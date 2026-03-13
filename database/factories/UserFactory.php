@@ -25,15 +25,16 @@ class UserFactory extends Factory
     {
         $name = fake()->firstName;
         $surname = fake()->lastName;
+        $email = fake()->unique()->safeEmail();
 
         return [
             'name' => $name,
             'surname' => $surname,
             'patronymic' => fake()->optional()->firstName,
-            'login' => fake()->unique()->safeEmail(),
-            'avatar' => 'https://picsum.photos/200/200',
-            'avatar_thumb' => 'https://picsum.photos/50/50',
-            'email' => fake()->unique()->safeEmail(),
+            'login' => $email,
+            'avatar' => 'https://picsum.photos/945/945',
+            'avatar_thumb' => 'https://picsum.photos/144/144',
+            'email' => $email,
             'email_verified_at' => fake()->dateTime(),
             'password' => static::$password ??= Hash::make('password')
         ];
