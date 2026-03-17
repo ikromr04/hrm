@@ -29,7 +29,7 @@ trait ApiResponse
         ?array $links = null
     ): JsonResponse {
         $response = [
-            'jsonapi' => ['version' => '1.1'],
+            'jsonapi' => ['version' => config('jsonapi.version')],
             'data' => $data
         ];
 
@@ -53,7 +53,7 @@ trait ApiResponse
         $status = (int) ($errors[0]['status'] ?? 500);
 
         return response()->json([
-            'jsonapi' => ['version' => '1.1'],
+            'jsonapi' => ['version' => config('jsonapi.version')],
             'errors'  => array_map(fn($error) => [
                 'status' => (string) $error['status'],
                 'title'  => $error['title'],

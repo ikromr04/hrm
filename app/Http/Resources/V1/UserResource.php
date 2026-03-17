@@ -4,7 +4,7 @@ namespace App\Http\Resources\V1;
 
 use Illuminate\Http\Request;
 
-class UserResource extends BaseResource
+class UserResource extends JsonApiResource
 {
     /**
      * Transform the resource into an array.

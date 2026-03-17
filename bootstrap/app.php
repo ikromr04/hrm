@@ -36,14 +36,14 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response()->json([
-                'jsonapi' => ['version' => '1.1'],
+                'jsonapi' => ['version' => config('jsonapi.version')],
                 'errors' => $errors
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         });
 
         $exceptions->render(function (AuthenticationException $exception, Request $request) {
             return response()->json([
-                'jsonapi' => ['version' => '1.1'],
+                'jsonapi' => ['version' => config('jsonapi.version')],
                 'errors' => [[
                     'status' => Response::HTTP_UNAUTHORIZED,
                     'title' => __('api.unauthenticated.title'),
