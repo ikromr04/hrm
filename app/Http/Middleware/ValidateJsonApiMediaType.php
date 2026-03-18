@@ -75,6 +75,13 @@ class ValidateJsonApiMediaType
             }
         }
 
-        return $next($request);
+        return $this->addContentTypeHeader($next($request));
+    }
+
+    private function addContentTypeHeader(Response $response): Response
+    {
+        $response->headers->set('Content-Type', 'application/vnd.api+json');
+
+        return $response;
     }
 }
