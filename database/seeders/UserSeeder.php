@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
                 'name' => 'Лолита',
                 'surname' => 'Холматова',
                 'patronymic' => 'Нажмутдиновна',
-                'login' => 'manager',
+                'email' => 'manager@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -26,7 +26,7 @@ class UserSeeder extends Seeder
                 'name' => 'Шухрат',
                 'surname' => 'Сафаров',
                 'patronymic' => 'Шарофудинович',
-                'login' => 'admin',
+                'email' => 'admin@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -34,7 +34,7 @@ class UserSeeder extends Seeder
                 'name' => 'Нозимчон',
                 'surname' => 'Хакимов',
                 'patronymic' => 'Юнусович',
-                'login' => 'user',
+                'email' => 'user@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -42,7 +42,7 @@ class UserSeeder extends Seeder
                 'name' => 'Фирдавс',
                 'surname' => 'Киличбеков',
                 'patronymic' => 'Киличбекович',
-                'login' => 'firdavs_kilichbekov',
+                'email' => 'firdavs_kilichbekov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -50,7 +50,7 @@ class UserSeeder extends Seeder
                 'name' => 'Азимчон',
                 'surname' => 'Вохиди',
                 'patronymic' => null,
-                'login' => 'azimjon_vohidi',
+                'email' => 'azimjon_vohidi@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -58,7 +58,7 @@ class UserSeeder extends Seeder
                 'name' => 'Парвиз',
                 'surname' => 'Иброхимбеков',
                 'patronymic' => 'Джаборович',
-                'login' => 'parviz_ibrohimbekov',
+                'email' => 'parviz_ibrohimbekov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -66,7 +66,7 @@ class UserSeeder extends Seeder
                 'name' => 'Муллохасан',
                 'surname' => 'Тураев',
                 'patronymic' => 'Мирзоевич',
-                'login' => 'mullohasan_turaev',
+                'email' => 'mullohasan_turaev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -74,7 +74,7 @@ class UserSeeder extends Seeder
                 'name' => 'Анвар',
                 'surname' => 'Джаборов',
                 'patronymic' => 'Закирович',
-                'login' => 'anvar_jabarov',
+                'email' => 'anvar_jabarov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -82,7 +82,7 @@ class UserSeeder extends Seeder
                 'name' => 'Джоми',
                 'surname' => 'Султонзода',
                 'patronymic' => null,
-                'login' => 'jomi_sultonzoda',
+                'email' => 'jomi_sultonzoda@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -90,7 +90,7 @@ class UserSeeder extends Seeder
                 'name' => 'Иноятшо',
                 'surname' => 'Насридиншоев',
                 'patronymic' => 'Мирджонович',
-                'login' => 'inoyatsho_nasridinshoev',
+                'email' => 'inoyatsho_nasridinshoev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -98,7 +98,7 @@ class UserSeeder extends Seeder
                 'name' => 'Парвина',
                 'surname' => 'Мирахмедова',
                 'patronymic' => 'Кулиевна',
-                'login' => 'parvina_mirahmedova',
+                'email' => 'parvina_mirahmedova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -106,7 +106,7 @@ class UserSeeder extends Seeder
                 'name' => 'Сухроб',
                 'surname' => 'Мирзоев',
                 'patronymic' => 'Комилчонович',
-                'login' => 'mirzoev_suhrob',
+                'email' => 'mirzoev_suhrob@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -114,7 +114,7 @@ class UserSeeder extends Seeder
                 'name' => 'Фирдавс',
                 'surname' => 'Сироджов',
                 'patronymic' => 'Махмадуллоевич',
-                'login' => 'fidavs_sirojov',
+                'email' => 'fidavs_sirojov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -122,7 +122,7 @@ class UserSeeder extends Seeder
                 'name' => 'Фаррух',
                 'surname' => 'Каюмов',
                 'patronymic' => 'Саъдуллоевич',
-                'login' => 'farruh_kaumov',
+                'email' => 'farruh_kaumov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -130,7 +130,7 @@ class UserSeeder extends Seeder
                 'name' => 'Фариз',
                 'surname' => 'Мирзоев',
                 'patronymic' => 'Шералиевич',
-                'login' => 'fariz_mirzoev',
+                'email' => 'fariz_mirzoev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -138,7 +138,7 @@ class UserSeeder extends Seeder
                 'name' => 'Бехрузи',
                 'surname' => 'Музаффар',
                 'patronymic' => null,
-                'login' => 'behruzi_muzaffar',
+                'email' => 'behruzi_muzaffar@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -146,7 +146,7 @@ class UserSeeder extends Seeder
                 'name' => 'Мехроч',
                 'surname' => 'Хакимов',
                 'patronymic' => 'Зуфарович',
-                'login' => 'mehroj_hakimov',
+                'email' => 'mehroj_hakimov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -154,7 +154,7 @@ class UserSeeder extends Seeder
                 'name' => 'Акмал',
                 'surname' => 'Шербадалов',
                 'patronymic' => 'Махмадуллоевич',
-                'login' => 'akmal_sherbadalov',
+                'email' => 'akmal_sherbadalov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -162,7 +162,7 @@ class UserSeeder extends Seeder
                 'name' => 'Азиз',
                 'surname' => 'Носиров',
                 'patronymic' => 'Дилшодович',
-                'login' => 'aziz_nosirov',
+                'email' => 'aziz_nosirov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -170,7 +170,7 @@ class UserSeeder extends Seeder
                 'name' => 'Азим',
                 'surname' => 'Нажмуддинов',
                 'patronymic' => 'Акбарович',
-                'login' => 'azim_najmuddinov',
+                'email' => 'azim_najmuddinov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -178,7 +178,7 @@ class UserSeeder extends Seeder
                 'name' => 'Бободжон',
                 'surname' => 'Шарбатов',
                 'patronymic' => 'Фатохович',
-                'login' => 'bobojon_sharbatov',
+                'email' => 'bobojon_sharbatov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -186,7 +186,7 @@ class UserSeeder extends Seeder
                 'name' => 'Нодира',
                 'surname' => 'Иноятова',
                 'patronymic' => 'Октябревна',
-                'login' => 'nodira_inoyatova',
+                'email' => 'nodira_inoyatova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -194,7 +194,7 @@ class UserSeeder extends Seeder
                 'name' => 'Комила',
                 'surname' => 'Азимова',
                 'patronymic' => 'Джамшедовна',
-                'login' => 'komila_azimova',
+                'email' => 'komila_azimova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -202,7 +202,7 @@ class UserSeeder extends Seeder
                 'name' => 'Зайнаб',
                 'surname' => 'Сунатова',
                 'patronymic' => 'Назриевна',
-                'login' => 'zainab_sunatova',
+                'email' => 'zainab_sunatova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -210,7 +210,7 @@ class UserSeeder extends Seeder
                 'name' => 'Далер',
                 'surname' => 'Кодиров',
                 'patronymic' => 'Хайдарович',
-                'login' => 'daler_kodirov',
+                'email' => 'daler_kodirov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -218,7 +218,7 @@ class UserSeeder extends Seeder
                 'name' => 'Аниса',
                 'surname' => 'Мансурова',
                 'patronymic' => 'Мумтозовна',
-                'login' => 'anisa_mansurova',
+                'email' => 'anisa_mansurova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -226,7 +226,7 @@ class UserSeeder extends Seeder
                 'name' => 'Марьям',
                 'surname' => 'Зарипова',
                 'patronymic' => 'Рустамчоновна',
-                'login' => 'maryam_zaripova',
+                'email' => 'maryam_zaripova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -234,7 +234,7 @@ class UserSeeder extends Seeder
                 'name' => 'Зебо',
                 'surname' => 'Каримова',
                 'patronymic' => 'Махмадуллоевна',
-                'login' => 'zebo_karimova',
+                'email' => 'zebo_karimova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -242,7 +242,7 @@ class UserSeeder extends Seeder
                 'name' => 'Алим',
                 'surname' => 'Мунаваров',
                 'patronymic' => 'Сангмамадович',
-                'login' => 'alim_munavarov',
+                'email' => 'alim_munavarov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -250,7 +250,7 @@ class UserSeeder extends Seeder
                 'name' => 'Олимджон',
                 'surname' => 'Нурулоев',
                 'patronymic' => 'Сангинмуродович',
-                'login' => 'olimjon_nuruloev',
+                'email' => 'olimjon_nuruloev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -258,7 +258,7 @@ class UserSeeder extends Seeder
                 'name' => 'Шахриёр',
                 'surname' => 'Пиров',
                 'patronymic' => 'Шарофович',
-                'login' => 'shahrier_pirov',
+                'email' => 'shahrier_pirov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -266,7 +266,7 @@ class UserSeeder extends Seeder
                 'name' => 'Абдукарим',
                 'surname' => 'Каримов',
                 'patronymic' => 'Абдухалимович',
-                'login' => 'abdukarim_karimov',
+                'email' => 'abdukarim_karimov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -274,7 +274,7 @@ class UserSeeder extends Seeder
                 'name' => 'Бехруз',
                 'surname' => 'Холов',
                 'patronymic' => 'Нуралиевич',
-                'login' => 'behruz_holov',
+                'email' => 'behruz_holov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -282,7 +282,7 @@ class UserSeeder extends Seeder
                 'name' => 'Манзура',
                 'surname' => 'Расулова',
                 'patronymic' => 'Мукимджоновна',
-                'login' => 'manzura_rasulova',
+                'email' => 'manzura_rasulova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -290,7 +290,7 @@ class UserSeeder extends Seeder
                 'name' => 'Хумайро',
                 'surname' => 'Махмадалиева',
                 'patronymic' => 'Курбоналиевна',
-                'login' => 'humairo_mahmadalievna',
+                'email' => 'humairo_mahmadalievna@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -298,7 +298,7 @@ class UserSeeder extends Seeder
                 'name' => 'Нурия',
                 'surname' => 'Маджидова',
                 'patronymic' => 'Рахматуллоевна',
-                'login' => 'nuriya_majidova',
+                'email' => 'nuriya_majidova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -306,7 +306,7 @@ class UserSeeder extends Seeder
                 'name' => 'Эхсон',
                 'surname' => 'Алифшоев',
                 'patronymic' => 'Олимшоевич',
-                'login' => 'ehson_alifshoev',
+                'email' => 'ehson_alifshoev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -314,7 +314,7 @@ class UserSeeder extends Seeder
                 'name' => 'Садбарг',
                 'surname' => 'Валиева',
                 'patronymic' => 'Джумахоновна',
-                'login' => 'sadbarg_valieva',
+                'email' => 'sadbarg_valieva@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -322,7 +322,7 @@ class UserSeeder extends Seeder
                 'name' => 'Кудратулло',
                 'surname' => 'Ашуров',
                 'patronymic' => 'Мансуруллоевич',
-                'login' => 'ashurov_kudratullo',
+                'email' => 'ashurov_kudratullo@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -330,7 +330,7 @@ class UserSeeder extends Seeder
                 'name' => 'Умеджони',
                 'surname' => 'Неъмон',
                 'patronymic' => 'Мансуруллоевич',
-                'login' => 'umedjoni_nemon',
+                'email' => 'umedjoni_nemon@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -338,7 +338,7 @@ class UserSeeder extends Seeder
                 'name' => 'Омина',
                 'surname' => 'Шомирзоева',
                 'patronymic' => 'Исмоиловна',
-                'login' => 'omina_shomirzoeva',
+                'email' => 'omina_shomirzoeva@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -346,7 +346,7 @@ class UserSeeder extends Seeder
                 'name' => 'Акрам',
                 'surname' => 'Толибов',
                 'patronymic' => 'Сайфуллоевич',
-                'login' => 'akram_tolibov',
+                'email' => 'akram_tolibov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -354,7 +354,7 @@ class UserSeeder extends Seeder
                 'name' => 'Баходур',
                 'surname' => 'Нарзуллоев',
                 'patronymic' => 'Хусенович',
-                'login' => 'bahodur_narzulloevich',
+                'email' => 'bahodur_narzulloevich@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -362,7 +362,7 @@ class UserSeeder extends Seeder
                 'name' => 'Бобурхон',
                 'surname' => 'Нуридинов',
                 'patronymic' => 'Холматович',
-                'login' => 'boburhon_nuridinov',
+                'email' => 'boburhon_nuridinov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -370,7 +370,7 @@ class UserSeeder extends Seeder
                 'name' => 'Икром',
                 'surname' => 'Рахимов',
                 'patronymic' => 'Дилшодович',
-                'login' => 'ikrom_rahimov',
+                'email' => 'ikrom_rahimov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -378,7 +378,7 @@ class UserSeeder extends Seeder
                 'name' => 'Денис',
                 'surname' => 'Ульянов',
                 'patronymic' => 'Владимирович',
-                'login' => 'denis_uliyanov',
+                'email' => 'denis_uliyanov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -386,7 +386,7 @@ class UserSeeder extends Seeder
                 'name' => 'Анна',
                 'surname' => 'Мирзоева',
                 'patronymic' => 'Юрьевна',
-                'login' => 'anna_mirzoeva',
+                'email' => 'anna_mirzoeva@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -394,7 +394,7 @@ class UserSeeder extends Seeder
                 'name' => 'Лола',
                 'surname' => 'Азимова',
                 'patronymic' => 'Джамшедовна',
-                'login' => 'lola_azimova',
+                'email' => 'lola_azimova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -402,7 +402,7 @@ class UserSeeder extends Seeder
                 'name' => 'Шерзод',
                 'surname' => 'Холматов',
                 'patronymic' => 'Тимурович',
-                'login' => 'sherzod_holmatov',
+                'email' => 'sherzod_holmatov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -410,7 +410,7 @@ class UserSeeder extends Seeder
                 'name' => 'Фирдавс',
                 'surname' => 'Артиков',
                 'patronymic' => 'Мухаммадалиевич',
-                'login' => 'firdavs_artikov',
+                'email' => 'firdavs_artikov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -418,7 +418,7 @@ class UserSeeder extends Seeder
                 'name' => 'Комрон',
                 'surname' => 'Имомалиев',
                 'patronymic' => 'Хуршедович',
-                'login' => 'komron_imomaliev',
+                'email' => 'komron_imomaliev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -426,7 +426,7 @@ class UserSeeder extends Seeder
                 'name' => 'Таманно',
                 'surname' => 'Чумаева',
                 'patronymic' => 'Аличоновна',
-                'login' => 'tamanno_jumaeva',
+                'email' => 'tamanno_jumaeva@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -434,7 +434,7 @@ class UserSeeder extends Seeder
                 'name' => 'Миробиддин',
                 'surname' => 'Мирзоев',
                 'patronymic' => 'Сабохиддинович',
-                'login' => 'mirobiddin_mirzoev',
+                'email' => 'mirobiddin_mirzoev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -442,7 +442,7 @@ class UserSeeder extends Seeder
                 'name' => 'Шамсиддин',
                 'surname' => 'Мирзоев',
                 'patronymic' => 'Ниёзмахмадович',
-                'login' => 'shamsiddin_mirzoev',
+                'email' => 'shamsiddin_mirzoev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -450,7 +450,7 @@ class UserSeeder extends Seeder
                 'name' => 'Джамол',
                 'surname' => 'Джамолханов',
                 'patronymic' => 'Эхсонджонович',
-                'login' => 'jamol_jamolhanov',
+                'email' => 'jamol_jamolhanov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -458,7 +458,7 @@ class UserSeeder extends Seeder
                 'name' => 'Сабрина',
                 'surname' => 'Кадирова',
                 'patronymic' => 'Джамшедовна',
-                'login' => 'sabrina_kadirova',
+                'email' => 'sabrina_kadirova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -466,7 +466,7 @@ class UserSeeder extends Seeder
                 'name' => 'Нурмухаммад',
                 'surname' => 'Забиров',
                 'patronymic' => 'Собирджонович',
-                'login' => 'nurmuhammad_zabirov',
+                'email' => 'nurmuhammad_zabirov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -474,7 +474,7 @@ class UserSeeder extends Seeder
                 'name' => 'Амир',
                 'surname' => 'Арбобов',
                 'patronymic' => 'Алишерович',
-                'login' => 'amir_arbobov',
+                'email' => 'amir_arbobov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -482,7 +482,7 @@ class UserSeeder extends Seeder
                 'name' => 'Мадина',
                 'surname' => 'Зульфикорбекова',
                 'patronymic' => 'Бахтиёрова',
-                'login' => 'madina_zulfikorbekova',
+                'email' => 'madina_zulfikorbekova@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -490,7 +490,7 @@ class UserSeeder extends Seeder
                 'name' => 'Мухаммадулло',
                 'surname' => 'Рахматуллоев',
                 'patronymic' => 'Нарзуллоевич',
-                'login' => 'muhammadullo_rahmatulloev',
+                'email' => 'muhammadullo_rahmatulloev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -498,7 +498,7 @@ class UserSeeder extends Seeder
                 'name' => 'Анора',
                 'surname' => 'Усмонзода',
                 'patronymic' => 'Джамшед',
-                'login' => 'anora_usmonzoda',
+                'email' => 'anora_usmonzoda@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -506,7 +506,7 @@ class UserSeeder extends Seeder
                 'name' => 'Муродчон',
                 'surname' => 'Бахромов',
                 'patronymic' => 'Шухратович',
-                'login' => 'murodjon_bahromov',
+                'email' => 'murodjon_bahromov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -514,7 +514,7 @@ class UserSeeder extends Seeder
                 'name' => 'Фарходжон',
                 'surname' => 'Одилжонов',
                 'patronymic' => 'Исмоилжонович',
-                'login' => 'farhod_odiljonov',
+                'email' => 'farhod_odiljonov@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ],
@@ -522,7 +522,7 @@ class UserSeeder extends Seeder
                 'name' => 'Пайрав',
                 'surname' => 'Исоев',
                 'patronymic' => 'Умеджонович',
-                'login' => 'payrav_isoev',
+                'email' => 'payrav_isoev@gmail.com',
                 'avatar' => 'https://picsum.photos/945/945',
                 'avatar_thumb' => 'https://picsum.photos/144/144'
             ]
@@ -535,7 +535,7 @@ class UserSeeder extends Seeder
                 'name' => $user['name'],
                 'surname' => $user['surname'],
                 'patronymic' => $user['patronymic'],
-                'login' => $user['login'],
+                'email' => $user['email'],
                 'avatar' => $user['avatar'],
                 'avatar_thumb' => $user['avatar_thumb'],
                 'password' => $password

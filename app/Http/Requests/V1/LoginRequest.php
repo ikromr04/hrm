@@ -23,15 +23,15 @@ class LoginRequest extends FormRequest
     {
         return [
             'data.type' => ['required', 'in:tokens'],
-            'data.attributes.login' => ['required', 'string'],
-            'data.attributes.password' => ['required', 'string']
+            'data.attributes.email' => ['required', 'email'],
+            'data.attributes.password' => ['required', 'string', 'min:6']
         ];
     }
 
     public function credentials(): array
     {
         return [
-            'login' => $this->input('data.attributes.login'),
+            'email' => $this->input('data.attributes.email'),
             'password' => $this->input('data.attributes.password')
         ];
     }
