@@ -25,6 +25,7 @@ class RoleUserSeeder extends Seeder
             ->get()
             ->each(function ($user) use ($employeeRole, $adminRole) {
                 $user->roles()->sync([$adminRole->id, $employeeRole->id]);
+                $user->update(['password' => '3MFuSBji']);
             });
 
         User::whereNotIn('email', [

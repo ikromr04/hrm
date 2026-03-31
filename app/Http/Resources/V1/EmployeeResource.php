@@ -18,7 +18,7 @@ class EmployeeResource extends JsonApiResource
             'attributes' => $this->mappedAttributes(),
 
             'links' => [
-                'self' => 'Not Implemented'
+                'self' => route('employees.show', $this->id),
             ],
         ];
     }
@@ -30,7 +30,7 @@ class EmployeeResource extends JsonApiResource
     {
         return [
             'links' => [
-                'self' => $request->fullUrl()
+                'self' => route('employees.show', $this->id),
             ]
         ];
     }
