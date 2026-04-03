@@ -13,7 +13,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/tokens', 'logoutAll')->name('logoutAll');
     });
 
-    Route::controller(UserController::class)->group(function() {
+    Route::controller(UserController::class)->group(function () {
         Route::post('users', 'store')->name('users.store');
+        Route::get('users/{user}', 'show')->name('users.show');
     });
 });
