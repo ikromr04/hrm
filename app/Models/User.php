@@ -123,6 +123,13 @@ class User extends Authenticatable
             ->withPivot('description');
     }
 
+    public function languages(): BelongsToMany
+    {
+        return $this
+            ->belongsToMany(Language::class)
+            ->withPivot('level');
+    }
+
     public function getAvatarAttribute(): string | null
     {
         if ($this->attributes['avatar']) {

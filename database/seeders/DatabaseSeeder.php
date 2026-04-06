@@ -27,6 +27,8 @@ class DatabaseSeeder extends Seeder
             UserEducationSeeder::class,
             EquipmentSeeder::class,
             EquipmentUserSeeder::class,
+            LanguageSeeder::class,
+            LanguageUserSeeder::class,
         ]);
     }
 }
