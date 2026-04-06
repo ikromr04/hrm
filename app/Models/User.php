@@ -109,6 +109,11 @@ class User extends Authenticatable
         return $this->hasMany(UserExperience::class);
     }
 
+    public function educations(): HasMany
+    {
+        return $this->hasMany(UserEducation::class);
+    }
+
     public function getAvatarAttribute(): string | null
     {
         if ($this->attributes['avatar']) {

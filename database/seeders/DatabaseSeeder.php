@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             DepartmentUserSeeder::class,
             UserExperienceSeeder::class,
+            UserEducationSeeder::class,
         ]);
     }
 }
