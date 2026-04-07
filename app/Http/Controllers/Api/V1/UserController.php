@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Requests\V1\AvatarStoreRequest;
 use App\Http\Requests\V1\UserStoreRequest;
+use App\Http\Resources\V1\UserCollection;
 use App\Http\Resources\V1\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\Encoders\WebpEncoder;
@@ -17,20 +18,26 @@ class UserController extends ApiController
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): UserCollection
     {
-        //
+        $users = User::get();
+
+        return new UserCollection($users);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(UserStoreRequest $request)
+    public function store(UserStoreRequest $request): UserResource
     {
-        $user = User::create($request->mappedAttributes())
-            ->refresh();
+        $avatar = $request->file('data.attributes.avatar');
+        if ($avatar) {
+            $request->addAttributes($this->uploadAvatar($avatar));
+        }
 
-        return new UserResource($user);
+        $user = User::create($request->mappedAttributes());
+
+        return new UserResource($user->refresh());
     }
 
     /**
@@ -44,7 +51,7 @@ class UserController extends ApiController
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, User $user)
     {
         //
     }
@@ -57,28 +64,24 @@ class UserController extends ApiController
         //
     }
 
-    public function uploadAvatar(User $user, AvatarStoreRequest $request): UserResource
+    private function uploadAvatar(UploadedFile $avatar): array
     {
-        $avatar = $request->file('image');
-
         $thumbnail = (new ImageManager(Driver::class))
             ->decode($avatar)
             ->cover(144, 144)
             ->encode(new WebpEncoder(quality: 90));
 
         $hashedName = pathinfo($avatar->hashName(), PATHINFO_FILENAME);
-        $avatarName = "{$user->id}_{$hashedName}.{$avatar->extension()}";
+        $avatarName = "{$hashedName}.{$avatar->extension()}";
         $avatarPath = User::PATH_AVATAR . "/{$avatarName}";
-        $thumbPath = User::PATH_AVATAR_THUMBS . "/{$user->id}_{$hashedName}.webp";
+        $thumbPath = User::PATH_AVATAR_THUMBS . "/{$hashedName}.webp";
 
         Storage::disk('public')->putFileAs(User::PATH_AVATAR, $avatar, $avatarName);
         Storage::disk('public')->put($thumbPath, $thumbnail);
 
-        $user->update([
+        return [
             'avatar' => $avatarPath,
             'avatar_thumb' => $thumbPath,
-        ]);
-
-        return new UserResource($user);
+        ];
     }
 }

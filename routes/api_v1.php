@@ -14,8 +14,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::controller(UserController::class)->group(function () {
+        Route::get('users', 'index')->name('users.index');
         Route::post('users', 'store')->name('users.store');
         Route::get('users/{user}', 'show')->name('users.show');
+        Route::patch('users/{user}', 'update')->name('users.update');
+        Route::delete('users/{user}', 'destroy')->name('users.destroy');
         Route::post('users/{user}/avatar', 'uploadAvatar')->name('users.avatar');
     });
 });
