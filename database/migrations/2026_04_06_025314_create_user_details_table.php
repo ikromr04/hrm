@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\FamilyStatus;
 use App\Enums\Sex;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -22,7 +23,7 @@ return new class extends Migration
             $table->string('address')->nullable();
             $table->string('tel_1')->nullable();
             $table->string('tel_2')->nullable();
-            $table->string('family_status')->nullable();
+            $table->enum('family_status', FamilyStatus::values())->nullable();
             $table->json('children')->nullable();
             $table->date('started_work_at')->nullable();
             $table->timestamps();

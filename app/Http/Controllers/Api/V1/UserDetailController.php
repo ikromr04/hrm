@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\V1;
+namespace App\Http\Controllers\ApiV1;
 
+use App\Http\Requests\V1\UserDetailStoreRequest;
+use App\Http\Resources\V1\UserDetailResource;
 use App\Models\UserDetail;
 use Illuminate\Http\Request;
 
@@ -26,9 +28,11 @@ class UserDetailController
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(UserDetailStoreRequest $request): UserDetailResource
     {
-        //
+        $detail = UserDetail::create($request->mappedAttributes());
+
+        return new UserDetailResource($detail->refresh());
     }
 
     /**
