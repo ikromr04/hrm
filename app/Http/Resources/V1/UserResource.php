@@ -24,12 +24,12 @@ class UserResource extends JsonResource
             'attributes' => $this->mappedAttributes(),
 
             'relationships' => (object)[
-                'roles' => (object)[
+                'details' => (object)[
                     'links' => (object)[
                         'related' => 'not implemented',
                     ],
                 ],
-                'details' => (object)[
+                'roles' => (object)[
                     'links' => (object)[
                         'related' => 'not implemented',
                     ],

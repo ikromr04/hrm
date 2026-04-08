@@ -65,16 +65,6 @@ class User extends Authenticatable
     }
 
     /**
-     * The roles that belong to the user.
-     *
-     * @return BelongsToMany<Role>
-     */
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class);
-    }
-
-    /**
      * The detail that belong to the user.
      *
      * @return HasOne<UserDetail>
@@ -82,6 +72,16 @@ class User extends Authenticatable
     public function details(): HasOne
     {
         return $this->hasOne(UserDetail::class);
+    }
+
+    /**
+     * The roles that belong to the user.
+     *
+     * @return BelongsToMany<Role>
+     */
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class);
     }
 
     /**
