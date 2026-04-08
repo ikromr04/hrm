@@ -69,7 +69,7 @@ class User extends Authenticatable
      *
      * @return HasOne<UserDetail>
      */
-    public function details(): HasOne
+    public function userDetails(): HasOne
     {
         return $this->hasOne(UserDetail::class);
     }

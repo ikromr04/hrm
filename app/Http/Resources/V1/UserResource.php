@@ -23,45 +23,53 @@ class UserResource extends JsonResource
 
             'attributes' => $this->mappedAttributes(),
 
-            'relationships' => (object)[
-                'details' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+            'relationships' => (object) [
+                'userDetails' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.user-details', $this->id),
+                        'related' => route('users.user-details', $this->id),
                     ],
                 ],
-                'roles' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'roles' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.roles', $this->id),
+                        'related' => route('users.roles', $this->id),
                     ],
                 ],
-                'positions' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'positions' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.positions', $this->id),
+                        'related' => route('users.positions', $this->id),
                     ],
                 ],
-                'departments' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'departments' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.departments', $this->id),
+                        'related' => route('users.departments', $this->id),
                     ],
                 ],
-                'experiences' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'experiences' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.experiences', $this->id),
+                        'related' => route('users.experiences', $this->id),
                     ],
                 ],
-                'educations' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'educations' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.educations', $this->id),
+                        'related' => route('users.educations', $this->id),
                     ],
                 ],
-                'equipments' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'equipments' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.equipments', $this->id),
+                        'related' => route('users.equipments', $this->id),
                     ],
                 ],
-                'languages' => (object)[
-                    'links' => (object)[
-                        'related' => 'not implemented',
+                'languages' => (object) [
+                    'links' => (object) [
+                        'self' => route('users.relationships.languages', $this->id),
+                        'related' => route('users.languages', $this->id),
                     ],
                 ],
             ],
