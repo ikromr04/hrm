@@ -5,7 +5,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
 use App\Http\Resources\Api\V1\UserResource;
-use Database\Seeders\EquipmentUserSeeder;
+use Intervention\Image\Encoders\WebpEncoder;
+use Intervention\Image\ImageManager;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,6 +16,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Attributes\UseResource;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Drivers\Gd\Driver;
 
 #[UseResource(UserResource::class)]
 class User extends Authenticatable
@@ -140,6 +144,15 @@ class User extends Authenticatable
         return $this->belongsToMany(Language::class);
     }
 
+    public function syncRelationships(array $relationships): static
+    {
+        foreach ($relationships as $name => $value) {
+            $this->{$name}()->sync($value);
+        }
+
+        return $this;
+    }
+
     public function getAvatarAttribute(): string | null
     {
         if ($this->attributes['avatar']) {
@@ -151,7 +164,6 @@ class User extends Authenticatable
 
     public function getAvatarThumbAttribute(): string | null
     {
-
         if ($this->attributes['avatar_thumb']) {
             return asset("storage/{$this->attributes['avatar_thumb']}");
         }
@@ -159,12 +171,51 @@ class User extends Authenticatable
         return null;
     }
 
-    public function syncRelationships(array $relationships): static
+    public function storeAvatar(UploadedFile $avatar): void
     {
-        foreach ($relationships as $name => $value) {
-            $this->{$name}()->sync($value);
+        $thumbnail = (new ImageManager(Driver::class))
+            ->decode($avatar)
+            ->cover(144, 144)
+            ->encode(new WebpEncoder(quality: 90));
+
+        $hashedName = pathinfo($avatar->hashName(), PATHINFO_FILENAME);
+        $avatarName = "{$hashedName}.{$avatar->extension()}";
+        $avatarPath = User::PATH_AVATAR . "/{$avatarName}";
+        $thumbPath = User::PATH_AVATAR_THUMBS . "/{$hashedName}.webp";
+
+        Storage::disk('public')->putFileAs(User::PATH_AVATAR, $avatar, $avatarName);
+        Storage::disk('public')->put($thumbPath, $thumbnail);
+
+        $this->update([
+            'avatar' => $avatarPath,
+            'avatar_thumb' => $thumbPath,
+        ]);
+    }
+
+
+    public function updateAvatar(UploadedFile $avatar): void
+    {
+        $this->deleteAvatarFiles();
+        $this->storeAvatar($avatar);
+    }
+
+    public function deleteAvatar(): void
+    {
+        $this->deleteAvatarFiles();
+        $this->update([
+            'avatar' => null,
+            'avatar_thumb' => null,
+        ]);
+    }
+
+    public function deleteAvatarFiles(): void
+    {
+        if ($this->avatar && Storage::disk('public')->exists($this->avatar)) {
+            Storage::disk('public')->delete($this->avatar);
         }
 
-        return $this;
+        if ($this->avatar_thumb && Storage::disk('public')->exists($this->avatar_thumb)) {
+            Storage::disk('public')->delete($this->avatar_thumb);
+        }
     }
 }

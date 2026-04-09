@@ -2,9 +2,10 @@
 
 namespace App\Http\Requests\Api\V1;
 
-use Illuminate\Support\Str;
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
 
-class UserStoreRequest extends UserBaseRequest
+class UserUpdateRequest extends UserBaseRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -17,27 +18,21 @@ class UserStoreRequest extends UserBaseRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
             'data.type' => 'required|in:users',
-            'data.attributes.name' => 'required|string|max:255',
-            'data.attributes.surname' => 'required|string|max:255',
+            'data.id' => "required|exists:users,id|in:$this->route('user')",
+            'data.attributes.name' => 'nullable|string|max:255',
+            'data.attributes.surname' => 'nullable|string|max:255',
             'data.attributes.patronymic' => 'nullable|string|max:255',
-            'data.attributes.email' => 'required|string|email|max:255|unique:users,email',
+            'data.attributes.email' => "nullable|string|email|max:255|unique:users,email,$this->route('user')",
             'data.attributes.password' => 'nullable|string|min:6|confirmed',
             'data.attributes.avatar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
 
             ...$this->relationshipRules
-        ];
-    }
-
-    public function messages(): array
-    {
-        return [
-            'data.attributes.email.unique' => 'Сотрудник с таким Email-ом уже существует.'
         ];
     }
 }
