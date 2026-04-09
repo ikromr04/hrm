@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Requests\V1\UserDetailStoreRequest;
-use App\Http\Resources\V1\UserDetailResource;
+use App\Http\Requests\Api\V1\UserDetailStoreRequest;
+use App\Http\Resources\Api\V1\UserDetailCollection;
+use App\Http\Resources\Api\V1\UserDetailResource;
 use App\Models\UserDetail;
 use Illuminate\Http\Request;
 
@@ -12,17 +13,9 @@ class UserDetailController
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): UserDetailCollection
     {
-        //
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+        return new UserDetailCollection(UserDetail::all());
     }
 
     /**
@@ -32,23 +25,15 @@ class UserDetailController
     {
         $detail = UserDetail::create($request->mappedAttributes());
 
-        return new UserDetailResource($detail->refresh());
+        return new UserDetailResource($detail);
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(UserDetail $userDetail)
+    public function show(UserDetail $userDetail): UserDetailResource
     {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(UserDetail $userDetail)
-    {
-        //
+        return new UserDetailResource($userDetail);
     }
 
     /**

@@ -13,8 +13,6 @@ class Equipment extends Model
 
     public function users(): BelongsToMany
     {
-        return $this
-        ->belongsToMany(User::class)
-        ->withPivot('description');
+        return $this->belongsToMany(User::class);
     }
 }

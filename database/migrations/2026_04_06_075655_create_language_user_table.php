@@ -16,7 +16,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('language_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->enum('level', LangLevel::values());
             $table->timestamps();
         });
     }

@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Http\Requests\V1;
+namespace App\Http\Requests\Api\V1;
 
-use App\Enums\LangLevel;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 
@@ -36,11 +36,6 @@ class UserStoreRequest extends FormRequest
 
             'data.relationships' => 'nullable|array',
 
-            'data.relationships.details' => 'nullable|array',
-            'data.relationships.details.data' => 'required_with:data.relationships.details|array',
-            'data.relationships.details.data.type' => 'required_with:data.relationships.details.data|in:user_details',
-            'data.relationships.details.data.id' => 'required_with:data.relationships.details.data|exists:user_details,id',
-
             'data.relationships.roles' => 'nullable|array',
             'data.relationships.roles.data' => 'required_with:data.relationships.roles|array',
             'data.relationships.roles.data.*.type' => 'required_with:data.relationships.roles.data|in:roles',
@@ -56,26 +51,17 @@ class UserStoreRequest extends FormRequest
             'data.relationships.departments.data.*.type' => 'required_with:data.relationships.departments.data|in:departments',
             'data.relationships.departments.data.*.id' => 'required_with:data.relationships.departments.data|exists:departments,id',
 
-            'data.relationships.experiences' => 'nullable|array',
-            'data.relationships.experiences.data' => 'required_with:data.relationships.experiences|array',
-            'data.relationships.experiences.data.*.type' => 'required_with:data.relationships.experiences.data|in:experiences',
-            'data.relationships.experiences.data.*.id' => 'required_with:data.relationships.experiences.data|exists:experiences,id',
-
-            'data.relationships.educations' => 'nullable|array',
-            'data.relationships.educations.data' => 'required_with:data.relationships.educations|array',
-            'data.relationships.educations.data.*.type' => 'required_with:data.relationships.educations.data|in:educations',
-            'data.relationships.educations.data.*.id' => 'required_with:data.relationships.educations.data|exists:educations,id',
-
-            'data.relationships.equipments' => 'nullable|array',
-            'data.relationships.equipments.data' => 'required_with:data.relationships.equipments|array',
-            'data.relationships.equipments.data.*.type' => 'required_with:data.relationships.equipments.data|in:equipments',
-            'data.relationships.equipments.data.*.id' => 'required_with:data.relationships.equipments.data|exists:equipments,id',
-
             'data.relationships.languages' => 'nullable|array',
             'data.relationships.languages.data' => 'required_with:data.relationships.languages|array',
             'data.relationships.languages.data.*.type' => 'required_with:data.relationships.languages.data|in:languages',
             'data.relationships.languages.data.*.id' => 'required_with:data.relationships.languages.data|exists:languages,id',
-            'data.relationships.languages.data.*.meta.level' => 'required_with:data.relationships.languages.data|in:' . implode(',', LangLevel::values()),
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'data.attributes.email.unique' => 'Сотрудник с таким Email-ом уже существует.'
         ];
     }
 
@@ -89,6 +75,24 @@ class UserStoreRequest extends FormRequest
             'password' => $this->input('data.attributes.password') ?: Str::random(12),
             ...$this->addedAttributes
         ];
+    }
+
+    public function mappedRelationships(): array
+    {
+        $relationships = [];
+
+        foreach (User::RELATIONSHIPS as $relationshipName) {
+            if ($this->has("data.relationships.$relationshipName")) {
+                $relationships[$relationshipName] = collect(
+                    $this->input("data.relationships.$relationshipName.data", [])
+                )
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
+                    ->toArray();
+            }
+        }
+
+        return $relationships;
     }
 
     public function addAttributes(array $attributes): void

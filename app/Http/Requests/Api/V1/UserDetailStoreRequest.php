@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\V1;
+namespace App\Http\Requests\Api\V1;
 
 use App\Enums\FamilyStatus;
 use App\Enums\Sex;
@@ -39,7 +39,7 @@ class UserDetailStoreRequest extends FormRequest
             'data.attributes.startedWorkAt' => 'nullable|date|before_or_equal:today',
 
             'data.relationships.user.data.type' => 'required|in:users',
-            'data.relationships.user.data.id' => 'required|exists:users,id',
+            'data.relationships.user.data.id' => 'required|exists:users,id|unique:user_details,user_id',
         ];
     }
 

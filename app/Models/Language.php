@@ -11,8 +11,6 @@ class Language extends Model
 
     public function users(): BelongsToMany
     {
-        return $this
-            ->belongsToMany(User::class)
-            ->withPivot('level');
+        return $this->belongsToMany(User::class);
     }
 }

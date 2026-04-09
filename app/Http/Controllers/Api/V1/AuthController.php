@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Requests\V1\LoginRequest;
-use App\Http\Resources\V1\TokenResource;
-use App\Http\Resources\V1\UserResource;
+use App\Http\Requests\Api\V1\LoginRequest;
+use App\Http\Resources\Api\V1\TokenResource;
+use App\Http\Resources\Api\V1\UserResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -17,7 +17,7 @@ class AuthController extends ApiController
      */
     public function me(Request $request): UserResource
     {
-        return new UserResource($request->user());
+        return $request->user()->toResource();
     }
 
     /**

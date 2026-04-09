@@ -26,7 +26,6 @@ class DatabaseSeeder extends Seeder
             UserExperienceSeeder::class,
             UserEducationSeeder::class,
             EquipmentSeeder::class,
-            EquipmentUserSeeder::class,
             LanguageSeeder::class,
             LanguageUserSeeder::class,
         ]);

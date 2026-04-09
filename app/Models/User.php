@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
+use App\Http\Resources\Api\V1\UserResource;
 use Database\Seeders\EquipmentUserSeeder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -13,7 +14,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Attributes\UseResource;
 
+#[UseResource(UserResource::class)]
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -24,6 +27,17 @@ class User extends Authenticatable
 
     public const PATH_AVATAR = 'images/avatars';
     public const PATH_AVATAR_THUMBS = 'images/avatars/thumbs';
+
+    public const RELATIONSHIPS = [
+        'details',
+        'roles',
+        'positions',
+        'departments',
+        'experiences',
+        'educations',
+        'equipments',
+        'languages',
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -69,7 +83,7 @@ class User extends Authenticatable
      *
      * @return HasOne<UserDetail>
      */
-    public function userDetails(): HasOne
+    public function details(): HasOne
     {
         return $this->hasOne(UserDetail::class);
     }
@@ -116,18 +130,14 @@ class User extends Authenticatable
         return $this->hasMany(UserEducation::class);
     }
 
-    public function equipments(): BelongsToMany
+    public function equipments(): HasMany
     {
-        return $this
-            ->belongsToMany(EquipmentUserSeeder::class)
-            ->withPivot('description');
+        return $this->hasMany(Equipment::class);
     }
 
     public function languages(): BelongsToMany
     {
-        return $this
-            ->belongsToMany(Language::class)
-            ->withPivot('level');
+        return $this->belongsToMany(Language::class);
     }
 
     public function getAvatarAttribute(): string | null
@@ -147,5 +157,14 @@ class User extends Authenticatable
         }
 
         return null;
+    }
+
+    public function syncRelationships(array $relationships): static
+    {
+        foreach ($relationships as $name => $value) {
+            $this->{$name}()->sync($value);
+        }
+
+        return $this;
     }
 }

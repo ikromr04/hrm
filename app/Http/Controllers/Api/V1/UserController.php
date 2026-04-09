@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Requests\V1\UserStoreRequest;
-use App\Http\Resources\V1\UserCollection;
-use App\Http\Resources\V1\UserResource;
+use App\Http\Requests\Api\V1\UserStoreRequest;
+use App\Http\Resources\Api\v1\UserCollection;
+use App\Http\Resources\Api\V1\UserResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -20,9 +20,7 @@ class UserController extends ApiController
      */
     public function index(): UserCollection
     {
-        $users = User::get();
-
-        return new UserCollection($users);
+        return new UserCollection(User::all());
     }
 
     /**
@@ -30,12 +28,14 @@ class UserController extends ApiController
      */
     public function store(UserStoreRequest $request): UserResource
     {
-        $avatar = $request->file('data.attributes.avatar');
-        if ($avatar) {
-            $request->addAttributes($this->uploadAvatar($avatar));
+        if ($request->hasFile('data.attributes.avatar')) {
+            $request->addAttributes(
+                $this->uploadAvatar($request->file('data.attributes.avatar'))
+            );
         }
 
-        $user = User::create($request->mappedAttributes());
+        $user = User::create($request->mappedAttributes())
+            ->syncRelationships($request->mappedRelationships());
 
         return new UserResource($user->refresh());
     }
