@@ -16,7 +16,7 @@ class LanguageResource extends JsonResource
     {
         return [
             'type' => 'languages',
-            'id' => $this->id,
+            'id' => (string) $this->id,
 
             'attributes' => [
                 'name' => $this->name,
