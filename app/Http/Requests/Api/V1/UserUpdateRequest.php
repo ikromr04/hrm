@@ -27,9 +27,9 @@ class UserUpdateRequest extends UserBaseRequest
             'data.attributes.name' => 'nullable|string|max:255',
             'data.attributes.surname' => 'nullable|string|max:255',
             'data.attributes.patronymic' => 'nullable|string|max:255',
+            'data.attributes.avatar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'data.attributes.email' => "nullable|string|email|max:255|unique:users,email,$this->route('user')",
             'data.attributes.password' => 'nullable|string|min:6|confirmed',
-            'data.attributes.avatar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
 
             ...$this->relationshipRules
         ];
