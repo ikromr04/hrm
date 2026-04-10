@@ -20,6 +20,8 @@ class PositionResource extends JsonResource
 
             'attributes' => [
                 'name' => $this->name,
+                'createdAt' => $this->created_at,
+                'updatedAt' => $this->updated_at,
             ],
 
             'links' => [

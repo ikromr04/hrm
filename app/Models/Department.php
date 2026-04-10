@@ -17,6 +17,9 @@ class Department extends Model
      */
     protected $fillable = [
         'name',
+        '_lft',
+        '_rgt',
+        'parent_id',
     ];
 
     /**
@@ -26,8 +29,6 @@ class Department extends Model
      */
     public function users(): BelongsToMany
     {
-        return $this
-            ->belongsToMany(User::class)
-            ->withPivot('leader');
+        return $this->belongsToMany(User::class);
     }
 }

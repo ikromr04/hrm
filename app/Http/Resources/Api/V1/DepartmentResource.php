@@ -5,7 +5,7 @@ namespace App\Http\Resources\Api\V1;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class RoleResource extends JsonResource
+class DepartmentResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -15,17 +15,20 @@ class RoleResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'type' => 'roles',
-            'id' => (string) $this->id,
+            'type' => 'departments',
+            'id' => $this->id,
 
             'attributes' => [
                 'name' => $this->name,
-                'displayName' => $this->display_name,
+                'left' => $this->_lft,
+                'right' => $this->_rgt,
+                'parent' => $this->parent_id,
                 'createdAt' => $this->created_at,
                 'updatedAt' => $this->updated_at,
             ],
+
             'links' => [
-                'self' => route('roles.show', $this->id)
+                'self' => route('departments.show', $this->id),
             ]
         ];
     }

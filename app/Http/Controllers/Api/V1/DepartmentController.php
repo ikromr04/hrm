@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Resources\Api\V1\DepartmentCollection;
 use App\Models\Department;
 use Illuminate\Http\Request;
 
@@ -10,9 +11,9 @@ class DepartmentController
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): DepartmentCollection
     {
-        //
+        return new DepartmentCollection(Department::all());
     }
 
     /**

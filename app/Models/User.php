@@ -119,9 +119,7 @@ class User extends Authenticatable
      */
     public function departments(): BelongsToMany
     {
-        return $this
-            ->belongsToMany(Department::class)
-            ->withPivot('leader');
+        return $this->belongsToMany(Department::class);
     }
 
     public function experiences(): HasMany

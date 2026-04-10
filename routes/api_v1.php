@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\PositionController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -21,5 +22,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('user-details', UserDetailController::class);
 
     Route::apiResource('roles', RoleController::class);
+
     Route::apiResource('positions', PositionController::class);
+
+    Route::apiResource('departments', DepartmentController::class);
 });
