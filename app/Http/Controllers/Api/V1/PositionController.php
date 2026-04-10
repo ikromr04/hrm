@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Resources\Api\V1\PositionCollection;
 use App\Models\Position;
 use Illuminate\Http\Request;
 
@@ -10,9 +11,9 @@ class PositionController
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): PositionCollection
     {
-        //
+        return new PositionCollection(Position::all());
     }
 
     /**
