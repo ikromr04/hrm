@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Requests\Api\V1\EquipmentStoreRequest;
+use App\Http\Resources\Api\V1\EquipmentResource;
 use App\Models\Equipment;
 use Illuminate\Http\Request;
 
@@ -26,9 +28,11 @@ class EquipmentController
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(EquipmentStoreRequest $request): EquipmentResource
     {
-        //
+        $equipment = Equipment::create($request->mappedAttributes());
+
+        return new EquipmentResource($equipment);
     }
 
     /**
