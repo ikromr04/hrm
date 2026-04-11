@@ -15,7 +15,7 @@ class EducationResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'type' => 'experiences',
+            'type' => 'educations',
             'id' => (string) $this->id,
 
             'attributes' => [

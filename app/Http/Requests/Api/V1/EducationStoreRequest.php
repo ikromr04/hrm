@@ -23,7 +23,7 @@ class EducationStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'data.type' => 'required|in:experiences',
+            'data.type' => 'required|in:educations',
             'data.attributes.institution' => 'required|string|max:255',
             'data.attributes.faculty' => 'required|string|max:255',
             'data.attributes.speciality' => 'required|string|max:255',

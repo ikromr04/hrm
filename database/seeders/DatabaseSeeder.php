@@ -24,7 +24,7 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             DepartmentUserSeeder::class,
             ExperienceSeeder::class,
-            UserEducationSeeder::class,
+            EducationSeeder::class,
             EquipmentSeeder::class,
             LanguageSeeder::class,
             LanguageUserSeeder::class,

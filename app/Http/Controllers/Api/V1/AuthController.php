@@ -17,7 +17,7 @@ class AuthController extends ApiController
      */
     public function me(Request $request): UserResource
     {
-        return $request->user()->toResource();
+        return new UserResource($request->user());
     }
 
     /**
