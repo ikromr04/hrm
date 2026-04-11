@@ -23,7 +23,7 @@ class DatabaseSeeder extends Seeder
             PositionUserSeeder::class,
             DepartmentSeeder::class,
             DepartmentUserSeeder::class,
-            UserExperienceSeeder::class,
+            ExperienceSeeder::class,
             UserEducationSeeder::class,
             EquipmentSeeder::class,
             LanguageSeeder::class,

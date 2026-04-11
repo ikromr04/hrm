@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\{
     AuthController,
     DepartmentController,
     EquipmentController,
+    ExperienceController,
     LanguageController,
     PositionController,
     RoleController,
@@ -34,4 +35,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('languages', LanguageController::class);
 
     Route::apiResource('equipments', EquipmentController::class);
+
+    Route::apiResource('experiences', ExperienceController::class);
 });

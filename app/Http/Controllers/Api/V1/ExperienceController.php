@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Requests\Api\V1\EquipmentStoreRequest;
-use App\Http\Resources\Api\V1\EquipmentResource;
-use App\Models\Equipment;
+use App\Http\Requests\Api\V1\ExperienceStoreRequest;
+use App\Http\Resources\Api\V1\ExperienceResource;
+use App\Models\Experience;
 use Illuminate\Http\Request;
 
-class EquipmentController
+class ExperienceController
 {
     /**
      * Display a listing of the resource.
@@ -28,17 +28,17 @@ class EquipmentController
     /**
      * Store a newly created resource in storage.
      */
-    public function store(EquipmentStoreRequest $request)
+    public function store(ExperienceStoreRequest $request): ExperienceResource
     {
-        $equipment = Equipment::create($request->mappedAttributes());
+        $experience = Experience::create($request->mappedAttributes());
 
-        return new EquipmentResource($equipment->refresh());
+        return new ExperienceResource($experience->refresh());
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(Equipment $equipment)
+    public function show(string $id)
     {
         //
     }
@@ -46,7 +46,7 @@ class EquipmentController
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Equipment $equipment)
+    public function edit(string $id)
     {
         //
     }
@@ -54,7 +54,7 @@ class EquipmentController
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Equipment $equipment)
+    public function update(Request $request, string $id)
     {
         //
     }
@@ -62,7 +62,7 @@ class EquipmentController
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Equipment $equipment)
+    public function destroy(string $id)
     {
         //
     }
