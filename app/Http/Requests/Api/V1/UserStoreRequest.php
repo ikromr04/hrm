@@ -2,8 +2,6 @@
 
 namespace App\Http\Requests\Api\V1;
 
-use Illuminate\Support\Str;
-
 class UserStoreRequest extends UserBaseRequest
 {
     /**
@@ -25,19 +23,12 @@ class UserStoreRequest extends UserBaseRequest
             'data.type' => 'required|in:users',
             'data.attributes.name' => 'required|string|max:255',
             'data.attributes.surname' => 'required|string|max:255',
-            'data.attributes.patronymic' => 'nullable|string|max:255',
+            'data.attributes.patronymic' => 'sometimes|nullable|string|max:255',
             'data.attributes.email' => 'required|string|email|max:255|unique:users,email',
-            'data.attributes.password' => 'nullable|string|min:6|confirmed',
-            'data.attributes.avatar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'data.attributes.password' => 'sometimes|nullable|string|min:6|confirmed',
+            'data.attributes.avatar' => 'sometimes|nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
 
             ...$this->relationshipRules
-        ];
-    }
-
-    public function messages(): array
-    {
-        return [
-            'data.attributes.email.unique' => 'Сотрудник с таким Email-ом уже существует.'
         ];
     }
 }

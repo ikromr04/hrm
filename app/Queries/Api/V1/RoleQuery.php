@@ -14,6 +14,7 @@ class RoleQuery extends QueryProfile
     protected function filters(): array
     {
         return [
+            'id',
             'name',
             'displayName',
             'createdAt',
@@ -24,7 +25,7 @@ class RoleQuery extends QueryProfile
     protected function includes(): array
     {
         return [
-            'user',
+            'users',
         ];
     }
 

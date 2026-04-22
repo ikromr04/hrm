@@ -2,22 +2,21 @@
 
 namespace App\Queries\Api\V1;
 
-use App\Models\Department;
+use App\Models\Equipment;
 
-class DepartmentQuery extends QueryProfile
+class EquipmentQuery extends QueryProfile
 {
     protected function model(): string
     {
-        return Department::class;
+        return Equipment::class;
     }
 
     protected function filters(): array
     {
         return [
+            'id',
             'name',
-            'left',
-            'right',
-            'parent',
+            'description',
             'createdAt',
             'updatedAt',
         ];
@@ -26,7 +25,7 @@ class DepartmentQuery extends QueryProfile
     protected function includes(): array
     {
         return [
-            'users',
+            'user',
         ];
     }
 
@@ -35,9 +34,7 @@ class DepartmentQuery extends QueryProfile
         return [
             'id',
             'name',
-            'left',
-            'right',
-            'parent',
+            'description',
             'createdAt',
             'updatedAt',
         ];
@@ -48,9 +45,7 @@ class DepartmentQuery extends QueryProfile
         return [
             'id',
             'name',
-            'left',
-            'right',
-            'parent',
+            'description',
             'createdAt',
             'updatedAt',
         ];

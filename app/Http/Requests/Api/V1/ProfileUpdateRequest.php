@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
-class ProfileStoreRequest extends ProfileBaseRequest
+class ProfileUpdateRequest extends ProfileBaseRequest
 {
     /**
      * Determine if the user is authorized to make this request.

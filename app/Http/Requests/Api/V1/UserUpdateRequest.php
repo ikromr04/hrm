@@ -23,13 +23,13 @@ class UserUpdateRequest extends UserBaseRequest
     {
         return [
             'data.type' => 'required|in:users',
-            'data.id' => "required|exists:users,id",
-            'data.attributes.name' => 'nullable|string|max:255',
-            'data.attributes.surname' => 'nullable|string|max:255',
-            'data.attributes.patronymic' => 'nullable|string|max:255',
-            'data.attributes.avatar' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'data.attributes.email' => "nullable|string|email|max:255|unique:users,email,$this->route('user')",
-            'data.attributes.password' => 'nullable|string|min:6|confirmed',
+            'data.id' => "required|exists:users,id|in:{$this->route('user')->id}",
+            'data.attributes.name' => 'sometimes|required|string|max:255',
+            'data.attributes.surname' => 'sometimes|required|string|max:255',
+            'data.attributes.patronymic' => 'sometimes|nullable|string|max:255',
+            'data.attributes.avatar' => 'sometimes|nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'data.attributes.email' => 'sometimes|required|email|max:255|unique:users,email',
+            'data.attributes.password' => 'sometimes|required|string|min:6|confirmed',
 
             ...$this->relationshipRules
         ];

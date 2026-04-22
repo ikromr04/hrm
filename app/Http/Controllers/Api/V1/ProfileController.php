@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Requests\Api\V1\ProfileStoreRequest;
-use App\Http\Resources\Api\V1\ProfileCollection;
+use App\Http\Requests\Api\V1\ProfileUpdateRequest;
 use App\Http\Resources\Api\V1\ProfileResource;
 use App\Models\Profile;
 use App\Queries\Api\V1\ProfileQuery;
@@ -27,7 +27,7 @@ class ProfileController
     {
         $profile = Profile::create($request->mappedAttributes());
 
-        return $profile->refresh()->toResource();
+        return $profile->toResource();
     }
 
     /**
@@ -43,9 +43,11 @@ class ProfileController
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Profile $profile)
+    public function update(ProfileUpdateRequest $request, Profile $profile): ProfileResource
     {
-        //
+        $profile->update($request->mappedAttributes());
+
+        return $profile->toResource();
     }
 
     /**

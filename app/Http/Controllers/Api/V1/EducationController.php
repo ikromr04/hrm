@@ -5,16 +5,18 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Api\V1\EducationStoreRequest;
 use App\Http\Resources\Api\V1\EducationResource;
 use App\Models\Education;
+use App\Queries\Api\V1\EducationQuery;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class EducationController
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(EducationQuery $query): AnonymousResourceCollection
     {
-        //
+        return $query->get()->toResourceCollection();
     }
 
     /**
@@ -32,7 +34,7 @@ class EducationController
     {
         $education = Education::create($request->mappedAttributes());
 
-        return new EducationResource($education->refresh());
+        return $education->toResource();
     }
 
     /**

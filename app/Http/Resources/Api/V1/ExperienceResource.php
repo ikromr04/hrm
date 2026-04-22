@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\JsonApi\JsonApiResource;
 class ExperienceResource extends JsonApiResource
 {
     public $relationships = [
-        'users' => UserResource::class,
+        'user' => UserResource::class,
     ];
 
     public function toAttributes(Request $request): array

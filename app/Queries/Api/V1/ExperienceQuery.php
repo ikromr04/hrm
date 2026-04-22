@@ -2,22 +2,23 @@
 
 namespace App\Queries\Api\V1;
 
-use App\Models\Department;
+use App\Models\Experience;
 
-class DepartmentQuery extends QueryProfile
+class ExperienceQuery extends QueryProfile
 {
     protected function model(): string
     {
-        return Department::class;
+        return Experience::class;
     }
 
     protected function filters(): array
     {
         return [
-            'name',
-            'left',
-            'right',
-            'parent',
+            'id',
+            'companyName',
+            'position',
+            'startedAt',
+            'endedAt',
             'createdAt',
             'updatedAt',
         ];
@@ -26,7 +27,7 @@ class DepartmentQuery extends QueryProfile
     protected function includes(): array
     {
         return [
-            'users',
+            'user',
         ];
     }
 
@@ -34,10 +35,10 @@ class DepartmentQuery extends QueryProfile
     {
         return [
             'id',
-            'name',
-            'left',
-            'right',
-            'parent',
+            'companyName',
+            'position',
+            'startedAt',
+            'endedAt',
             'createdAt',
             'updatedAt',
         ];
@@ -47,10 +48,10 @@ class DepartmentQuery extends QueryProfile
     {
         return [
             'id',
-            'name',
-            'left',
-            'right',
-            'parent',
+            'companyName',
+            'position',
+            'startedAt',
+            'endedAt',
             'createdAt',
             'updatedAt',
         ];

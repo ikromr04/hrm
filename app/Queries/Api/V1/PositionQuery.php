@@ -23,7 +23,7 @@ class PositionQuery extends QueryProfile
     protected function includes(): array
     {
         return [
-            'user',
+            'users',
         ];
     }
 

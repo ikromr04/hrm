@@ -22,7 +22,7 @@ class ProfileResource extends JsonApiResource
             'tel1' => $this->tel_1,
             'tel2' => $this->tel_2,
             'familyStatus' => $this->family_status,
-            'children' => $this->children ? json_decode($this->children) : $this->children,
+            'children' => $this->children,
             'startedWorkAt' => $this->started_work_at,
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,

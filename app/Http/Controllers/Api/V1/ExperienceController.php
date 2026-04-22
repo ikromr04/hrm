@@ -5,16 +5,18 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Api\V1\ExperienceStoreRequest;
 use App\Http\Resources\Api\V1\ExperienceResource;
 use App\Models\Experience;
+use App\Queries\Api\V1\ExperienceQuery;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ExperienceController
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(ExperienceQuery $query): AnonymousResourceCollection
     {
-        //
+        return $query->get()->toResourceCollection();
     }
 
     /**
@@ -32,7 +34,7 @@ class ExperienceController
     {
         $experience = Experience::create($request->mappedAttributes());
 
-        return new ExperienceResource($experience->refresh());
+        return $experience->toResource();
     }
 
     /**

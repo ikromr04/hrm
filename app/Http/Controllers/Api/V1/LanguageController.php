@@ -4,16 +4,18 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\Api\V1\LanguageCollection;
 use App\Models\Language;
+use App\Queries\Api\V1\LanguageQuery;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class LanguageController
 {
     /**
      * Display a listing of the resource.
      */
-    public function index(): LanguageCollection
+    public function index(LanguageQuery $query): AnonymousResourceCollection
     {
-        return new LanguageCollection(Language::all());
+        return $query->get()->toResourceCollection();
     }
 
     /**

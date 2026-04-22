@@ -26,7 +26,7 @@ class UserController extends ApiController
             $user->storeAvatar($request->file('data.attributes.avatar'));
         }
 
-        return $user->refresh()->toResource();
+        return $user->toResource();
     }
 
     public function show(UserQuery $query, string $id): UserResource
@@ -36,9 +36,8 @@ class UserController extends ApiController
         return $user->toResource();
     }
 
-    public function update(UserUpdateRequest $request, UserQuery $query, string $id): UserResource
+    public function update(UserUpdateRequest $request, User $user): UserResource
     {
-        $user = $query->query()->findOrFail($id);
         $user->update($request->mappedAttributes());
         $user->syncRelationships($request->mappedRelationships());
 

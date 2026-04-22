@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Http\Resources\Api\V1\EquipmentResource;
+use Illuminate\Database\Eloquent\Attributes\UseResource;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+#[UseResource(EquipmentResource::class)]
 class Equipment extends Model
 {
     protected $table = 'equipments';
@@ -15,8 +18,8 @@ class Equipment extends Model
         'user_id',
     ];
 
-    public function users(): BelongsToMany
+    public function user(): BelongsTo
     {
-        return $this->belongsToMany(User::class);
+        return $this->belongsTo(User::class);
     }
 }

@@ -2,22 +2,21 @@
 
 namespace App\Queries\Api\V1;
 
-use App\Models\Department;
+use App\Models\Language;
 
-class DepartmentQuery extends QueryProfile
+class LanguageQuery extends QueryProfile
 {
     protected function model(): string
     {
-        return Department::class;
+        return Language::class;
     }
 
     protected function filters(): array
     {
         return [
+            'id',
             'name',
-            'left',
-            'right',
-            'parent',
+            'level',
             'createdAt',
             'updatedAt',
         ];
@@ -35,9 +34,7 @@ class DepartmentQuery extends QueryProfile
         return [
             'id',
             'name',
-            'left',
-            'right',
-            'parent',
+            'level',
             'createdAt',
             'updatedAt',
         ];
@@ -48,9 +45,7 @@ class DepartmentQuery extends QueryProfile
         return [
             'id',
             'name',
-            'left',
-            'right',
-            'parent',
+            'level',
             'createdAt',
             'updatedAt',
         ];
