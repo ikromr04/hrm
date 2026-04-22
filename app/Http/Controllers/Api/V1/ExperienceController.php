@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Requests\Api\V1\ExperienceStoreRequest;
+use App\Http\Requests\Api\V1\ExperienceUpdateRequest;
 use App\Http\Resources\Api\V1\ExperienceResource;
 use App\Models\Experience;
 use App\Queries\Api\V1\ExperienceQuery;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 class ExperienceController extends ApiController
 {
@@ -17,14 +19,6 @@ class ExperienceController extends ApiController
     public function index(ExperienceQuery $query): AnonymousResourceCollection
     {
         return $query->get()->toResourceCollection();
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
     }
 
     /**
@@ -46,26 +40,22 @@ class ExperienceController extends ApiController
     }
 
     /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(ExperienceUpdateRequest $request, Experience $experience)
     {
-        //
+        $experience->update($request->mappedAttributes());
+
+        return $experience->toResource();
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Experience $experience): Response
     {
-        //
+        $experience->delete();
+
+        return $this->noContent();
     }
 }
