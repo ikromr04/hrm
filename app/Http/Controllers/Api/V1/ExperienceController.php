@@ -42,7 +42,7 @@ class ExperienceController extends ApiController
     /**
      * Update the specified resource in storage.
      */
-    public function update(ExperienceUpdateRequest $request, Experience $experience)
+    public function update(ExperienceUpdateRequest $request, Experience $experience): ExperienceResource
     {
         $experience->update($request->mappedAttributes());
 

@@ -24,7 +24,7 @@ class EducationUpdateRequest extends FormRequest
     {
         return [
             'data.type' => 'required|in:educations',
-            'data.id' => "required|in:{$this->route('education')->id}",
+            'data.id' => "required|exists:educations,id|in:{$this->route('education')->id}",
             'data.attributes.institution' => 'sometimes|required|string|max:255',
             'data.attributes.faculty' => 'sometimes|required|string|max:255',
             'data.attributes.speciality' => 'sometimes|required|string|max:255',
