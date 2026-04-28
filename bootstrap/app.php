@@ -14,7 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
         then: function (Application $app): void {
-            Route::middleware(['api', 'media_type', 'accept'])
+            Route::middleware(['api'])
                 ->prefix('api/v1')
                 ->group(base_path('routes/api_v1.php'));
         }
