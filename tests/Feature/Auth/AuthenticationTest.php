@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -15,6 +16,25 @@ class AuthenticationTest extends TestCase
         $response = $this->get('/login');
 
         $response->assertStatus(200);
+        $response->assertInertia(fn (Assert $page) => $page->component('auth/login'));
+    }
+
+    public function test_home_redirects_to_dashboard()
+    {
+        $this->get('/')->assertRedirect('/dashboard');
+    }
+
+    public function test_registration_is_disabled()
+    {
+        $this->get('/register')->assertNotFound();
+        $this->post('/register', [
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertNotFound();
+
+        $this->assertGuest();
     }
 
     public function test_users_can_authenticate_using_the_login_screen()
