@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\Directories;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeStatusController;
@@ -12,6 +13,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+    Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
+    Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });
 
 Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee}')->name('employees.')->group(function () {

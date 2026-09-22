@@ -47,3 +47,6 @@ export function tenure(since: string): string {
 
     return [years > 0 && `${years} ${plural(years, ['год', 'года', 'лет'])}`, (rest > 0 || years === 0) && `${rest} мес.`].filter(Boolean).join(' ');
 }
+
+/** "5 сотрудников" */
+export const peopleLabel = (count: number) => `${count} ${plural(count, ['сотрудник', 'сотрудника', 'сотрудников'])}`;

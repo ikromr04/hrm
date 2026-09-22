@@ -64,7 +64,9 @@ function Departments({ items }: { items: Employee['departments'] }) {
         <ul className="flex flex-col gap-1">
             {items.map((department) => (
                 <li key={department.id}>
-                    {department.path}
+                    <Link href={route('departments.show', department.id)} className="hover:underline">
+                        {department.path}
+                    </Link>
                     {department.is_head && <span className="text-brand-strong font-semibold dark:text-[#C5E27A]"> · руководитель</span>}
                 </li>
             ))}

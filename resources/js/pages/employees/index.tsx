@@ -185,15 +185,20 @@ function DepartmentBadges({ departments }: { departments: EmployeeRow['departmen
     return (
         <div className="flex flex-wrap gap-1 whitespace-normal">
             {departments.map((department) => (
-                <StatusBadge
+                <Link
                     key={department.id}
-                    tone="neutral"
-                    title={department.is_head ? `${department.path} · руководитель` : department.path}
-                    className="h-auto min-h-[22px] gap-1 py-0.5 whitespace-normal"
+                    href={route('departments.show', department.id)}
+                    className="group focus-visible:ring-ring rounded-md outline-hidden focus-visible:ring-2"
                 >
-                    {department.is_head && <Crown className="size-3 shrink-0 text-[#9A4A06] dark:text-[#F8C471]" aria-label="Руководитель" />}
-                    {department.name}
-                </StatusBadge>
+                    <StatusBadge
+                        tone="neutral"
+                        title={department.is_head ? `${department.path} · руководитель` : department.path}
+                        className="h-auto min-h-[22px] gap-1 py-0.5 whitespace-normal transition-colors group-hover:bg-[#E4E4E7] group-hover:text-[#18181B] dark:group-hover:bg-white/20 dark:group-hover:text-white"
+                    >
+                        {department.is_head && <Crown className="size-3 shrink-0 text-[#9A4A06] dark:text-[#F8C471]" aria-label="Руководитель" />}
+                        {department.name}
+                    </StatusBadge>
+                </Link>
             ))}
         </div>
     );

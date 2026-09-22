@@ -7,7 +7,7 @@ interface AuthLayoutProps {
     description?: string;
 }
 
-const MODULES = ['Сотрудники', 'Оргструктура', 'Оборудование', 'ПИР', 'KPI'];
+const MODULES = ['Сотрудники', 'Структура компании', 'Оборудование', 'ПИР', 'KPI'];
 
 export default function AuthEvoletLayout({ children, title, description }: PropsWithChildren<AuthLayoutProps>) {
     return (

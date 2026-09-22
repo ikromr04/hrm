@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type SharedData, type SidebarNavGroup } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BarChart3, Bell, BookMarked, Briefcase, CalendarDays, Laptop, LayoutGrid, Settings, Target, Users, Wallet } from 'lucide-react';
+import { BarChart3, Bell, BookMarked, Briefcase, CalendarDays, Laptop, LayoutGrid, Network, Settings, Target, Users, Wallet } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const navGroups: SidebarNavGroup[] = [
@@ -11,6 +11,7 @@ const navGroups: SidebarNavGroup[] = [
         items: [
             { title: 'Главная', url: '/dashboard', icon: LayoutGrid },
             { title: 'Сотрудники', url: '/employees', icon: Users },
+            { title: 'Структура компании', url: '/departments', icon: Network },
             { title: 'Оборудование', icon: Laptop },
             { title: 'Отпуска', icon: CalendarDays },
         ],
