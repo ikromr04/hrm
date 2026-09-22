@@ -21,6 +21,13 @@ return new class extends Migration
             $table->string('avatar')->nullable();
             $table->enum('sex', ['male', 'female']);
 
+            // Employment status: people who left stay in the database, apart
+            // from the working staff. Deleting an employee removes the row.
+            $table->enum('status', ['active', 'transferred', 'fired'])->default('active')->index();
+            $table->date('status_changed_at')->nullable();
+            // Where the person was transferred to, or why they were let go.
+            $table->string('status_note')->nullable();
+
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
