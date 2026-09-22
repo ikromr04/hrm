@@ -4,6 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 interface AppLayoutProps {
     children: React.ReactNode;
     breadcrumbs?: BreadcrumbItem[];
+    fitViewport?: boolean;
 }
 
 export default ({ children, breadcrumbs, ...props }: AppLayoutProps) => (
