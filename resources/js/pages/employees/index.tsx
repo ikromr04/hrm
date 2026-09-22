@@ -689,7 +689,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                 <h1 className="text-xl font-semibold tracking-tight">Сотрудники</h1>
 
                 <div className="-mb-2 flex flex-wrap items-center gap-2">
-                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-8 w-full max-w-sm items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
+                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-8 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
                         <Search className="size-4 shrink-0" />
                         <span className="sr-only">Поиск по всем полям</span>
                         <input
@@ -715,8 +715,6 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                             Сбросить фильтры ({activeFilters})
                         </Button>
                     )}
-
-                    <div className="flex-1" />
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
