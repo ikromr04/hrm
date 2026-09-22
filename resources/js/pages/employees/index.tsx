@@ -1,4 +1,5 @@
 import { EmployeeActions, type EmploymentStatus } from '@/components/employee-actions';
+import { LanguageBadges } from '@/components/language-badges';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonAvatar } from '@/components/person-avatar';
 import { Phones } from '@/components/phones';
@@ -21,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
-import { capitalize, formatDate, maritalLabels, sexLabels, type Marital, type PrivateDetails, type Sex } from '@/lib/employee';
+import { capitalize, formatDate, maritalLabels, sexLabels, type Marital, type PrivateDetails, type Sex, type SpokenLanguage } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -60,6 +61,8 @@ interface EmployeeRow {
     /** Positions, shown as "Должность"; an employee can hold several. */
     positions: string[];
     departments: { id: number; name: string; path: string; is_head: boolean }[];
+    /** Public, like positions; the best known first. */
+    languages: SpokenLanguage[];
     status: EmploymentStatus;
     status_changed_at: string | null;
     /** Where they were transferred or why they were let go; managers only. */
@@ -76,6 +79,7 @@ interface Filters {
     role: string[];
     position: number[];
     department: number[];
+    language: number[];
     sex: Sex | null;
     birth_from: string | null;
     birth_to: string | null;
@@ -94,6 +98,7 @@ type ColumnKey =
     | 'role'
     | 'position'
     | 'department'
+    | 'languages'
     | 'birth_date'
     | 'sex'
     | 'nationality'
@@ -123,6 +128,7 @@ interface EmployeesProps {
         positions: { id: number; name: string }[];
         /** The department tree flattened, parents first. */
         departments: { id: number; name: string; depth: number }[];
+        languages: { id: number; name: string }[];
         nationalities: string[];
         citizenships: string[];
     };
@@ -139,7 +145,11 @@ type Option<T> = { value: T; label: string; depth?: number };
 type FilterDef =
     | { type: 'text'; param: 'search' | 'address' | 'phone'; placeholder: string }
     | { type: 'select'; param: 'sex' | 'marital_status'; options: Option<string>[] }
-    | { type: 'multi'; param: 'role' | 'position' | 'department' | 'nationality' | 'citizenship' | 'children'; options: Option<string | number>[] }
+    | {
+          type: 'multi';
+          param: 'role' | 'position' | 'department' | 'language' | 'nationality' | 'citizenship' | 'children';
+          options: Option<string | number>[];
+      }
     | { type: 'dates'; from: 'birth_from' | 'hired_from'; to: 'birth_to' | 'hired_to' };
 
 interface ColumnDef {
@@ -312,6 +322,14 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
             private: false,
             filter: { type: 'multi', param: 'position', options: options.positions.map((t) => ({ value: t.id, label: t.name })) },
             cell: (row) => (row.positions.length ? <PositionBadges titles={row.positions} /> : <Empty />),
+        },
+        {
+            key: 'languages',
+            label: 'Языки',
+            width: 260,
+            private: false,
+            filter: { type: 'multi', param: 'language', options: options.languages.map((l) => ({ value: l.id, label: l.name })) },
+            cell: (row) => (row.languages.length ? <LanguageBadges languages={row.languages} /> : <Empty />),
         },
         {
             key: 'birth_date',

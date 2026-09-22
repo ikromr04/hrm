@@ -1,10 +1,23 @@
+import { LevelMeter } from '@/components/language-badges';
 import { PersonAvatar } from '@/components/person-avatar';
 import { SosPhone } from '@/components/phones';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
-import { age, capitalize, formatDate, formatPhone, maritalLabels, sexLabels, tenure, type PrivateDetails, type Sex } from '@/lib/employee';
+import {
+    age,
+    capitalize,
+    formatDate,
+    formatPhone,
+    languageLevelLabels,
+    maritalLabels,
+    sexLabels,
+    tenure,
+    type PrivateDetails,
+    type Sex,
+    type SpokenLanguage,
+} from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
@@ -33,6 +46,8 @@ interface Employee {
     /** Positions, shown as "Должность"; an employee can hold several. */
     positions: string[];
     departments: { id: number; name: string; path: string; is_head: boolean }[];
+    /** The best known first. */
+    languages: SpokenLanguage[];
     /** Null when the viewer may not see this person's private data. */
     private: ProfilePrivate | null;
 }
@@ -68,6 +83,20 @@ function Departments({ items }: { items: Employee['departments'] }) {
                         {department.path}
                     </Link>
                     {department.is_head && <span className="text-brand-strong font-semibold dark:text-[#C5E27A]"> · руководитель</span>}
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function Languages({ items }: { items: SpokenLanguage[] }) {
+    return (
+        <ul className="flex flex-col gap-1">
+            {items.map((language) => (
+                <li key={language.id} className="flex items-center gap-2">
+                    {language.name}
+                    <LevelMeter level={language.level} className="text-muted-foreground" />
+                    <span className="text-muted-foreground font-normal">{languageLevelLabels[language.level]}</span>
                 </li>
             ))}
         </ul>
@@ -220,6 +249,9 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                                     <Field label={employee.departments.length > 1 ? 'Отделы' : 'Отдел'} wide>
                                         {employee.departments.length > 0 ? <Departments items={employee.departments} /> : null}
                                     </Field>
+                                    <Field label="Языки" wide>
+                                        {employee.languages.length > 0 ? <Languages items={employee.languages} /> : null}
+                                    </Field>
                                     <Field label="Начало работы">{formatDate(details.hired_at)}</Field>
                                     <Field label="Стаж в компании">{details.hired_at && tenure(details.hired_at)}</Field>
                                 </Fields>
@@ -263,6 +295,9 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                                 </Field>
                                 <Field label={employee.departments.length > 1 ? 'Отделы' : 'Отдел'} wide>
                                     {employee.departments.length > 0 ? <Departments items={employee.departments} /> : null}
+                                </Field>
+                                <Field label="Языки" wide>
+                                    {employee.languages.length > 0 ? <Languages items={employee.languages} /> : null}
                                 </Field>
                                 <Field label="Пол">{sexLabels[employee.sex]}</Field>
                             </Fields>

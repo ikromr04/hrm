@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Department;
+use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
@@ -33,6 +34,7 @@ class UserSeeder extends Seeder
         $this->callOnce(RoleSeeder::class);
         $this->callOnce(DepartmentSeeder::class);
         $this->callOnce(PositionSeeder::class);
+        $this->callOnce(LanguageSeeder::class);
 
         $admin = $this->account(['name' => 'Некруз', 'surname' => 'Абдуллоев', 'patronymic' => 'Саидович', 'sex' => 'male', 'email' => 'admin@evolet.test']);
         $admin->assignRole('admin');
@@ -75,7 +77,40 @@ class UserSeeder extends Seeder
         $this->assignDepartments();
         $this->assignPositions();
         $this->assignDepartmentHeads();
+        $this->assignLanguages();
         $this->addChildren();
+    }
+
+    /**
+     * Nearly everyone speaks Tajik and Russian; many know some English, and a
+     * few speak another language as well.
+     */
+    private function assignLanguages(): void
+    {
+        $languages = Language::all()->keyBy('name');
+        $level = fn (array $weights) => fake()->randomElement(array_merge(...array_map(
+            fn (string $level, int $weight) => array_fill(0, $weight, $level),
+            array_keys($weights),
+            $weights,
+        )));
+
+        User::doesntHave('languages')->get()->each(function (User $user) use ($languages, $level) {
+            $spoken = [
+                'Таджикский' => $level(['advanced' => 9, 'intermediate' => 1]),
+                'Русский' => $level(['advanced' => 6, 'intermediate' => 3, 'beginner' => 1]),
+            ];
+
+            if (fake()->boolean(65)) {
+                $spoken['Английский'] = $level(['advanced' => 2, 'intermediate' => 4, 'beginner' => 4]);
+            }
+
+            if (fake()->boolean(20)) {
+                $other = fake()->randomElement(array_diff(LanguageSeeder::LANGUAGES, array_keys($spoken)));
+                $spoken[$other] = $level(['advanced' => 3, 'intermediate' => 3, 'beginner' => 4]);
+            }
+
+            $user->languages()->sync(collect($spoken)->mapWithKeys(fn (string $lvl, string $name) => [$languages[$name]->id => ['level' => $lvl]]));
+        });
     }
 
     /**

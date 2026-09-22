@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Language;
 use App\Models\User;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -60,6 +61,9 @@ class UpdateEmployeeRequest extends FormRequest
             'positions.*' => ['integer', 'distinct', Rule::exists('positions', 'id')],
             'departments' => ['present', 'array'],
             'departments.*' => ['integer', 'distinct', Rule::exists('departments', 'id')],
+            'languages' => ['present', 'array'],
+            'languages.*.id' => ['required', 'integer', 'distinct', Rule::exists('languages', 'id')],
+            'languages.*.level' => ['required', Rule::in(Language::LEVELS)],
 
             'hired_at' => $date,
             'birth_date' => $date,
@@ -132,6 +136,8 @@ class UpdateEmployeeRequest extends FormRequest
             'roles.*' => 'позиция',
             'positions.*' => 'должность',
             'departments.*' => 'отдел',
+            'languages.*.id' => 'язык',
+            'languages.*.level' => 'уровень',
             'hired_at' => 'начало работы',
             'birth_date' => 'дата рождения',
             'birth_place' => 'место рождения',

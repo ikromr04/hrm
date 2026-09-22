@@ -41,6 +41,7 @@ class EmployeeEditTest extends TestCase
             'roles' => $employee->roles->pluck('name')->all(),
             'positions' => [],
             'departments' => [],
+            'languages' => [],
             'children' => [],
             ...$overrides,
         ];

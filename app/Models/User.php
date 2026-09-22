@@ -114,6 +114,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Languages the employee speaks, each with a level; public, like positions.
+     */
+    public function languages(): BelongsToMany
+    {
+        return $this->belongsToMany(Language::class)->withPivot('level')->withTimestamps()->orderBy('name');
+    }
+
+    /**
      * Private, like details.
      */
     public function children(): HasMany

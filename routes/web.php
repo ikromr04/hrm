@@ -28,13 +28,14 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee
     Route::delete('/', [EmployeeStatusController::class, 'destroy'])->name('destroy');
 });
 
-// Directories: roles ("Позиция"), positions ("Должность") and departments.
+// Directories: roles ("Позиция"), positions ("Должность"), departments and languages.
 Route::middleware(['auth', 'can:manage-directories'])->prefix('directories')->name('directories.')->group(function () {
     Route::redirect('/', '/directories/roles');
 
     Route::resource('roles', Directories\RoleController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('positions', Directories\PositionController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::resource('departments', Directories\DepartmentController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::resource('languages', Directories\LanguageController::class)->only(['index', 'store', 'update', 'destroy']);
 });
 
 require __DIR__.'/settings.php';

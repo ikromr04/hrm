@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Department;
+use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
@@ -68,6 +69,8 @@ class EmployeeController extends Controller
             'role.*' => ['string', Rule::exists('roles', 'name')],
             'department' => ['nullable', 'array'],
             'department.*' => ['integer', Rule::exists('departments', 'id')],
+            'language' => ['nullable', 'array'],
+            'language.*' => ['integer', Rule::exists('languages', 'id')],
             'sex' => ['nullable', Rule::in(['male', 'female'])],
 
             'birth_from' => $private(['nullable', 'date']),
@@ -91,6 +94,7 @@ class EmployeeController extends Controller
             'position' => array_map('intval', $input['position'] ?? []),
             'role' => array_values($input['role'] ?? []),
             'department' => array_map('intval', $input['department'] ?? []),
+            'language' => array_map('intval', $input['language'] ?? []),
             'sex' => $input['sex'] ?? null,
             'birth_from' => $input['birth_from'] ?? null,
             'birth_to' => $input['birth_to'] ?? null,
@@ -109,7 +113,7 @@ class EmployeeController extends Controller
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
         $status = $input['status'] ?? 'active';
 
-        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id'])
+        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name'])
             ->where('status', $status);
         $this->applySearch($query, $filters['q'], $privateAccess);
         $this->applyFilters($query, $filters);
@@ -133,6 +137,7 @@ class EmployeeController extends Controller
             'roles' => $this->roleTitles($user),
             'positions' => $this->positionNames($user),
             'departments' => $this->departmentList($user),
+            'languages' => $this->languageList($user),
             'status' => $user->status,
             'status_changed_at' => $user->status_changed_at?->toDateString(),
             'status_note' => $canManage ? $user->status_note : null,
@@ -151,6 +156,7 @@ class EmployeeController extends Controller
                 'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
+                'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
                 'nationalities' => $privateAccess ? $this->distinctDetail('nationality') : [],
                 'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
             ],
@@ -172,7 +178,7 @@ class EmployeeController extends Controller
 
     public function show(Request $request, User $employee): Response
     {
-        $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id']);
+        $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name']);
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
 
         if ($canSeePrivate) {
@@ -194,6 +200,7 @@ class EmployeeController extends Controller
                 'roles' => $this->roleTitles($employee),
                 'positions' => $this->positionNames($employee),
                 'departments' => $this->departmentList($employee),
+                'languages' => $this->languageList($employee),
                 'private' => $canSeePrivate ? [
                     ...$this->privateDetails($employee),
                     'birth_place' => $employee->details?->birth_place,
@@ -210,7 +217,7 @@ class EmployeeController extends Controller
 
     public function edit(User $employee): Response
     {
-        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'details', 'children']);
+        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children']);
         $details = $employee->details;
 
         return Inertia::render('employees/edit', [
@@ -227,6 +234,7 @@ class EmployeeController extends Controller
                 'departments' => $employee->departments->pluck('id')->all(),
                 // Heads are chosen in the departments directory; shown here for context.
                 'head_of' => $employee->departments->filter(fn (Department $d) => $d->pivot->is_head)->pluck('id')->values()->all(),
+                'languages' => $employee->languages->map(fn (Language $l) => ['id' => $l->id, 'level' => $l->pivot->level])->all(),
                 'hired_at' => $details?->hired_at?->toDateString() ?? '',
                 'birth_date' => $details?->birth_date?->toDateString() ?? '',
                 'birth_place' => $details?->birth_place ?? '',
@@ -248,6 +256,7 @@ class EmployeeController extends Controller
                 'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
+                'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
                 'nationalities' => $this->distinctDetail('nationality'),
                 'citizenships' => $this->distinctDetail('citizenship'),
             ],
@@ -265,6 +274,7 @@ class EmployeeController extends Controller
             $employee->positions()->sync($data['positions']);
             // Departments the employee stays in keep their head flag.
             $employee->departments()->sync($data['departments']);
+            $employee->languages()->sync(collect($data['languages'])->mapWithKeys(fn (array $l) => [$l['id'] => ['level' => $l['level']]]));
 
             $employee->details()->updateOrCreate([], Arr::only($data, (new UserDetail)->getFillable()));
 
@@ -302,6 +312,7 @@ class EmployeeController extends Controller
 
                 $q->orWhereHas('roles', fn (Builder $q) => $q->where('title', 'like', $like))
                     ->orWhereHas('positions', fn (Builder $q) => $q->where('name', 'like', $like))
+                    ->orWhereHas('languages', fn (Builder $q) => $q->where('name', 'like', $like))
                     ->orWhereHas('departments', fn (Builder $q) => $q->where('name', 'like', $like));
 
                 foreach (['male' => 'мужской', 'female' => 'женский'] as $sex => $label) {
@@ -356,6 +367,8 @@ class EmployeeController extends Controller
             }))
             ->when($filters['role'], fn (Builder $q, array $roles) => $q->role($roles))
             ->when($filters['position'], fn (Builder $q, array $ids) => $q->whereHas('positions', fn (Builder $q) => $q->whereIn('positions.id', $ids)))
+            // Anyone who speaks one of the picked languages, at any level.
+            ->when($filters['language'], fn (Builder $q, array $ids) => $q->whereHas('languages', fn (Builder $q) => $q->whereIn('languages.id', $ids)))
             // Picking a department also matches everyone in its sub-departments.
             ->when($filters['department'], fn (Builder $q, array $ids) => $q->whereHas(
                 'departments',
@@ -528,6 +541,20 @@ class EmployeeController extends Controller
     private function positionNames(User $user): array
     {
         return $user->positions->pluck('name')->sort()->values()->all();
+    }
+
+    /**
+     * Languages with the level, the best known first.
+     *
+     * @return list<array{id: int, name: string, level: string}>
+     */
+    private function languageList(User $user): array
+    {
+        return $user->languages
+            ->sortBy([fn (Language $a, Language $b) => array_search($b->pivot->level, Language::LEVELS, true) <=> array_search($a->pivot->level, Language::LEVELS, true), ['name', 'asc']])
+            ->map(fn (Language $l) => ['id' => $l->id, 'name' => $l->name, 'level' => $l->pivot->level])
+            ->values()
+            ->all();
     }
 
     /**

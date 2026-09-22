@@ -50,3 +50,21 @@ export function tenure(since: string): string {
 
 /** "5 сотрудников" */
 export const peopleLabel = (count: number) => `${count} ${plural(count, ['сотрудник', 'сотрудника', 'сотрудников'])}`;
+
+export type LanguageLevel = 'beginner' | 'intermediate' | 'advanced';
+
+/** From least to most fluent. */
+export const languageLevels: LanguageLevel[] = ['beginner', 'intermediate', 'advanced'];
+
+export const languageLevelLabels: Record<LanguageLevel, string> = {
+    beginner: 'Начальный',
+    intermediate: 'Средний',
+    advanced: 'Продвинутый',
+};
+
+/** A language an employee speaks, public like positions. */
+export interface SpokenLanguage {
+    id: number;
+    name: string;
+    level: LanguageLevel;
+}

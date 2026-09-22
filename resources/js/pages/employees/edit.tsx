@@ -8,7 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { formatPhone, maritalLabels, sexLabels, type Marital, type Sex } from '@/lib/employee';
+import {
+    formatPhone,
+    languageLevelLabels,
+    languageLevels,
+    maritalLabels,
+    sexLabels,
+    type LanguageLevel,
+    type Marital,
+    type Sex,
+} from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -40,6 +49,7 @@ type EmployeeForm = {
     passport_issued_at: string;
     passport_issued_by: string;
     children: { full_name: string; birth_date: string }[];
+    languages: { id: number; level: LanguageLevel }[];
 };
 
 interface Props {
@@ -50,6 +60,7 @@ interface Props {
         departments: { id: number; name: string; depth: number }[];
         nationalities: string[];
         citizenships: string[];
+        languages: { id: number; name: string }[];
     };
 }
 
@@ -107,6 +118,7 @@ export default function EditEmployee({ employee, options }: Props) {
         passport_issued_at: employee.passport_issued_at,
         passport_issued_by: employee.passport_issued_by,
         children: employee.children,
+        languages: employee.languages,
     });
 
     const { data, setData, processing } = form;
@@ -118,6 +130,14 @@ export default function EditEmployee({ employee, options }: Props) {
         value: data[key] as string,
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => setData(key, event.target.value as never),
     });
+
+    const setLanguage = (index: number, patch: Partial<EmployeeForm['languages'][number]>) =>
+        setData(
+            'languages',
+            data.languages.map((language, i) => (i === index ? { ...language, ...patch } : language)),
+        );
+    // Each language once: a new row takes the first one not picked yet.
+    const unusedLanguage = options.languages.find((language) => !data.languages.some((l) => l.id === language.id));
 
     const setChild = (index: number, patch: Partial<EmployeeForm['children'][number]>) =>
         setData(
@@ -300,6 +320,80 @@ export default function EditEmployee({ employee, options }: Props) {
                                     {(id) => <Input id={id} type="date" {...text('hired_at')} />}
                                 </Field>
                             </Fields>
+                        </Section>
+
+                        <Section title="Языки">
+                            {data.languages.length === 0 && <p className="text-muted-foreground text-sm">Не указаны</p>}
+                            {data.languages.map((language, index) => (
+                                <div key={index} className="flex items-start gap-2">
+                                    <div className="grid flex-1 grid-cols-[1fr_9.5rem] gap-2">
+                                        <div className="flex flex-col gap-1">
+                                            <Select value={String(language.id)} onValueChange={(value) => setLanguage(index, { id: Number(value) })}>
+                                                <SelectTrigger aria-label="Язык">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="max-h-72">
+                                                    {options.languages
+                                                        .filter(
+                                                            (option) => option.id === language.id || !data.languages.some((l) => l.id === option.id),
+                                                        )
+                                                        .map((option) => (
+                                                            <SelectItem key={option.id} value={String(option.id)}>
+                                                                {option.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <InputError message={errors[`languages.${index}.id`]} />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <Select
+                                                value={language.level}
+                                                onValueChange={(value) => setLanguage(index, { level: value as LanguageLevel })}
+                                            >
+                                                <SelectTrigger aria-label="Уровень">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {languageLevels.map((level) => (
+                                                        <SelectItem key={level} value={level}>
+                                                            {languageLevelLabels[level]}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <InputError message={errors[`languages.${index}.level`]} />
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground shrink-0"
+                                        aria-label="Убрать язык"
+                                        onClick={() =>
+                                            setData(
+                                                'languages',
+                                                data.languages.filter((_, i) => i !== index),
+                                            )
+                                        }
+                                    >
+                                        <Trash2 />
+                                    </Button>
+                                </div>
+                            ))}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="self-start"
+                                disabled={!unusedLanguage}
+                                onClick={() =>
+                                    unusedLanguage && setData('languages', [...data.languages, { id: unusedLanguage.id, level: 'intermediate' }])
+                                }
+                            >
+                                <Plus />
+                                Добавить язык
+                            </Button>
                         </Section>
 
                         <Section title="Контакты">
