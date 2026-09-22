@@ -23,6 +23,10 @@ interface Employee {
     avatar: string | null;
     sex: Sex;
     email: string;
+    status: 'active' | 'transferred' | 'fired';
+    status_changed_at: string | null;
+    /** Where they were transferred or why they were let go; managers only. */
+    status_note: string | null;
     /** Access roles, shown as "Позиция". */
     roles: string[];
     /** Positions, shown as "Должность"; an employee can hold several. */
@@ -89,6 +93,24 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                     <div className="flex min-w-0 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <h1 className="text-[28px] leading-tight font-bold tracking-tight">{fullName}</h1>
+                            {employee.status !== 'active' && (
+                                <StatusBadge tone={employee.status === 'fired' ? 'danger' : 'warning'} title={employee.status_note ?? undefined}>
+                                    {[
+                                        employee.status === 'fired'
+                                            ? employee.sex === 'female'
+                                                ? 'Уволена'
+                                                : 'Уволен'
+                                            : employee.sex === 'female'
+                                              ? 'Переведена'
+                                              : 'Переведён',
+                                        formatDate(employee.status_changed_at),
+                                        employee.status_note &&
+                                            (employee.status === 'transferred' ? `→ ${employee.status_note}` : `· ${employee.status_note}`),
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                </StatusBadge>
+                            )}
                             {employee.positions.map((title) => (
                                 <StatusBadge key={title} tone="success">
                                     {title}

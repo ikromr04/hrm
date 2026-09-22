@@ -5,6 +5,7 @@ export interface Auth {
     /** What the current user may do; mirrors server-side gates. */
     can: {
         manageDirectories: boolean;
+        manageEmployees: boolean;
     };
 }
 

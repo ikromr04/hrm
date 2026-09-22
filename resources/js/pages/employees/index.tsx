@@ -1,3 +1,4 @@
+import { EmployeeActions, type EmploymentStatus } from '@/components/employee-actions';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonAvatar } from '@/components/person-avatar';
 import { Phones } from '@/components/phones';
@@ -22,8 +23,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import AppLayout from '@/layouts/app-layout';
 import { capitalize, formatDate, maritalLabels, sexLabels, type Marital, type PrivateDetails, type Sex } from '@/lib/employee';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowDown,
     ArrowUp,
@@ -58,6 +59,10 @@ interface EmployeeRow {
     /** Positions, shown as "Должность"; an employee can hold several. */
     positions: string[];
     departments: { id: number; name: string; path: string }[];
+    status: EmploymentStatus;
+    status_changed_at: string | null;
+    /** Where they were transferred or why they were let go; managers only. */
+    status_note: string | null;
     /** Null when the viewer may not see this person's private data. */
     private: PrivateDetails | null;
 }
@@ -120,6 +125,10 @@ interface EmployeesProps {
         nationalities: string[];
         citizenships: string[];
     };
+    /** Which list is shown: working, transferred or fired. */
+    status: EmploymentStatus;
+    /** Per-list counts; null for viewers who only see working staff. */
+    statusCounts: Record<EmploymentStatus, number> | null;
     total: number;
 }
 
@@ -183,6 +192,35 @@ function DepartmentBadges({ departments }: { departments: EmployeeRow['departmen
     );
 }
 
+const statusTabs: { status: EmploymentStatus; label: string }[] = [
+    { status: 'active', label: 'Работают' },
+    { status: 'transferred', label: 'Переведённые' },
+    { status: 'fired', label: 'Уволенные' },
+];
+
+/** Width of the trailing actions column, kept pinned to the right edge. */
+const ACTIONS_WIDTH = 56;
+
+/** "Уволена 12.03.2026 · По собственному желанию" under the name. */
+function LeftBadge({ row }: { row: EmployeeRow }) {
+    const female = row.sex === 'female';
+    const label = row.status === 'fired' ? (female ? 'Уволена' : 'Уволен') : female ? 'Переведена' : 'Переведён';
+    const text = [label, formatDate(row.status_changed_at)].filter(Boolean).join(' ');
+
+    return (
+        <span className="mt-1 flex min-w-0 flex-col items-start gap-1 text-xs whitespace-normal">
+            <StatusBadge tone={row.status === 'fired' ? 'danger' : 'warning'} className="h-5 shrink-0">
+                {text}
+            </StatusBadge>
+            {row.status_note && (
+                <span className="text-muted-foreground leading-snug break-words">
+                    {row.status === 'transferred' ? `→ ${row.status_note}` : row.status_note}
+                </span>
+            )}
+        </span>
+    );
+}
+
 function Empty() {
     return <span className="text-muted-foreground">—</span>;
 }
@@ -230,6 +268,7 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
                         >
                             {row.email}
                         </a>
+                        {row.status !== 'active' && <LeftBadge row={row} />}
                     </div>
                 </div>
             ),
@@ -405,9 +444,16 @@ const DEFAULT_SORT: Sort = { key: 'name', direction: 'asc' };
 
 type QueryValue = string | number | (string | number)[] | null;
 
-function toParams(filters: Filters, sort: Sort, perPage: number, defaultPerPage: number): Record<string, Exclude<QueryValue, null>> {
+function toParams(
+    filters: Filters,
+    sort: Sort,
+    perPage: number,
+    defaultPerPage: number,
+    status: EmploymentStatus,
+): Record<string, Exclude<QueryValue, null>> {
     const params: Record<string, QueryValue> = {
         ...filters,
+        status: status === 'active' ? null : status,
         sort: sort.key === DEFAULT_SORT.key ? null : sort.key,
         direction: sort.direction === DEFAULT_SORT.direction ? null : sort.direction,
         per_page: perPage === defaultPerPage ? null : perPage,
@@ -591,7 +637,20 @@ function ColumnFilter({ column, filters, onApply }: { column: ColumnDef; filters
 
 /* ---------------------------------------------------------------- page */
 
-export default function Employees({ employees, filters, sort, perPage, perPageOptions, privateAccess, sortable, options }: EmployeesProps) {
+export default function Employees({
+    employees,
+    filters,
+    sort,
+    perPage,
+    perPageOptions,
+    privateAccess,
+    sortable,
+    options,
+    status,
+    statusCounts,
+}: EmployeesProps) {
+    const { auth } = usePage<SharedData>().props;
+    const canManage = auth.can.manageEmployees;
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(() => defaultView(columns, privateAccess), [columns, privateAccess]);
     const [view, setView] = useState<ViewState>(() =>
@@ -605,10 +664,10 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
 
     useEffect(() => saveView(view), [view]);
 
-    const visit = (next: { filters?: Partial<Filters>; sort?: Sort; perPage?: number }) => {
+    const visit = (next: { filters?: Partial<Filters>; sort?: Sort; perPage?: number; status?: EmploymentStatus }) => {
         router.get(
             route('employees.index'),
-            toParams({ ...filters, ...next.filters }, next.sort ?? sort, next.perPage ?? perPage, perPageOptions[0]),
+            toParams({ ...filters, ...next.filters }, next.sort ?? sort, next.perPage ?? perPage, perPageOptions[0], next.status ?? status),
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
@@ -636,7 +695,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
     const right = view.pinned.right.filter((k) => !isHidden(k)).map(byKey);
     const center = columns.filter((c) => !isHidden(c.key) && !pinSide(c.key));
     const visible = [...left, ...center, ...right];
-    const tableWidth = visible.reduce((sum, c) => sum + c.width, 0);
+    const tableWidth = visible.reduce((sum, c) => sum + c.width, 0) + (canManage ? ACTIONS_WIDTH : 0);
 
     const stickyStyle = (column: ColumnDef): CSSProperties => {
         const side = pinSide(column.key);
@@ -646,7 +705,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
         }
         if (side === 'right') {
             const index = right.indexOf(column);
-            return { right: right.slice(index + 1).reduce((sum, c) => sum + c.width, 0) };
+            return { right: right.slice(index + 1).reduce((sum, c) => sum + c.width, canManage ? ACTIONS_WIDTH : 0) };
         }
         return {};
     };
@@ -700,6 +759,28 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                             className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
                         />
                     </label>
+
+                    {statusCounts && (
+                        <nav aria-label="Списки сотрудников" className="flex items-center gap-1 text-sm">
+                            {statusTabs.map((tab) => (
+                                <button
+                                    key={tab.status}
+                                    type="button"
+                                    onClick={() => visit({ status: tab.status })}
+                                    aria-current={status === tab.status ? 'page' : undefined}
+                                    className={cn(
+                                        'flex h-8 items-center gap-1.5 rounded-md px-2.5 transition-colors',
+                                        status === tab.status
+                                            ? 'bg-brand-soft text-foreground font-semibold dark:bg-white/10'
+                                            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                                    )}
+                                >
+                                    {tab.label}
+                                    <span className="text-muted-foreground text-xs font-semibold tabular-nums">{statusCounts[tab.status]}</span>
+                                </button>
+                            ))}
+                        </nav>
+                    )}
 
                     {activeFilters > 0 && (
                         <Button
@@ -776,7 +857,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                                                 className={cn(
                                                     'px-4 py-2.5 font-semibold',
                                                     index === 0 && 'pl-6',
-                                                    index === visible.length - 1 && 'pr-6',
+                                                    index === visible.length - 1 && !canManage && 'pr-6',
                                                     stickyClass(column, true),
                                                 )}
                                             >
@@ -864,6 +945,15 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                                             </th>
                                         );
                                     })}
+                                    {canManage && (
+                                        <th
+                                            scope="col"
+                                            style={{ width: ACTIONS_WIDTH }}
+                                            className="bg-sidebar sticky right-0 z-20 shadow-[-1px_0_0_var(--border)]"
+                                        >
+                                            <span className="sr-only">Действия</span>
+                                        </th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody>
@@ -876,7 +966,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                                                 className={cn(
                                                     'truncate px-4 py-3',
                                                     index === 0 && 'pl-6',
-                                                    index === visible.length - 1 && 'pr-6',
+                                                    index === visible.length - 1 && !canManage && 'pr-6',
                                                     stickyClass(column, false),
                                                 )}
                                             >
@@ -887,12 +977,17 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                                                 )}
                                             </td>
                                         ))}
+                                        {canManage && (
+                                            <td className="bg-card sticky right-0 z-[1] py-2 pr-3 pl-1 shadow-[-1px_0_0_var(--border)]">
+                                                <EmployeeActions employee={row} isSelf={row.id === auth.user.id} />
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
 
                                 {employees.data.length === 0 && (
                                     <tr className="border-t">
-                                        <td colSpan={visible.length} className="text-muted-foreground px-6 py-16 text-center">
+                                        <td colSpan={visible.length + (canManage ? 1 : 0)} className="text-muted-foreground px-6 py-16 text-center">
                                             Никого не нашлось. Попробуйте изменить поиск или фильтры.
                                         </td>
                                     </tr>
