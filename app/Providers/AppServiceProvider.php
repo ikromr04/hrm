@@ -26,5 +26,8 @@ class AppServiceProvider extends ServiceProvider
 
         // Editing positions, roles and departments. Admins only for now (via before); HR can be added here.
         Gate::define('manage-directories', fn (User $user) => false);
+
+        // Transferring, firing, restoring and deleting employees; seeing who left.
+        Gate::define('manage-employees', fn (User $user) => false);
     }
 }

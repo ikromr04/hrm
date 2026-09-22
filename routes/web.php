@@ -3,6 +3,7 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Directories;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeStatusController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
@@ -11,6 +12,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+});
+
+Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee}')->name('employees.')->group(function () {
+    Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
+    Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');
+    Route::post('restore', [EmployeeStatusController::class, 'restore'])->name('restore');
+    Route::delete('/', [EmployeeStatusController::class, 'destroy'])->name('destroy');
 });
 
 // Directories: roles ("Позиция"), positions ("Должность") and departments.

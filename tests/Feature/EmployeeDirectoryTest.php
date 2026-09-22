@@ -75,7 +75,7 @@ class EmployeeDirectoryTest extends TestCase
                 ->where('employees.data.0.positions', ['Переводчик'])
                 ->where('employees.data.0.private', null)
                 ->has('employees.data.0', fn (Assert $row) => $row
-                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'positions', 'departments', 'private'])
+                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'positions', 'departments', 'status', 'status_changed_at', 'status_note', 'private'])
                     ->missing('details')
                     ->missing('children')
                 )

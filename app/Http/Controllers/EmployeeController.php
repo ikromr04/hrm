@@ -24,7 +24,9 @@ class EmployeeController extends Controller
      * Public columns. Private details (user_details, user_children) are loaded
      * separately, and only for rows the viewer is allowed to see.
      */
-    private const PUBLIC_COLUMNS = ['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email'];
+    private const PUBLIC_COLUMNS = ['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'status', 'status_changed_at', 'status_note'];
+
+    public const STATUSES = ['active', 'transferred', 'fired'];
 
     private const PUBLIC_SORTS = ['name', 'role', 'department', 'position', 'sex'];
 
@@ -44,11 +46,14 @@ class EmployeeController extends Controller
     {
         $viewer = $request->user();
         $privateAccess = $viewer->can('viewAnyPrivateDetails', User::class);
+        // Only people who manage employees see who was transferred or fired.
+        $canManage = $viewer->can('manage-employees');
         $sortable = $privateAccess ? [...self::PUBLIC_SORTS, ...self::PRIVATE_SORTS] : self::PUBLIC_SORTS;
         $private = fn (array $rules) => $privateAccess ? $rules : ['prohibited'];
 
         $input = $request->validate([
             'per_page' => ['nullable', 'integer', Rule::in(self::PER_PAGE_OPTIONS)],
+            'status' => ['nullable', Rule::in($canManage ? self::STATUSES : ['active'])],
             'sort' => ['nullable', Rule::in($sortable)],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
 
@@ -99,8 +104,10 @@ class EmployeeController extends Controller
         $sort = $input['sort'] ?? 'name';
         $direction = $input['direction'] ?? 'asc';
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
+        $status = $input['status'] ?? 'active';
 
-        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id']);
+        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id'])
+            ->where('status', $status);
         $this->applySearch($query, $filters['q'], $privateAccess);
         $this->applyFilters($query, $filters);
         $this->applySort($query, $sort, $direction);
@@ -123,6 +130,9 @@ class EmployeeController extends Controller
             'roles' => $this->roleTitles($user),
             'positions' => $this->positionNames($user),
             'departments' => $this->departmentList($user),
+            'status' => $user->status,
+            'status_changed_at' => $user->status_changed_at?->toDateString(),
+            'status_note' => $canManage ? $user->status_note : null,
             'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
         ]);
 
@@ -141,8 +151,20 @@ class EmployeeController extends Controller
                 'nationalities' => $privateAccess ? $this->distinctDetail('nationality') : [],
                 'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
             ],
+            'status' => $status,
+            'statusCounts' => $canManage ? $this->statusCounts() : null,
             'total' => User::count(),
         ]);
+    }
+
+    /**
+     * @return array<string, int> Every status, with zero where nobody has it.
+     */
+    private function statusCounts(): array
+    {
+        $counts = User::query()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+
+        return collect(self::STATUSES)->mapWithKeys(fn (string $s) => [$s => (int) ($counts[$s] ?? 0)])->all();
     }
 
     public function show(Request $request, User $employee): Response
@@ -163,6 +185,9 @@ class EmployeeController extends Controller
                 'avatar' => $employee->avatar,
                 'sex' => $employee->sex,
                 'email' => $employee->email,
+                'status' => $employee->status,
+                'status_changed_at' => $employee->status_changed_at?->toDateString(),
+                'status_note' => $request->user()->can('manage-employees') ? $employee->status_note : null,
                 'roles' => $this->roleTitles($employee),
                 'positions' => $this->positionNames($employee),
                 'departments' => $this->departmentList($employee),

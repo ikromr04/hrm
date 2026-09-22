@@ -13,8 +13,15 @@ class UserSeeder extends Seeder
 {
     public const EMPLOYEES = 67;
 
+    /** People who have left: [status, how many, notes to pick from]. */
+    public const FORMER = [
+        ['fired', 6, ['По собственному желанию', 'По соглашению сторон', 'Истечение срока трудового договора', null]],
+        ['transferred', 3, ['Эволет Европа', 'Эволет Узбекистан', 'Эволет Казахстан']],
+    ];
+
     /**
-     * Mock accounts for local development: one admin plus 67 employees.
+     * Mock accounts for local development: one admin, 67 working employees
+     * and a few who were fired or transferred.
      * Every account uses the password "password".
      */
     public function run(): void
@@ -43,10 +50,25 @@ class UserSeeder extends Seeder
             $this->account($attributes);
         }
 
-        $missing = self::EMPLOYEES - User::whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'))->count();
+        $missing = self::EMPLOYEES - User::active()->whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'))->count();
 
         if ($missing > 0) {
             User::factory($missing)->has(UserDetail::factory(), 'details')->create();
+        }
+
+        foreach (self::FORMER as [$status, $count, $notes]) {
+            $missing = $count - User::where('status', $status)->count();
+
+            if ($missing > 0) {
+                User::factory($missing)
+                    ->has(UserDetail::factory(), 'details')
+                    ->state(fn () => [
+                        'status' => $status,
+                        'status_changed_at' => fake()->dateTimeBetween('-2 years', '-1 week'),
+                        'status_note' => fake()->randomElement($notes),
+                    ])
+                    ->create();
+            }
         }
 
         $this->assignRoles();
@@ -87,7 +109,9 @@ class UserSeeder extends Seeder
     private function assignPositions(): void
     {
         $titles = Position::all()->keyBy('name');
-        $employees = fn () => User::whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'));
+        $everyone = fn () => User::whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'));
+        // Head posts go to people who still work here.
+        $employees = fn () => $everyone()->active();
 
         foreach (PositionSeeder::HEADS as $title => $departmentName) {
             if ($titles[$title]->users()->exists()) {
@@ -118,7 +142,7 @@ class UserSeeder extends Seeder
 
         $regular = collect(PositionSeeder::OTHERS);
 
-        $employees()->doesntHave('positions')->get()->each(function (User $user) use ($titles, $regular) {
+        $everyone()->doesntHave('positions')->get()->each(function (User $user) use ($titles, $regular) {
             $pool = $user->sex === 'female' ? $regular : $regular->reject(fn ($t) => $t === 'Уборщица');
             $picked = $pool->random(fake()->boolean(12) ? 2 : 1);
 

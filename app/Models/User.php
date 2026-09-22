@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,8 +15,18 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
+
+    /**
+     * Mirrors the column default, so a freshly created user counts as working
+     * before it is reloaded from the database.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'status' => 'active',
+    ];
 
     /**
      * The attributes that are mass assignable.
@@ -27,6 +39,9 @@ class User extends Authenticatable
         'patronymic',
         'avatar',
         'sex',
+        'status',
+        'status_changed_at',
+        'status_note',
         'email',
         'password',
     ];
@@ -39,6 +54,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        // Why someone was let go is not for the page payload by default.
+        'status_note',
     ];
 
     /**
@@ -49,9 +66,26 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'status_changed_at' => 'date',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Still working here, as opposed to transferred or fired.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
+    }
+
+    /**
+     * @param  Builder<User>  $query
+     */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where('status', 'active');
     }
 
     /**

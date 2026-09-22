@@ -15,12 +15,16 @@ class UserSeederTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_seeder_creates_one_admin_and_67_employees_with_details()
+    public function test_seeder_creates_admin_working_and_former_employees_with_details()
     {
         $this->seed(DatabaseSeeder::class);
 
-        $this->assertSame(68, User::count());
-        $this->assertSame(68, UserDetail::count());
+        $this->assertSame(77, User::count());
+        $this->assertSame(77, UserDetail::count());
+        // 1 admin + 67 working + 6 fired + 3 transferred.
+        $this->assertSame(68, User::active()->count());
+        $this->assertSame(6, User::where('status', 'fired')->count());
+        $this->assertSame(3, User::where('status', 'transferred')->count());
         $this->assertSame(1, User::role('admin')->count());
         $this->assertSame(0, User::whereNull('surname')->orWhereNull('sex')->count());
         $this->assertSame(0, User::where('email', 'not like', '%@evolet.test')->count());
@@ -67,8 +71,8 @@ class UserSeederTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         $this->seed(DatabaseSeeder::class);
 
-        $this->assertSame(68, User::count());
-        $this->assertSame(68, UserDetail::count());
+        $this->assertSame(77, User::count());
+        $this->assertSame(77, UserDetail::count());
         $this->assertSame(1, User::role('admin')->count());
     }
 }

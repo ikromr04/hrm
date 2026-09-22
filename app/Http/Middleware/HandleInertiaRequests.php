@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
                 'can' => [
                     'manageDirectories' => (bool) $request->user()?->can('manage-directories'),
+                    'manageEmployees' => (bool) $request->user()?->can('manage-employees'),
                 ],
             ],
         ]);
