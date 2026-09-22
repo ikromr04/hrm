@@ -104,7 +104,7 @@ class EmployeeController extends Controller
             'avatar' => $user->avatar,
             'sex' => $user->sex,
             'email' => $user->email,
-            'role' => $user->roles->first()?->title,
+            'roles' => $this->positions($user),
             'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
         ]);
 
@@ -143,7 +143,7 @@ class EmployeeController extends Controller
                 'avatar' => $employee->avatar,
                 'sex' => $employee->sex,
                 'email' => $employee->email,
-                'role' => $employee->roles->first()?->title,
+                'roles' => $this->positions($employee),
                 'private' => $canSeePrivate ? [
                     ...$this->privateDetails($employee),
                     'birth_place' => $employee->details?->birth_place,
@@ -235,6 +235,16 @@ class EmployeeController extends Controller
 
         // Stable order within equal values, so pages never shuffle.
         $query->orderBy('surname')->orderBy('name')->orderBy('users.id');
+    }
+
+    /**
+     * An employee can hold several positions; titles in alphabetical order.
+     *
+     * @return list<string>
+     */
+    private function positions(User $user): array
+    {
+        return $user->roles->pluck('title')->sort()->values()->all();
     }
 
     /**

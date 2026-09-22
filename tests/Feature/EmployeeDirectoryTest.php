@@ -57,10 +57,10 @@ class EmployeeDirectoryTest extends TestCase
             ->get('/employees')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('employees.data.0.surname', 'Азимова')
-                ->where('employees.data.0.role', 'Переводчик')
+                ->where('employees.data.0.roles', ['Переводчик'])
                 ->where('employees.data.0.private', null)
                 ->has('employees.data.0', fn (Assert $row) => $row
-                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'role', 'private'])
+                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'private'])
                     ->missing('details')
                     ->missing('children')
                 )
@@ -124,12 +124,28 @@ class EmployeeDirectoryTest extends TestCase
         $this->get('/employees?position[]=intern')
             ->assertInertia(fn (Assert $page) => $page
                 ->has('employees.data', 3)
-                ->where('employees.data.0.role', 'Стажер')
+                ->where('employees.data.0.roles', ['Стажер'])
                 ->where('filters.position', ['intern'])
             );
 
         $this->get('/employees?position[]=intern&position[]=analyst')
             ->assertInertia(fn (Assert $page) => $page->has('employees.data', 5));
+    }
+
+    public function test_employee_with_several_positions_shows_all_and_matches_any()
+    {
+        $viewer = User::factory()->create(['surname' => 'Бобоев']);
+        $both = User::factory()->create(['surname' => 'Азимов']);
+        $both->assignRole(['translator', 'copywriter']);
+        $this->actingAs($viewer);
+
+        $this->get('/employees')
+            ->assertInertia(fn (Assert $page) => $page->where('employees.data.0.roles', ['Копирайтер', 'Переводчик']));
+
+        foreach (['translator', 'copywriter'] as $position) {
+            $this->get('/employees?position[]='.$position)
+                ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $both->id));
+        }
     }
 
     public function test_directory_sorts_by_public_columns()
@@ -152,8 +168,8 @@ class EmployeeDirectoryTest extends TestCase
         // Аналитик < Переводчик; the viewer without a position sorts first.
         $this->get('/employees?sort=position')
             ->assertInertia(fn (Assert $page) => $page
-                ->where('employees.data.1.role', 'Аналитик')
-                ->where('employees.data.2.role', 'Переводчик')
+                ->where('employees.data.1.roles', ['Аналитик'])
+                ->where('employees.data.2.roles', ['Переводчик'])
             );
     }
 

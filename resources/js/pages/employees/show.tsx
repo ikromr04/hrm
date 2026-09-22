@@ -23,7 +23,8 @@ interface Employee {
     avatar: string | null;
     sex: Sex;
     email: string;
-    role: string | null;
+    /** Position titles; an employee can hold several. */
+    roles: string[];
     /** Null when the viewer may not see this person's private data. */
     private: ProfilePrivate | null;
 }
@@ -75,7 +76,11 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                     <div className="flex min-w-0 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <h1 className="text-[28px] leading-tight font-bold tracking-tight">{fullName}</h1>
-                            {employee.role && <StatusBadge tone="success">{employee.role}</StatusBadge>}
+                            {employee.roles.map((role) => (
+                                <StatusBadge key={role} tone="success">
+                                    {role}
+                                </StatusBadge>
+                            ))}
                         </div>
 
                         <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm">
@@ -155,8 +160,8 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                         <div className="flex flex-col gap-4">
                             <Section title="Работа">
                                 <Fields>
-                                    <Field label="Позиция" wide>
-                                        {employee.role}
+                                    <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'} wide>
+                                        {employee.roles.length > 0 ? employee.roles.join(', ') : null}
                                     </Field>
                                     <Field label="Начало работы">{formatDate(details.hired_at)}</Field>
                                     <Field label="Стаж в компании">{details.hired_at && tenure(details.hired_at)}</Field>
@@ -193,8 +198,8 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                     <div className="grid items-start gap-4 lg:grid-cols-3">
                         <Section title="Основное">
                             <Fields>
-                                <Field label="Позиция" wide>
-                                    {employee.role}
+                                <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'} wide>
+                                    {employee.roles.length > 0 ? employee.roles.join(', ') : null}
                                 </Field>
                                 <Field label="Пол">{sexLabels[employee.sex]}</Field>
                             </Fields>

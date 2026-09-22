@@ -74,8 +74,9 @@ class UserSeeder extends Seeder
     }
 
     /**
-     * One role per employee: a couple of department heads, a few division
-     * heads, everyone else spread over the remaining roles.
+     * A couple of department heads, a few division heads, everyone else spread
+     * over the remaining roles. About one in six also holds a second regular
+     * position (roles are many-to-many).
      */
     private function assignRoles(): void
     {
@@ -83,7 +84,14 @@ class UserSeeder extends Seeder
         $pool = [...array_fill(0, 2, 'department-head'), ...array_fill(0, 6, 'division-head')];
 
         User::doesntHave('roles')->orderBy('id')->get()->each(function (User $user, int $index) use ($pool, $regular) {
-            $user->assignRole($pool[$index] ?? fake()->randomElement($regular));
+            $first = $pool[$index] ?? fake()->randomElement($regular);
+            $roles = [$first];
+
+            if (fake()->boolean(17)) {
+                $roles[] = fake()->randomElement(array_values(array_diff($regular, [$first])));
+            }
+
+            $user->assignRole($roles);
         });
     }
 

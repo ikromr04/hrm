@@ -39,7 +39,7 @@ class EmployeeProfileTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('employees/show')
                 ->where('employee.surname', $employee->surname)
-                ->where('employee.role', 'Переводчик')
+                ->where('employee.roles', ['Переводчик'])
                 ->where('employee.private', null)
             );
     }

@@ -43,7 +43,9 @@ class UserSeederTest extends TestCase
         $this->assertSame('Руководитель Департамента', Role::findByName('department-head')->title);
 
         $this->assertSame(0, User::doesntHave('roles')->count());
-        $this->assertSame(0, User::has('roles', '>', 1)->count());
+        // Many-to-many: some employees hold a second position, never more.
+        $this->assertSame(0, User::has('roles', '>', 2)->count());
+        $this->assertSame(['admin'], User::role('admin')->first()->getRoleNames()->all());
         $this->assertSame(2, User::role('department-head')->count());
         $this->assertSame(6, User::role('division-head')->count());
     }

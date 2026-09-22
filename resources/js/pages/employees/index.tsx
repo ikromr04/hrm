@@ -54,7 +54,8 @@ interface EmployeeRow {
     avatar: string | null;
     sex: Sex;
     email: string;
-    role: string | null;
+    /** Position titles; an employee can hold several. */
+    roles: string[];
     /** Null when the viewer may not see this person's private data. */
     private: PrivateDetails | null;
 }
@@ -133,6 +134,18 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Сотрудники', href: '/
 
 const fullName = (row: EmployeeRow) => [row.surname, row.name].filter(Boolean).join(' ');
 
+function PositionBadges({ roles }: { roles: string[] }) {
+    return (
+        <div className="flex flex-wrap gap-1 whitespace-normal">
+            {roles.map((role) => (
+                <StatusBadge key={role} tone="success">
+                    {role}
+                </StatusBadge>
+            ))}
+        </div>
+    );
+}
+
 function Empty() {
     return <span className="text-muted-foreground">—</span>;
 }
@@ -190,7 +203,7 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
             width: 240,
             private: false,
             filter: { type: 'multi', param: 'position', options: options.positions.map((p) => ({ value: p.name, label: p.title })) },
-            cell: (row) => (row.role ? <StatusBadge tone="success">{row.role}</StatusBadge> : <Empty />),
+            cell: (row) => (row.roles.length ? <PositionBadges roles={row.roles} /> : <Empty />),
         },
         {
             key: 'birth_date',
