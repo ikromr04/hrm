@@ -1,0 +1,67 @@
+<?php
+
+namespace Database\Factories;
+
+use App\Models\User;
+use App\Models\UserDetail;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+/**
+ * @extends Factory<UserDetail>
+ */
+class UserDetailFactory extends Factory
+{
+    private const CITIES = ['г. Душанбе', 'г. Худжанд', 'г. Бохтар', 'г. Куляб', 'г. Истаравшан', 'г. Турсунзаде', 'г. Вахдат', 'г. Гиссар'];
+
+    /** [male, female], weighted towards Tajik. */
+    private const NATIONALITIES = [
+        ['таджик', 'таджичка'], ['таджик', 'таджичка'], ['таджик', 'таджичка'], ['таджик', 'таджичка'],
+        ['таджик', 'таджичка'], ['таджик', 'таджичка'], ['узбек', 'узбечка'], ['русский', 'русская'],
+    ];
+
+    private const STREETS = ['пр. Рудаки', 'ул. Айни', 'ул. А. Навои', 'ул. Бохтар', 'ул. Шотемур', 'пр. И. Сомони', 'ул. Лахути', 'ул. Фирдавси'];
+
+    /**
+     * Define the model's default state.
+     *
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        return [
+            'user_id' => User::factory(),
+            'hired_at' => fake()->dateTimeBetween('-10 years', '-1 month'),
+            'birth_date' => fake()->dateTimeBetween('-60 years', '-21 years'),
+            'birth_place' => fake()->randomElement(self::CITIES),
+            'citizenship' => 'Таджикистан',
+            'nationality' => null, // picked in configure() to match the employee's sex
+            'passport_series' => 'А',
+            'passport_number' => fake()->numerify('0#######'),
+            'passport_issued_at' => fake()->dateTimeBetween('-9 years', '-1 month'),
+            'passport_issued_by' => 'МВД Республики Таджикистан',
+            'marital_status' => fake()->randomElement(['single', 'married']),
+            'home_address' => sprintf('г. Душанбе, %s %d, кв. %d', fake()->randomElement(self::STREETS), fake()->numberBetween(1, 120), fake()->numberBetween(1, 180)),
+            'phone' => $this->phone(),
+            'sos_phone' => $this->phone(),
+        ];
+    }
+
+    /**
+     * Nationality agrees with the employee's sex: "таджик" / "таджичка".
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (UserDetail $details) {
+            if ($details->nationality === null && $details->user) {
+                [$male, $female] = fake()->randomElement(self::NATIONALITIES);
+                $details->nationality = $details->user->sex === 'female' ? $female : $male;
+            }
+        });
+    }
+
+    /** Tajik mobile number in E.164, e.g. +992901234567. */
+    private function phone(): string
+    {
+        return '+992'.fake()->randomElement(['90', '91', '92', '93', '98', '88', '55', '50', '77']).fake()->numerify('#######');
+    }
+}

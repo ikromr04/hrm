@@ -4,13 +4,16 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasRoles, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -19,6 +22,10 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'surname',
+        'patronymic',
+        'avatar',
+        'sex',
         'email',
         'password',
     ];
@@ -44,5 +51,22 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Private data (passport, address, contacts). Only load it for viewers
+     * who are allowed to see it.
+     */
+    public function details(): HasOne
+    {
+        return $this->hasOne(UserDetail::class);
+    }
+
+    /**
+     * Private, like details.
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(UserChild::class)->orderBy('birth_date');
     }
 }

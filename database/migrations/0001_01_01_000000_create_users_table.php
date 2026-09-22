@@ -13,7 +13,14 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+
+            // Public profile: visible to every colleague.
             $table->string('name');
+            $table->string('surname');
+            $table->string('patronymic')->nullable();
+            $table->string('avatar')->nullable();
+            $table->enum('sex', ['male', 'female']);
+
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
