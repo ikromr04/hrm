@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Department;
+use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
@@ -24,6 +25,7 @@ class UserSeeder extends Seeder
 
         $this->callOnce(RoleSeeder::class);
         $this->callOnce(DepartmentSeeder::class);
+        $this->callOnce(PositionSeeder::class);
 
         $admin = $this->account(['name' => 'Некруз', 'surname' => 'Абдуллоев', 'patronymic' => 'Саидович', 'sex' => 'male', 'email' => 'admin@evolet.test']);
         $admin->assignRole('admin');
@@ -49,6 +51,7 @@ class UserSeeder extends Seeder
 
         $this->assignRoles();
         $this->assignDepartments();
+        $this->assignPositions();
         $this->addChildren();
     }
 
@@ -74,6 +77,53 @@ class UserSeeder extends Seeder
                     ->state(fn () => ['birth_date' => fake()->dateTimeBetween($earliest, '-1 month')])
                     ->create();
             });
+    }
+
+    /**
+     * Every head title goes to someone in the unit it leads, preferring people
+     * with a head role there. Everyone else gets one regular title, about one
+     * in eight a second one. The admin account holds no position.
+     */
+    private function assignPositions(): void
+    {
+        $titles = Position::all()->keyBy('name');
+        $employees = fn () => User::whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'));
+
+        foreach (PositionSeeder::HEADS as $title => $departmentName) {
+            if ($titles[$title]->users()->exists()) {
+                continue;
+            }
+
+            $department = Department::firstWhere('name', $departmentName);
+            $head = $employees()
+                ->whereHas('departments', fn ($q) => $q->whereKey($department->id))
+                ->whereDoesntHave('positions', fn ($q) => $q->whereIn('name', array_keys(PositionSeeder::HEADS)))
+                ->with('roles')
+                ->get()
+                ->sortByDesc(fn (User $u) => $u->hasAnyRole(['department-head', 'division-head']))
+                ->first();
+
+            if (! $head) {
+                // Nobody suitable in that unit yet: move in someone who leads nothing else.
+                $head = $employees()
+                    ->doesntHave('positions')
+                    ->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', ['department-head', 'division-head']))
+                    ->inRandomOrder()
+                    ->first();
+                $head?->departments()->syncWithoutDetaching([$department->id]);
+            }
+
+            $head?->positions()->attach($titles[$title]);
+        }
+
+        $regular = collect(PositionSeeder::OTHERS);
+
+        $employees()->doesntHave('positions')->get()->each(function (User $user) use ($titles, $regular) {
+            $pool = $user->sex === 'female' ? $regular : $regular->reject(fn ($t) => $t === 'Уборщица');
+            $picked = $pool->random(fake()->boolean(12) ? 2 : 1);
+
+            $user->positions()->attach($titles->whereIn('name', $picked->all())->pluck('id'));
+        });
     }
 
     /**

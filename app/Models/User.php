@@ -64,6 +64,14 @@ class User extends Authenticatable
     }
 
     /**
+     * What the employee does; one or several, public. Access rights are roles.
+     */
+    public function positions(): BelongsToMany
+    {
+        return $this->belongsToMany(Position::class)->withTimestamps()->orderBy('name');
+    }
+
+    /**
      * None, one or several departments (public, like positions).
      */
     public function departments(): BelongsToMany
