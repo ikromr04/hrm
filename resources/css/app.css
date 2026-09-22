@@ -82,6 +82,8 @@
 }
 
 :root {
+    /* Lets the browser draw scrollbars, date pickers and autofill to match the theme. */
+    color-scheme: light;
     --background: hsl(0, 0%, 100%);
     --foreground: #2a2d31;
     --card: hsl(0, 0%, 100%);
@@ -122,6 +124,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: hsl(0, 0%, 3.9%);
     --foreground: hsl(0, 0%, 98%);
     --card: hsl(0, 0%, 3.9%);
