@@ -15,6 +15,8 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee}')->name('employees.')->group(function () {
+    Route::get('edit', [EmployeeController::class, 'edit'])->name('edit');
+    Route::put('/', [EmployeeController::class, 'update'])->name('update');
     Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
     Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');
     Route::post('restore', [EmployeeStatusController::class, 'restore'])->name('restore');

@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Department;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -203,6 +206,76 @@ class EmployeeController extends Controller
                 ] : null,
             ],
         ]);
+    }
+
+    public function edit(User $employee): Response
+    {
+        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'details', 'children']);
+        $details = $employee->details;
+
+        return Inertia::render('employees/edit', [
+            'employee' => [
+                'id' => $employee->id,
+                'surname' => $employee->surname,
+                'name' => $employee->name,
+                'patronymic' => $employee->patronymic ?? '',
+                'sex' => $employee->sex,
+                'email' => $employee->email,
+                'status' => $employee->status,
+                'roles' => $employee->roles->pluck('name')->all(),
+                'positions' => $employee->positions->pluck('id')->all(),
+                'departments' => $employee->departments->pluck('id')->all(),
+                // Heads are chosen in the departments directory; shown here for context.
+                'head_of' => $employee->departments->filter(fn (Department $d) => $d->pivot->is_head)->pluck('id')->values()->all(),
+                'hired_at' => $details?->hired_at?->toDateString() ?? '',
+                'birth_date' => $details?->birth_date?->toDateString() ?? '',
+                'birth_place' => $details?->birth_place ?? '',
+                'nationality' => $details?->nationality ?? '',
+                'citizenship' => $details?->citizenship ?? '',
+                'marital_status' => $details?->marital_status ?? '',
+                'home_address' => $details?->home_address ?? '',
+                'phone' => $details?->phone ?? '',
+                'sos_phone' => $details?->sos_phone ?? '',
+                'passport_series' => $details?->passport_series ?? '',
+                'passport_number' => $details?->passport_number ?? '',
+                'passport_issued_at' => $details?->passport_issued_at?->toDateString() ?? '',
+                'passport_issued_by' => $details?->passport_issued_by ?? '',
+                'children' => $employee->children
+                    ->map(fn (UserChild $c) => ['full_name' => $c->full_name, 'birth_date' => $c->birth_date?->toDateString() ?? ''])
+                    ->all(),
+            ],
+            'options' => [
+                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
+                'departments' => $this->departmentOptions(),
+                'nationalities' => $this->distinctDetail('nationality'),
+                'citizenships' => $this->distinctDetail('citizenship'),
+            ],
+        ]);
+    }
+
+    public function update(UpdateEmployeeRequest $request, User $employee): RedirectResponse
+    {
+        $data = $request->validated();
+
+        DB::transaction(function () use ($employee, $data) {
+            $employee->update(Arr::only($data, ['surname', 'name', 'patronymic', 'sex', 'email']));
+
+            $employee->syncRoles($data['roles']);
+            $employee->positions()->sync($data['positions']);
+            // Departments the employee stays in keep their head flag.
+            $employee->departments()->sync($data['departments']);
+
+            $employee->details()->updateOrCreate([], Arr::only($data, (new UserDetail)->getFillable()));
+
+            $employee->children()->delete();
+            $employee->children()->createMany(array_map(
+                fn (array $child) => ['full_name' => $child['full_name'], 'birth_date' => $child['birth_date'] ?? null],
+                $data['children'],
+            ));
+        });
+
+        return to_route('employees.show', $employee);
     }
 
     /**

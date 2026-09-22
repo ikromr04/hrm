@@ -1,13 +1,14 @@
 import { PersonAvatar } from '@/components/person-avatar';
 import { SosPhone } from '@/components/phones';
 import { StatusBadge } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { age, capitalize, formatDate, formatPhone, maritalLabels, sexLabels, tenure, type PrivateDetails, type Sex } from '@/lib/employee';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
-import { Lock, Mail, Phone } from 'lucide-react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { Lock, Mail, Pencil, Phone } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 interface ProfilePrivate extends PrivateDetails {
@@ -75,6 +76,7 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
     const shortName = `${employee.surname} ${employee.name}`;
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
     const details = employee.private;
+    const { auth } = usePage<SharedData>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Сотрудники', href: '/employees' },
@@ -93,7 +95,7 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                         <PersonAvatar name={`${employee.name} ${employee.surname}`} className="size-[88px] text-[29px]" />
                     )}
 
-                    <div className="flex min-w-0 flex-col gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <h1 className="text-[28px] leading-tight font-bold tracking-tight">{fullName}</h1>
                             {employee.status !== 'active' && (
@@ -137,6 +139,15 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                             )}
                         </div>
                     </div>
+
+                    {auth.can.manageEmployees && (
+                        <Button variant="outline" className="self-start sm:self-center" asChild>
+                            <Link href={route('employees.edit', employee.id)}>
+                                <Pencil />
+                                Редактировать
+                            </Link>
+                        </Button>
+                    )}
                 </Card>
 
                 {details ? (

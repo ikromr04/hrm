@@ -4,9 +4,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { router, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowRightLeft, Ellipsis, LoaderCircle, RotateCcw, Trash2, UserX } from 'lucide-react';
+import { ArrowRightLeft, Ellipsis, LoaderCircle, Pencil, RotateCcw, Trash2, UserX } from 'lucide-react';
 import { type FormEventHandler, useState } from 'react';
 
 export type EmploymentStatus = 'active' | 'transferred' | 'fired';
@@ -20,7 +20,7 @@ export interface ActionTarget {
 
 type OpenDialog = 'transfer' | 'fire' | 'delete' | null;
 
-/** "⋯" menu for one employee: transfer, fire, restore, delete. */
+/** "⋯" menu for one employee: edit, transfer, fire, restore, delete. */
 export function EmployeeActions({ employee, isSelf }: { employee: ActionTarget; isSelf: boolean }) {
     const [dialog, setDialog] = useState<OpenDialog>(null);
     const name = `${employee.surname} ${employee.name}`;
@@ -36,6 +36,13 @@ export function EmployeeActions({ employee, isSelf }: { employee: ActionTarget; 
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem asChild>
+                        <Link href={route('employees.edit', employee.id)}>
+                            <Pencil />
+                            Редактировать
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     {employee.status === 'active' ? (
                         <>
                             <DropdownMenuItem disabled={isSelf} onSelect={() => setDialog('transfer')}>
