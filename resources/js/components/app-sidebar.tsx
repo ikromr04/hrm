@@ -1,9 +1,9 @@
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type SidebarNavGroup } from '@/types';
-import { Link } from '@inertiajs/react';
-import { BarChart3, Bell, Briefcase, CalendarDays, Laptop, LayoutGrid, Settings, Target, Users, Wallet } from 'lucide-react';
+import { type SharedData, type SidebarNavGroup } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
+import { BarChart3, Bell, BookMarked, Briefcase, CalendarDays, Laptop, LayoutGrid, Settings, Target, Users, Wallet } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const navGroups: SidebarNavGroup[] = [
@@ -26,14 +26,18 @@ const navGroups: SidebarNavGroup[] = [
     },
 ];
 
-const footerGroup: SidebarNavGroup = {
-    items: [
-        { title: 'Настройки', url: '/settings', icon: Settings },
-        { title: 'Уведомления', icon: Bell },
-    ],
-};
-
 export function AppSidebar() {
+    const { auth } = usePage<SharedData>().props;
+
+    const footerGroup: SidebarNavGroup = {
+        items: [
+            // Only shown to people who may edit positions, roles and departments.
+            ...(auth.can.manageDirectories ? [{ title: 'Справочники', url: '/directories', icon: BookMarked }] : []),
+            { title: 'Настройки', url: '/settings', icon: Settings },
+            { title: 'Уведомления', icon: Bell },
+        ],
+    };
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>

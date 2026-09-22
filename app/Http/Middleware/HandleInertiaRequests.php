@@ -44,6 +44,9 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+                'can' => [
+                    'manageDirectories' => (bool) $request->user()?->can('manage-directories'),
+                ],
             ],
         ]);
     }

@@ -2,6 +2,10 @@ import { LucideIcon } from 'lucide-react';
 
 export interface Auth {
     user: User;
+    /** What the current user may do; mirrors server-side gates. */
+    can: {
+        manageDirectories: boolean;
+    };
 }
 
 export interface BreadcrumbItem {
