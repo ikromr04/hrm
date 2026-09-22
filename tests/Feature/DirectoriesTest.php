@@ -132,6 +132,157 @@ class DirectoriesTest extends TestCase
         $this->assertSame('Отдел продаж', $child->fresh()->name);
     }
 
+    public function test_department_heads_are_chosen_from_working_staff_and_join_the_department()
+    {
+        $this->actingAs($this->admin);
+        $department = Department::create(['name' => 'Отдел Дизайна']);
+        $first = User::factory()->create(['surname' => 'Азимова', 'name' => 'Нигина']);
+        $second = User::factory()->create(['surname' => 'Бобоев', 'name' => 'Фаррух']);
+        $fired = User::factory()->create(['status' => 'fired']);
+
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Отдел Дизайна', 'parent_id' => null, 'head_ids' => [$fired->id]])
+            ->assertSessionHasErrors('head_ids.0');
+
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Отдел Дизайна', 'parent_id' => null, 'head_ids' => [$second->id, $first->id]])
+            ->assertSessionHasNoErrors();
+        $this->assertEqualsCanonicalizing([$first->id, $second->id], $department->heads()->pluck('users.id')->all());
+
+        $this->get('/directories/departments')->assertInertia(fn (Assert $page) => $page
+            ->where('items.0.heads', [['id' => $first->id, 'name' => 'Азимова Нигина'], ['id' => $second->id, 'name' => 'Бобоев Фаррух']])
+            ->where('employees', fn ($people) => collect($people)->doesntContain('id', $fired->id))
+        );
+
+        $this->get('/employees')->assertInertia(fn (Assert $page) => $page
+            ->where('employees.data', fn ($rows) => collect($rows)->firstWhere('id', $first->id)['departments'][0]['is_head'] === true)
+        );
+
+        // A former head stays in the department as an ordinary member.
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Отдел Дизайна', 'parent_id' => null, 'head_ids' => [$first->id]])
+            ->assertSessionHasNoErrors();
+        $this->assertSame([$first->id], $department->heads()->pluck('users.id')->all());
+        $this->assertTrue($department->users()->whereKey($second->id)->exists());
+
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Отдел Дизайна', 'parent_id' => null, 'head_ids' => []])
+            ->assertSessionHasNoErrors();
+        $this->assertFalse($department->heads()->exists());
+        $this->assertSame(2, $department->users()->count());
+    }
+
+    public function test_counts_show_working_staff_and_include_sub_departments()
+    {
+        $this->actingAs($this->admin);
+        $parent = Department::create(['name' => 'А Департамент']);
+        $child = Department::create(['name' => 'Б Отдел', 'parent_id' => $parent->id]);
+        $position = Position::create(['name' => 'Юрист']);
+
+        [$inBoth, $inChild, $inParent, $head] = User::factory(4)->create();
+        $fired = User::factory()->create(['status' => 'fired']);
+        $parent->users()->attach([$inBoth->id, $inParent->id, $fired->id]);
+        $parent->users()->attach($head, ['is_head' => true]);
+        $child->users()->attach([$inBoth->id, $inChild->id]);
+        collect([$inBoth, $fired])->each(fn (User $u) => $u->positions()->attach($position));
+
+        $this->get('/directories/departments')->assertInertia(fn (Assert $page) => $page
+            // Working people only, heads included; someone in both units is counted once.
+            ->where('items.0.name', 'А Департамент')
+            ->where('items.0.users_count', 3)
+            ->where('items.0.total_count', 4)
+            ->where('items.1.users_count', 2)
+            ->where('items.1.total_count', 2)
+        );
+
+        $this->get('/directories/positions')->assertInertia(fn (Assert $page) => $page->where('items.0.users_count', 1));
+    }
+
+    public function test_department_members_are_edited_from_the_directory()
+    {
+        $this->actingAs($this->admin);
+        $department = Department::create(['name' => 'Отдел']);
+        [$head, $stays, $leaves, $joins] = User::factory(4)->create();
+        $fired = User::factory()->create(['status' => 'fired']);
+        $department->users()->attach([$head->id => ['is_head' => true], $stays->id => ['is_head' => false], $leaves->id => ['is_head' => false], $fired->id => ['is_head' => false]]);
+
+        $this->get('/directories/departments')->assertInertia(fn (Assert $page) => $page
+            ->where('items.0.member_ids', fn ($ids) => collect($ids)->sort()->values()->all() === [$stays->id, $leaves->id])
+        );
+
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Отдел', 'parent_id' => null, 'member_ids' => [$fired->id]])
+            ->assertSessionHasErrors('member_ids.0');
+
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Отдел', 'parent_id' => null, 'member_ids' => [$stays->id, $joins->id]])
+            ->assertSessionHasNoErrors();
+
+        // Heads stay when only members are sent; people who left stay on record.
+        $this->assertEqualsCanonicalizing([$head->id, $stays->id, $joins->id, $fired->id], $department->users()->pluck('users.id')->all());
+        $this->assertSame([$head->id], $department->heads()->pluck('users.id')->all());
+    }
+
+    public function test_heads_and_members_are_saved_together()
+    {
+        $this->actingAs($this->admin);
+        $department = Department::create(['name' => 'Отдел']);
+        [$former, $promoted, $member] = User::factory(3)->create();
+        $department->users()->attach([$former->id => ['is_head' => true], $promoted->id => ['is_head' => false]]);
+
+        // The form moves a former head to the members and a new head out of them.
+        $this->put("/directories/departments/{$department->id}", [
+            'name' => 'Отдел',
+            'parent_id' => null,
+            'head_ids' => [$promoted->id],
+            'member_ids' => [$former->id, $member->id],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame([$promoted->id], $department->heads()->pluck('users.id')->all());
+        $this->assertEqualsCanonicalizing([$former->id, $promoted->id, $member->id], $department->users()->pluck('users.id')->all());
+
+        // Left out of both lists: leaves the department.
+        $this->put("/directories/departments/{$department->id}", [
+            'name' => 'Отдел',
+            'parent_id' => null,
+            'head_ids' => [$promoted->id],
+            'member_ids' => [],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame([$promoted->id], $department->users()->pluck('users.id')->all());
+    }
+
+    public function test_a_new_department_can_start_with_members()
+    {
+        $this->actingAs($this->admin);
+        [$head, $member] = User::factory(2)->create();
+
+        $this->post('/directories/departments', ['name' => 'Новый', 'parent_id' => null, 'head_ids' => [$head->id], 'member_ids' => [$member->id]])
+            ->assertSessionHasNoErrors();
+
+        $department = Department::firstWhere('name', 'Новый');
+        $this->assertSame([$head->id], $department->heads()->pluck('users.id')->all());
+        $this->assertEqualsCanonicalizing([$head->id, $member->id], $department->users()->pluck('users.id')->all());
+    }
+
+    public function test_renaming_a_department_without_head_ids_keeps_its_heads()
+    {
+        $this->actingAs($this->admin);
+        $head = User::factory()->create();
+        $department = Department::create(['name' => 'Отдел']);
+        $department->users()->attach($head, ['is_head' => true]);
+
+        $this->put("/directories/departments/{$department->id}", ['name' => 'Новый отдел', 'parent_id' => null])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame([$head->id], $department->heads()->pluck('users.id')->all());
+    }
+
+    public function test_deleting_a_head_removes_them_from_the_heads()
+    {
+        $head = User::factory()->create();
+        $department = Department::create(['name' => 'Отдел']);
+        $department->users()->attach($head, ['is_head' => true]);
+
+        $head->delete();
+
+        $this->assertFalse($department->heads()->exists());
+    }
+
     public function test_deleting_a_department_moves_its_sub_departments_up()
     {
         $this->actingAs($this->admin);

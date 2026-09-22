@@ -23,6 +23,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('department_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            // A department can have several heads, all of them its members.
+            $table->boolean('is_head')->default(false);
             $table->timestamps();
 
             $table->unique(['department_id', 'user_id']);

@@ -43,7 +43,15 @@ class Department extends Model
 
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class)->withTimestamps();
+        return $this->belongsToMany(User::class)->withPivot('is_head')->withTimestamps();
+    }
+
+    /**
+     * Members who lead this department; there can be several.
+     */
+    public function heads(): BelongsToMany
+    {
+        return $this->users()->wherePivot('is_head', true);
     }
 
     /**

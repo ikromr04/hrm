@@ -31,7 +31,7 @@ interface Employee {
     roles: string[];
     /** Positions, shown as "Должность"; an employee can hold several. */
     positions: string[];
-    departments: { id: number; name: string; path: string }[];
+    departments: { id: number; name: string; path: string; is_head: boolean }[];
     /** Null when the viewer may not see this person's private data. */
     private: ProfilePrivate | null;
 }
@@ -62,7 +62,10 @@ function Departments({ items }: { items: Employee['departments'] }) {
     return (
         <ul className="flex flex-col gap-1">
             {items.map((department) => (
-                <li key={department.id}>{department.path}</li>
+                <li key={department.id}>
+                    {department.path}
+                    {department.is_head && <span className="text-brand-strong font-semibold dark:text-[#C5E27A]"> · руководитель</span>}
+                </li>
             ))}
         </ul>
     );

@@ -31,6 +31,7 @@ import {
     ArrowUpDown,
     ChevronDown,
     Columns3,
+    Crown,
     EllipsisVertical,
     EyeOff,
     ListFilter,
@@ -58,7 +59,7 @@ interface EmployeeRow {
     roles: string[];
     /** Positions, shown as "Должность"; an employee can hold several. */
     positions: string[];
-    departments: { id: number; name: string; path: string }[];
+    departments: { id: number; name: string; path: string; is_head: boolean }[];
     status: EmploymentStatus;
     status_changed_at: string | null;
     /** Where they were transferred or why they were let go; managers only. */
@@ -184,7 +185,13 @@ function DepartmentBadges({ departments }: { departments: EmployeeRow['departmen
     return (
         <div className="flex flex-wrap gap-1 whitespace-normal">
             {departments.map((department) => (
-                <StatusBadge key={department.id} tone="neutral" title={department.path} className="h-auto min-h-[22px] py-0.5 whitespace-normal">
+                <StatusBadge
+                    key={department.id}
+                    tone="neutral"
+                    title={department.is_head ? `${department.path} · руководитель` : department.path}
+                    className="h-auto min-h-[22px] gap-1 py-0.5 whitespace-normal"
+                >
+                    {department.is_head && <Crown className="size-3 shrink-0 text-[#9A4A06] dark:text-[#F8C471]" aria-label="Руководитель" />}
                     {department.name}
                 </StatusBadge>
             ))}

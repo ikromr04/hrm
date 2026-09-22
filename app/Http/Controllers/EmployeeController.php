@@ -370,7 +370,7 @@ class EmployeeController extends Controller
     }
 
     /**
-     * @return list<array{id: int, name: string, path: string}>
+     * @return list<array{id: int, name: string, path: string, is_head: bool}>
      */
     private function departmentList(User $user): array
     {
@@ -378,6 +378,7 @@ class EmployeeController extends Controller
             'id' => $d->id,
             'name' => $d->name,
             'path' => $this->departmentPath($d->id),
+            'is_head' => (bool) $d->pivot->is_head,
         ])->all();
     }
 

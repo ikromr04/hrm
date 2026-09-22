@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DepartmentSeeder;
+use Database\Seeders\PositionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -74,6 +75,19 @@ class DepartmentTest extends TestCase
 
         $this->assertSame(['Второй', 'Первый'], $user->fresh()->departments->pluck('name')->all());
         $this->assertSame(1, $first->users()->count());
+    }
+
+    public function test_seeded_head_positions_lead_their_department()
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        foreach (PositionSeeder::HEADS as $position => $name) {
+            $department = Department::with('heads.positions')->firstWhere('name', $name);
+
+            $this->assertNotEmpty($department->heads, "{$name} should have a head");
+            $this->assertTrue($department->heads->every(fn (User $head) => $head->isActive()));
+            $this->assertTrue($department->heads->contains(fn (User $head) => $head->positions->contains('name', $position)));
+        }
     }
 
     public function test_seeded_heads_sit_in_the_unit_they_lead()

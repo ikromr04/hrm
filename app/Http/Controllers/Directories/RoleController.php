@@ -23,7 +23,8 @@ class RoleController extends Controller
     public function index(): Response
     {
         return Inertia::render('directories/roles', [
-            'items' => Role::query()->withCount('users')->orderBy('title')->get()->map(fn (Role $role) => [
+            // Counts match the employee list the number links to: working staff only.
+            'items' => Role::query()->withCount(['users' => fn ($q) => $q->where('status', 'active')])->orderBy('title')->get()->map(fn (Role $role) => [
                 'id' => $role->id,
                 'name' => $role->name,
                 'title' => $role->title,

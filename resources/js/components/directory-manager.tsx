@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { PeoplePicker, type PickablePerson } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,11 +15,18 @@ import { type FormEventHandler, useMemo, useState } from 'react';
 export interface DirectoryItem {
     id: number;
     label: string;
+    /** Working employees who hold it; for departments, heads included. */
     users_count: number;
+    /** Departments only: working employees here and in sub-departments, each counted once. */
+    total_count?: number;
     /** System records that can be renamed but not deleted. */
     protected?: boolean;
     /** Departments only: the tree is built from these. */
     parent_id?: number | null;
+    /** Departments only: who leads it; there can be several. */
+    heads?: { id: number; name: string }[];
+    /** Departments only: working members who do not lead it. */
+    member_ids?: number[];
 }
 
 interface Labels {
@@ -43,6 +51,8 @@ interface DirectoryManagerProps {
     employeesUrl: (item: DirectoryItem) => string;
     /** Show and edit the parent/child structure (departments). */
     tree?: boolean;
+    /** When given, each record has heads and members chosen from these people (departments). */
+    people?: PickablePerson[];
 }
 
 type Row = DirectoryItem & { depth: number };
@@ -76,7 +86,7 @@ function descendantIds(items: DirectoryItem[], id: number): Set<number> {
     return result;
 }
 
-export function DirectoryManager({ items, field, route: routeName, labels, employeesUrl, tree = false }: DirectoryManagerProps) {
+export function DirectoryManager({ items, field, route: routeName, labels, employeesUrl, tree = false, people }: DirectoryManagerProps) {
     const [query, setQuery] = useState('');
     const [editing, setEditing] = useState<DirectoryItem | 'new' | null>(null);
     const [deleting, setDeleting] = useState<DirectoryItem | null>(null);
@@ -112,6 +122,11 @@ export function DirectoryManager({ items, field, route: routeName, labels, emplo
                                 <th scope="col" className="px-6 py-3 font-semibold">
                                     Название
                                 </th>
+                                {people && (
+                                    <th scope="col" className="w-72 px-4 py-3 font-semibold">
+                                        Руководители
+                                    </th>
+                                )}
                                 <th scope="col" className="w-40 px-4 py-3 font-semibold">
                                     Сотрудников
                                 </th>
@@ -132,13 +147,38 @@ export function DirectoryManager({ items, field, route: routeName, labels, emplo
                                             )}
                                         </span>
                                     </td>
+                                    {people && (
+                                        <td className="px-4 py-2.5">
+                                            {row.heads?.length ? (
+                                                <span className="flex flex-col gap-0.5">
+                                                    {row.heads.map((head) => (
+                                                        <Link
+                                                            key={head.id}
+                                                            href={route('employees.show', head.id)}
+                                                            className="hover:text-brand-strong hover:underline dark:hover:text-[#C5E27A]"
+                                                        >
+                                                            {head.name}
+                                                        </Link>
+                                                    ))}
+                                                </span>
+                                            ) : (
+                                                <span className="text-muted-foreground">Не назначен</span>
+                                            )}
+                                        </td>
+                                    )}
                                     <td className="px-4 py-2.5 tabular-nums">
-                                        {row.users_count > 0 ? (
+                                        {(row.total_count ?? row.users_count) > 0 ? (
                                             <Link href={employeesUrl(row)} className="text-brand-strong hover:underline dark:text-[#C5E27A]">
-                                                {row.users_count}
+                                                {row.total_count ?? row.users_count}
                                             </Link>
                                         ) : (
                                             <span className="text-muted-foreground">0</span>
+                                        )}
+                                        {row.total_count !== undefined && row.total_count !== row.users_count && (
+                                            <span className="text-muted-foreground" title="Числятся в самом отделе, без подотделов">
+                                                {' '}
+                                                · {row.users_count} напрямую
+                                            </span>
                                         )}
                                     </td>
                                     <td className="py-1.5 pr-6 pl-4">
@@ -169,7 +209,7 @@ export function DirectoryManager({ items, field, route: routeName, labels, emplo
 
                             {visible.length === 0 && (
                                 <tr className="border-t">
-                                    <td colSpan={3} className="text-muted-foreground px-6 py-12 text-center">
+                                    <td colSpan={people ? 4 : 3} className="text-muted-foreground px-6 py-12 text-center">
                                         {items.length === 0 ? 'Пока пусто.' : 'Ничего не найдено.'}
                                     </td>
                                 </tr>
@@ -188,6 +228,7 @@ export function DirectoryManager({ items, field, route: routeName, labels, emplo
                     routeName={routeName}
                     labels={labels}
                     tree={tree}
+                    people={people}
                     onClose={() => setEditing(null)}
                 />
             )}
@@ -204,6 +245,7 @@ function EditorDialog({
     routeName,
     labels,
     tree,
+    people,
     onClose,
 }: {
     item: DirectoryItem | null;
@@ -212,9 +254,23 @@ function EditorDialog({
     routeName: string;
     labels: Labels;
     tree: boolean;
+    people?: PickablePerson[];
     onClose: () => void;
 }) {
-    const form = useForm<{ label: string; parent_id: number | null }>({ label: item?.label ?? '', parent_id: item?.parent_id ?? null });
+    const form = useForm<{ label: string; parent_id: number | null; head_ids: number[]; member_ids: number[] }>({
+        label: item?.label ?? '',
+        parent_id: item?.parent_id ?? null,
+        head_ids: item?.heads?.map((head) => head.id) ?? [],
+        member_ids: item?.member_ids ?? [],
+    });
+
+    // A head is a member too, listed once: new heads leave the member list,
+    // former heads stay in the department as ordinary members.
+    const setHeads = (ids: number[]) => {
+        const former = form.data.head_ids.filter((id) => !ids.includes(id));
+        form.setData((data) => ({ ...data, head_ids: ids, member_ids: [...data.member_ids.filter((id) => !ids.includes(id)), ...former] }));
+    };
+    const members = useMemo(() => people?.filter((person) => !form.data.head_ids.includes(person.id)) ?? [], [people, form.data.head_ids]);
 
     // A department cannot move under itself or its own sub-departments.
     const blocked = useMemo(() => (item && tree ? descendantIds(items, item.id) : new Set<number>()), [item, items, tree]);
@@ -223,7 +279,11 @@ function EditorDialog({
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
-        form.transform((data) => ({ [field]: data.label.trim(), ...(tree ? { parent_id: data.parent_id } : {}) }));
+        form.transform((data) => ({
+            [field]: data.label.trim(),
+            ...(tree ? { parent_id: data.parent_id } : {}),
+            ...(people ? { head_ids: data.head_ids, member_ids: data.member_ids } : {}),
+        }));
         const options = { preserveScroll: true, onSuccess: onClose };
 
         if (item) form.put(route(`${routeName}.update`, item.id), options);
@@ -231,10 +291,12 @@ function EditorDialog({
     };
 
     const errors = form.errors as Record<string, string | undefined>;
+    /** The first error for a list and its items ("head_ids", "head_ids.0", ...). */
+    const listError = (key: string) => errors[key] ?? Object.entries(errors).find(([name]) => name.startsWith(`${key}.`))?.[1];
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
                 <form onSubmit={submit} className="flex flex-col gap-5">
                     <DialogHeader>
                         <DialogTitle>{item ? labels.edit : labels.create}</DialogTitle>
@@ -272,6 +334,39 @@ function EditorDialog({
                                 </SelectContent>
                             </Select>
                             <InputError message={errors.parent_id} />
+                        </div>
+                    )}
+
+                    {people && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="directory-head">Руководители</Label>
+                            <PeoplePicker
+                                id="directory-head"
+                                people={people}
+                                value={form.data.head_ids}
+                                onChange={setHeads}
+                                emptyLabel="Не назначены"
+                            />
+                            <InputError message={listError('head_ids')} />
+                        </div>
+                    )}
+
+                    {people && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="directory-members">
+                                Сотрудники
+                                {form.data.member_ids.length > 0 && (
+                                    <span className="text-muted-foreground font-normal"> · {form.data.member_ids.length}</span>
+                                )}
+                            </Label>
+                            <PeoplePicker
+                                id="directory-members"
+                                people={members}
+                                value={form.data.member_ids}
+                                onChange={(ids) => form.setData('member_ids', ids)}
+                                emptyLabel="Никого нет"
+                            />
+                            <InputError message={listError('member_ids')} />
                         </div>
                     )}
 
@@ -319,6 +414,8 @@ function DeleteDialog({
         });
     };
 
+    const affected = item?.users_count ?? 0;
+
     return (
         <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-md">
@@ -328,10 +425,10 @@ function DeleteDialog({
                     </DialogTitle>
                     <DialogDescription asChild>
                         <div className="flex flex-col gap-1.5">
-                            {item && item.users_count > 0 ? (
+                            {affected > 0 ? (
                                 <p>
-                                    Запись снимется у {item.users_count} {plural(item.users_count, ['сотрудника', 'сотрудников', 'сотрудников'])}.
-                                    Самих сотрудников это не затронет.
+                                    Запись снимется у {affected} {plural(affected, ['сотрудника', 'сотрудников', 'сотрудников'])}. Самих сотрудников
+                                    это не затронет.
                                 </p>
                             ) : (
                                 <p>Сотрудников с этой записью нет.</p>

@@ -74,6 +74,7 @@ class UserSeeder extends Seeder
         $this->assignRoles();
         $this->assignDepartments();
         $this->assignPositions();
+        $this->assignDepartmentHeads();
         $this->addChildren();
     }
 
@@ -99,6 +100,37 @@ class UserSeeder extends Seeder
                     ->state(fn () => ['birth_date' => fake()->dateTimeBetween($earliest, '-1 month')])
                     ->create();
             });
+    }
+
+    /**
+     * The holder of a unit's head position leads it; units without one get a
+     * working member who holds a head role, if there is any. Larger units
+     * sometimes get a second head: a department can have several.
+     */
+    private function assignDepartmentHeads(): void
+    {
+        $headPositions = array_flip(PositionSeeder::HEADS);
+
+        Department::whereDoesntHave('heads')->get()->each(function (Department $department) use ($headPositions) {
+            $members = $department->users()->active()->with(['positions', 'roles'])->get();
+
+            $head = isset($headPositions[$department->name])
+                ? $members->first(fn (User $u) => $u->positions->contains('name', $headPositions[$department->name]))
+                : null;
+            $head ??= $members->first(fn (User $u) => $u->hasAnyRole(['department-head', 'division-head']));
+
+            if (! $head) {
+                return;
+            }
+
+            $heads = [$head->id];
+
+            if ($members->count() >= 5 && fake()->boolean(35)) {
+                $heads[] = $members->where('id', '!=', $head->id)->random()->id;
+            }
+
+            $department->users()->syncWithoutDetaching(array_fill_keys($heads, ['is_head' => true]));
+        });
     }
 
     /**
@@ -131,6 +163,8 @@ class UserSeeder extends Seeder
                 // Nobody suitable in that unit yet: move in someone who leads nothing else.
                 $head = $employees()
                     ->doesntHave('positions')
+                    // Nobody ends up in more than two departments.
+                    ->has('departments', '<', 2)
                     ->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', ['department-head', 'division-head']))
                     ->inRandomOrder()
                     ->first();

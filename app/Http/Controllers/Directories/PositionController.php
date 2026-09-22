@@ -18,7 +18,8 @@ class PositionController extends Controller
     public function index(): Response
     {
         return Inertia::render('directories/positions', [
-            'items' => Position::query()->withCount('users')->orderBy('name')->get(['id', 'name']),
+            // Counts match the employee list the number links to: working staff only.
+            'items' => Position::query()->withCount(['users' => fn ($q) => $q->where('status', 'active')])->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
