@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,7 +25,10 @@ class EmployeeController extends Controller
      */
     private const PUBLIC_COLUMNS = ['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email'];
 
-    private const PUBLIC_SORTS = ['name', 'position', 'sex'];
+    private const PUBLIC_SORTS = ['name', 'position', 'department', 'sex'];
+
+    /** @var Collection<int, Department>|null All departments keyed by id; the tree is small. */
+    private ?Collection $departments = null;
 
     /**
      * Sorting or filtering by these reveals how colleagues compare on private
@@ -48,6 +54,8 @@ class EmployeeController extends Controller
             'search' => ['nullable', 'string', 'max:100'],
             'position' => ['nullable', 'array'],
             'position.*' => ['string', Rule::exists('roles', 'name')],
+            'department' => ['nullable', 'array'],
+            'department.*' => ['integer', Rule::exists('departments', 'id')],
             'sex' => ['nullable', Rule::in(['male', 'female'])],
 
             'birth_from' => $private(['nullable', 'date']),
@@ -68,6 +76,7 @@ class EmployeeController extends Controller
         $filters = [
             'search' => trim($input['search'] ?? ''),
             'position' => array_values($input['position'] ?? []),
+            'department' => array_map('intval', $input['department'] ?? []),
             'sex' => $input['sex'] ?? null,
             'birth_from' => $input['birth_from'] ?? null,
             'birth_to' => $input['birth_to'] ?? null,
@@ -85,7 +94,7 @@ class EmployeeController extends Controller
         $direction = $input['direction'] ?? 'asc';
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
-        $query = User::query()->select(self::PUBLIC_COLUMNS)->with('roles:id,name,title');
+        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'departments:id,name,parent_id']);
         $this->applyFilters($query, $filters);
         $this->applySort($query, $sort, $direction);
 
@@ -105,6 +114,7 @@ class EmployeeController extends Controller
             'sex' => $user->sex,
             'email' => $user->email,
             'roles' => $this->positions($user),
+            'departments' => $this->departmentList($user),
             'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
         ]);
 
@@ -118,6 +128,7 @@ class EmployeeController extends Controller
             'sortable' => $sortable,
             'options' => [
                 'positions' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'departments' => $this->departmentOptions(),
                 'nationalities' => $privateAccess ? $this->distinctDetail('nationality') : [],
                 'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
             ],
@@ -170,6 +181,11 @@ class EmployeeController extends Controller
                 }
             }))
             ->when($filters['position'], fn (Builder $q, array $positions) => $q->role($positions))
+            // Picking a department also matches everyone in its sub-departments.
+            ->when($filters['department'], fn (Builder $q, array $ids) => $q->whereHas(
+                'departments',
+                fn (Builder $q) => $q->whereIn('departments.id', $this->withDescendants($ids)),
+            ))
             ->when($filters['sex'], fn (Builder $q, string $sex) => $q->where('sex', $sex))
             ->when($filters['children'], fn (Builder $q, array $counts) => $q->where(function (Builder $q) use ($counts) {
                 $count = UserChild::selectRaw('count(*)')->whereColumn('user_children.user_id', 'users.id');
@@ -217,6 +233,13 @@ class EmployeeController extends Controller
         match ($sort) {
             'name' => $query->orderBy('surname', $direction)->orderBy('name', $direction),
             'sex' => $query->orderBy('sex', $direction),
+            'department' => $query->orderBy(
+                DB::table('department_user')
+                    ->join('departments', 'departments.id', '=', 'department_user.department_id')
+                    ->whereColumn('department_user.user_id', 'users.id')
+                    ->selectRaw('min(departments.name)'),
+                $direction,
+            ),
             'position' => $query->orderBy(
                 Role::select('roles.title')
                     ->join('model_has_roles', 'model_has_roles.role_id', '=', 'roles.id')
@@ -235,6 +258,73 @@ class EmployeeController extends Controller
 
         // Stable order within equal values, so pages never shuffle.
         $query->orderBy('surname')->orderBy('name')->orderBy('users.id');
+    }
+
+    /**
+     * @return list<array{id: int, name: string, path: string}>
+     */
+    private function departmentList(User $user): array
+    {
+        return $user->departments->map(fn (Department $d) => [
+            'id' => $d->id,
+            'name' => $d->name,
+            'path' => $this->departmentPath($d->id),
+        ])->all();
+    }
+
+    /**
+     * @return Collection<int, Department>
+     */
+    private function allDepartments(): Collection
+    {
+        return $this->departments ??= Department::query()->orderBy('name')->get(['id', 'name', 'parent_id'])->keyBy('id');
+    }
+
+    /**
+     * "Департамент маркетинга › Отдел Дизайна", resolved in memory.
+     */
+    private function departmentPath(int $id): string
+    {
+        $names = [];
+
+        for ($d = $this->allDepartments()->get($id); $d && ! isset($names[$d->id]); $d = $this->allDepartments()->get($d->parent_id)) {
+            $names[$d->id] = $d->name;
+        }
+
+        return implode(' › ', array_reverse($names));
+    }
+
+    /**
+     * The tree flattened for the filter: parents first, children indented.
+     *
+     * @return list<array{id: int, name: string, depth: int}>
+     */
+    private function departmentOptions(?int $parentId = null, int $depth = 0): array
+    {
+        return $this->allDepartments()
+            ->where('parent_id', $parentId)
+            ->flatMap(fn (Department $d) => [
+                ['id' => $d->id, 'name' => $d->name, 'depth' => $depth],
+                ...$this->departmentOptions($d->id, $depth + 1),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function withDescendants(array $ids): array
+    {
+        $result = $ids;
+
+        for ($level = $ids; $level !== [];) {
+            $level = $this->allDepartments()->whereIn('parent_id', $level)->pluck('id')->diff($result)->values()->all();
+            $result = [...$result, ...$level];
+        }
+
+        return $result;
     }
 
     /**

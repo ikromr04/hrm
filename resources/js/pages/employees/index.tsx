@@ -56,6 +56,7 @@ interface EmployeeRow {
     email: string;
     /** Position titles; an employee can hold several. */
     roles: string[];
+    departments: { id: number; name: string; path: string }[];
     /** Null when the viewer may not see this person's private data. */
     private: PrivateDetails | null;
 }
@@ -63,6 +64,7 @@ interface EmployeeRow {
 interface Filters {
     search: string;
     position: string[];
+    department: number[];
     sex: Sex | null;
     birth_from: string | null;
     birth_to: string | null;
@@ -79,6 +81,7 @@ interface Filters {
 type ColumnKey =
     | 'name'
     | 'position'
+    | 'department'
     | 'birth_date'
     | 'sex'
     | 'nationality'
@@ -105,18 +108,21 @@ interface EmployeesProps {
     sortable: ColumnKey[];
     options: {
         positions: { name: string; title: string }[];
+        /** The department tree flattened, parents first. */
+        departments: { id: number; name: string; depth: number }[];
         nationalities: string[];
         citizenships: string[];
     };
     total: number;
 }
 
-type Option<T> = { value: T; label: string };
+/** `depth` indents tree options such as departments. */
+type Option<T> = { value: T; label: string; depth?: number };
 
 type FilterDef =
     | { type: 'text'; param: 'search' | 'address' | 'phone'; placeholder: string }
     | { type: 'select'; param: 'sex' | 'marital_status'; options: Option<string>[] }
-    | { type: 'multi'; param: 'position' | 'nationality' | 'citizenship' | 'children'; options: Option<string | number>[] }
+    | { type: 'multi'; param: 'position' | 'department' | 'nationality' | 'citizenship' | 'children'; options: Option<string | number>[] }
     | { type: 'dates'; from: 'birth_from' | 'hired_from'; to: 'birth_to' | 'hired_to' };
 
 interface ColumnDef {
@@ -140,6 +146,18 @@ function PositionBadges({ roles }: { roles: string[] }) {
             {roles.map((role) => (
                 <StatusBadge key={role} tone="success">
                     {role}
+                </StatusBadge>
+            ))}
+        </div>
+    );
+}
+
+function DepartmentBadges({ departments }: { departments: EmployeeRow['departments'] }) {
+    return (
+        <div className="flex flex-wrap gap-1 whitespace-normal">
+            {departments.map((department) => (
+                <StatusBadge key={department.id} tone="neutral" title={department.path} className="h-auto min-h-[22px] py-0.5 whitespace-normal">
+                    {department.name}
                 </StatusBadge>
             ))}
         </div>
@@ -204,6 +222,18 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
             private: false,
             filter: { type: 'multi', param: 'position', options: options.positions.map((p) => ({ value: p.name, label: p.title })) },
             cell: (row) => (row.roles.length ? <PositionBadges roles={row.roles} /> : <Empty />),
+        },
+        {
+            key: 'department',
+            label: 'Отдел / Департамент',
+            width: 300,
+            private: false,
+            filter: {
+                type: 'multi',
+                param: 'department',
+                options: options.departments.map((d) => ({ value: d.id, label: d.name, depth: d.depth })),
+            },
+            cell: (row) => (row.departments.length ? <DepartmentBadges departments={row.departments} /> : <Empty />),
         },
         {
             key: 'birth_date',
@@ -440,7 +470,11 @@ function FilterBody({ filter, filters, onApply }: { filter: FilterDef; filters: 
                     const id = `filter-${filter.param}-${option.value}`;
 
                     return (
-                        <div key={id} className="hover:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5">
+                        <div
+                            key={id}
+                            className="hover:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5"
+                            style={option.depth ? { paddingLeft: 8 + option.depth * 20 } : undefined}
+                        >
                             <Checkbox id={id} checked={selected.includes(option.value)} onCheckedChange={(on) => toggle(option.value, on === true)} />
                             <Label htmlFor={id} className="flex-1 cursor-pointer font-normal">
                                 {option.label}
@@ -495,7 +529,7 @@ function ColumnFilter({ column, filters, onApply }: { column: ColumnDef; filters
                     {active && <span className="bg-brand absolute top-0.5 right-0.5 size-1.5 rounded-full" />}
                 </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-64 p-3">
+            <PopoverContent align="start" className={cn('p-3', filter.type === 'multi' && filter.param === 'department' ? 'w-96' : 'w-64')}>
                 <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-semibold">{column.label}</span>
                     {active && (

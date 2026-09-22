@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
@@ -60,7 +61,7 @@ class EmployeeDirectoryTest extends TestCase
                 ->where('employees.data.0.roles', ['Переводчик'])
                 ->where('employees.data.0.private', null)
                 ->has('employees.data.0', fn (Assert $row) => $row
-                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'private'])
+                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'departments', 'private'])
                     ->missing('details')
                     ->missing('children')
                 )
@@ -148,6 +149,66 @@ class EmployeeDirectoryTest extends TestCase
         }
     }
 
+    public function test_rows_list_departments_with_their_path()
+    {
+        $marketing = Department::create(['name' => 'Департамент маркетинга']);
+        $design = Department::create(['name' => 'Отдел Дизайна', 'parent_id' => $marketing->id]);
+        $user = User::factory()->create();
+        $user->departments()->attach([$design->id, $marketing->id]);
+
+        $this->actingAs($user)
+            ->get('/employees')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('employees.data.0.departments.0.name', 'Департамент маркетинга')
+                ->where('employees.data.0.departments.1.path', 'Департамент маркетинга › Отдел Дизайна')
+                ->where('options.departments', [
+                    ['id' => $marketing->id, 'name' => 'Департамент маркетинга', 'depth' => 0],
+                    ['id' => $design->id, 'name' => 'Отдел Дизайна', 'depth' => 1],
+                ])
+            );
+    }
+
+    public function test_department_filter_includes_sub_departments()
+    {
+        $marketing = Department::create(['name' => 'Департамент маркетинга']);
+        $design = Department::create(['name' => 'Отдел Дизайна', 'parent_id' => $marketing->id]);
+        $finance = Department::create(['name' => 'Департамент финансов']);
+
+        $head = User::factory()->create();
+        $head->departments()->attach($marketing);
+        $designer = User::factory()->create();
+        $designer->departments()->attach($design);
+        User::factory()->create()->departments()->attach($finance);
+        $this->actingAs(User::factory()->create());
+
+        $this->get('/employees?department[]='.$marketing->id)
+            ->assertInertia(fn (Assert $page) => $page->has('employees.data', 2)->where('filters.department', [$marketing->id]));
+
+        $this->get('/employees?department[]='.$design->id)
+            ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $designer->id));
+
+        $this->get('/employees?department[]=999999')->assertSessionHasErrors('department.0');
+    }
+
+    public function test_directory_sorts_by_department()
+    {
+        $a = Department::create(['name' => 'Архив']);
+        $b = Department::create(['name' => 'Бухгалтерия']);
+        $viewer = User::factory()->create();
+        $inB = User::factory()->create();
+        $inB->departments()->attach($b);
+        $inA = User::factory()->create();
+        $inA->departments()->attach($a);
+        $this->actingAs($viewer);
+
+        // The viewer has no department and sorts first.
+        $this->get('/employees?sort=department')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('employees.data.1.id', $inA->id)
+                ->where('employees.data.2.id', $inB->id)
+            );
+    }
+
     public function test_directory_sorts_by_public_columns()
     {
         $viewer = User::factory()->create(['surname' => 'Бобоев']);
@@ -159,7 +220,7 @@ class EmployeeDirectoryTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('sort.key', 'name')
                 ->where('employees.data.0.surname', 'Азимов')
-                ->where('sortable', ['name', 'position', 'sex'])
+                ->where('sortable', ['name', 'position', 'department', 'sex'])
             );
 
         $this->get('/employees?sort=name&direction=desc')
@@ -195,7 +256,7 @@ class EmployeeDirectoryTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('employees.data.0.id', $oldest->id)
                 ->where('employees.data.2.id', $youngest->id)
-                ->has('sortable', 11)
+                ->has('sortable', 12)
             );
 
         $this->get('/employees?sort=children&direction=desc')
