@@ -14,6 +14,7 @@ import {
     maritalLabels,
     sexLabels,
     tenure,
+    type Education,
     type PrivateDetails,
     type Sex,
     type SpokenLanguage,
@@ -25,6 +26,7 @@ import { Lock, Mail, Pencil, Phone } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 interface ProfilePrivate extends PrivateDetails {
+    educations: (Education & { id: number })[];
     birth_place: string | null;
     passport: { series: string | null; number: string | null; issued_at: string | null; issued_by: string | null };
 }
@@ -97,6 +99,29 @@ function Languages({ items }: { items: SpokenLanguage[] }) {
                     {language.name}
                     <LevelMeter level={language.level} className="text-muted-foreground" />
                     <span className="text-muted-foreground font-normal">{languageLevelLabels[language.level]}</span>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+/** "2010–2015", or "2019 — учится" for someone still enrolled. */
+const studyYears = (education: Education) =>
+    education.graduated_year ? `${education.started_year}–${education.graduated_year}` : `${education.started_year} — учится`;
+
+function Educations({ items }: { items: ProfilePrivate['educations'] }) {
+    return (
+        <ul className="flex flex-col">
+            {items.map((education) => (
+                <li key={education.id} className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                    <span className="text-sm font-medium">{education.institution}</span>
+                    <span className="text-sm">
+                        {education.faculty} · {education.specialty}
+                    </span>
+                    <span className="text-muted-foreground text-[13px] tabular-nums">
+                        {studyYears(education)}
+                        {education.diploma_number && ` · диплом № ${education.diploma_number}`}
+                    </span>
                 </li>
             ))}
         </ul>
@@ -183,25 +208,35 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
 
                 {details ? (
                     <div className="grid items-start gap-4 lg:grid-cols-3">
-                        <Section title="Личные данные">
-                            <Fields>
-                                <Field label="Дата рождения">
-                                    {details.birth_date && (
-                                        <>
-                                            {formatDate(details.birth_date)}
-                                            <span className="text-muted-foreground font-normal"> · {age(details.birth_date)}</span>
-                                        </>
-                                    )}
-                                </Field>
-                                <Field label="Место рождения">{details.birth_place}</Field>
-                                <Field label="Пол">{sexLabels[employee.sex]}</Field>
-                                <Field label="Национальность">{details.nationality && capitalize(details.nationality)}</Field>
-                                <Field label="Гражданство">{details.citizenship}</Field>
-                                <Field label="Семейное положение">
-                                    {details.marital_status && maritalLabels[employee.sex][details.marital_status]}
-                                </Field>
-                            </Fields>
-                        </Section>
+                        <div className="flex flex-col gap-4">
+                            <Section title="Личные данные">
+                                <Fields>
+                                    <Field label="Дата рождения">
+                                        {details.birth_date && (
+                                            <>
+                                                {formatDate(details.birth_date)}
+                                                <span className="text-muted-foreground font-normal"> · {age(details.birth_date)}</span>
+                                            </>
+                                        )}
+                                    </Field>
+                                    <Field label="Место рождения">{details.birth_place}</Field>
+                                    <Field label="Пол">{sexLabels[employee.sex]}</Field>
+                                    <Field label="Национальность">{details.nationality && capitalize(details.nationality)}</Field>
+                                    <Field label="Гражданство">{details.citizenship}</Field>
+                                    <Field label="Семейное положение">
+                                        {details.marital_status && maritalLabels[employee.sex][details.marital_status]}
+                                    </Field>
+                                </Fields>
+                            </Section>
+
+                            <Section title="Образование">
+                                {details.educations.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">Не указано</p>
+                                ) : (
+                                    <Educations items={details.educations} />
+                                )}
+                            </Section>
+                        </div>
 
                         <div className="flex flex-col gap-4">
                             <Section title="Контакты">

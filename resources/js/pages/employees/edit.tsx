@@ -50,6 +50,8 @@ type EmployeeForm = {
     passport_issued_at: string;
     passport_issued_by: string;
     children: { full_name: string; birth_date: string }[];
+    /** Every field as text; years are parsed on the server. */
+    educations: Record<'institution' | 'faculty' | 'specialty' | 'started_year' | 'graduated_year' | 'diploma_number', string>[];
     languages: { id: number; level: LanguageLevel }[];
 };
 
@@ -120,6 +122,7 @@ export default function EditEmployee({ employee, options }: Props) {
         passport_issued_at: employee.passport_issued_at,
         passport_issued_by: employee.passport_issued_by,
         children: employee.children,
+        educations: employee.educations,
         languages: employee.languages,
     });
 
@@ -140,6 +143,13 @@ export default function EditEmployee({ employee, options }: Props) {
         );
     // Each language once: a new row takes the first one not picked yet.
     const unusedLanguage = options.languages.find((language) => !data.languages.some((l) => l.id === language.id));
+
+    const setEducation = (index: number, patch: Partial<EmployeeForm['educations'][number]>) =>
+        setData(
+            'educations',
+            data.educations.map((education, i) => (i === index ? { ...education, ...patch } : education)),
+        );
+    const emptyEducation = { institution: '', faculty: '', specialty: '', started_year: '', graduated_year: '', diploma_number: '' };
 
     const setChild = (index: number, patch: Partial<EmployeeForm['children'][number]>) =>
         setData(
@@ -487,6 +497,108 @@ export default function EditEmployee({ employee, options }: Props) {
                             </Button>
                         </Section>
                     </div>
+
+                    <Section title="Образование" className="lg:col-span-3">
+                        {data.educations.length === 0 && <p className="text-muted-foreground text-sm">Не указано</p>}
+                        {data.educations.map((education, index) => (
+                            <div key={index} className="flex items-start gap-2 border-t pt-4 first-of-type:border-t-0 first-of-type:pt-0">
+                                <div className="grid flex-1 gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_1.5fr_6rem_6rem_9rem]">
+                                    <Field label="Учебное заведение" error={errors[`educations.${index}.institution`]}>
+                                        {(id) => (
+                                            <Input
+                                                id={id}
+                                                required
+                                                value={education.institution}
+                                                onChange={(e) => setEducation(index, { institution: e.target.value })}
+                                            />
+                                        )}
+                                    </Field>
+                                    <Field label="Факультет" error={errors[`educations.${index}.faculty`]}>
+                                        {(id) => (
+                                            <Input
+                                                id={id}
+                                                required
+                                                value={education.faculty}
+                                                onChange={(e) => setEducation(index, { faculty: e.target.value })}
+                                            />
+                                        )}
+                                    </Field>
+                                    <Field label="Специальность" error={errors[`educations.${index}.specialty`]}>
+                                        {(id) => (
+                                            <Input
+                                                id={id}
+                                                required
+                                                value={education.specialty}
+                                                onChange={(e) => setEducation(index, { specialty: e.target.value })}
+                                            />
+                                        )}
+                                    </Field>
+                                    <Field label="Поступление" error={errors[`educations.${index}.started_year`]}>
+                                        {(id) => (
+                                            <Input
+                                                id={id}
+                                                type="number"
+                                                inputMode="numeric"
+                                                min={1950}
+                                                max={new Date().getFullYear()}
+                                                placeholder="Год"
+                                                required
+                                                value={education.started_year}
+                                                onChange={(e) => setEducation(index, { started_year: e.target.value })}
+                                            />
+                                        )}
+                                    </Field>
+                                    <Field label="Окончание" error={errors[`educations.${index}.graduated_year`]}>
+                                        {(id) => (
+                                            <Input
+                                                id={id}
+                                                type="number"
+                                                inputMode="numeric"
+                                                min={1950}
+                                                max={new Date().getFullYear() + 10}
+                                                placeholder="Учится"
+                                                value={education.graduated_year}
+                                                onChange={(e) => setEducation(index, { graduated_year: e.target.value })}
+                                            />
+                                        )}
+                                    </Field>
+                                    <Field label="№ диплома" error={errors[`educations.${index}.diploma_number`]}>
+                                        {(id) => (
+                                            <Input
+                                                id={id}
+                                                value={education.diploma_number}
+                                                onChange={(e) => setEducation(index, { diploma_number: e.target.value })}
+                                            />
+                                        )}
+                                    </Field>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-muted-foreground mt-6 shrink-0"
+                                    aria-label="Убрать образование"
+                                    onClick={() =>
+                                        setData(
+                                            'educations',
+                                            data.educations.filter((_, i) => i !== index),
+                                        )
+                                    }
+                                >
+                                    <Trash2 />
+                                </Button>
+                            </div>
+                        ))}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="self-start"
+                            onClick={() => setData('educations', [...data.educations, emptyEducation])}
+                        >
+                            <Plus />
+                            Добавить образование
+                        </Button>
+                    </Section>
                 </div>
             </form>
         </AppLayout>

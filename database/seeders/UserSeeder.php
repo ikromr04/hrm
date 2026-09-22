@@ -8,6 +8,7 @@ use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
+use App\Models\UserEducation;
 use Illuminate\Database\Seeder;
 
 class UserSeeder extends Seeder
@@ -79,6 +80,26 @@ class UserSeeder extends Seeder
         $this->assignDepartmentHeads();
         $this->assignLanguages();
         $this->addChildren();
+        $this->addEducation();
+    }
+
+    /**
+     * Everyone has studied somewhere; about one in five went on to a second
+     * degree or course.
+     */
+    private function addEducation(): void
+    {
+        User::doesntHave('educations')->with('details')->get()->each(function (User $user) {
+            $first = UserEducation::factory()->for($user)->forBirthDate($user->details?->birth_date)->create();
+
+            if (fake()->boolean(20) && $first->graduated_year) {
+                UserEducation::factory()->for($user)->state(fn () => [
+                    'started_year' => $first->graduated_year + fake()->numberBetween(0, 5),
+                ])->state(fn (array $a) => [
+                    'graduated_year' => (int) date('Y') >= $a['started_year'] + 2 ? $a['started_year'] + 2 : null,
+                ])->create();
+            }
+        });
     }
 
     /**

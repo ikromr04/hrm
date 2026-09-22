@@ -9,6 +9,7 @@ use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
+use App\Models\UserEducation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -182,7 +183,7 @@ class EmployeeController extends Controller
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
 
         if ($canSeePrivate) {
-            $employee->load(['details', 'children']);
+            $employee->load(['details', 'children', 'educations']);
         }
 
         return Inertia::render('employees/show', [
@@ -210,6 +211,7 @@ class EmployeeController extends Controller
                         'issued_at' => $employee->details?->passport_issued_at?->toDateString(),
                         'issued_by' => $employee->details?->passport_issued_by,
                     ],
+                    'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
                 ] : null,
             ],
         ]);
@@ -217,7 +219,7 @@ class EmployeeController extends Controller
 
     public function edit(User $employee): Response
     {
-        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children']);
+        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children', 'educations']);
         $details = $employee->details;
 
         return Inertia::render('employees/edit', [
@@ -252,6 +254,10 @@ class EmployeeController extends Controller
                 'children' => $employee->children
                     ->map(fn (UserChild $c) => ['full_name' => $c->full_name, 'birth_date' => $c->birth_date?->toDateString() ?? ''])
                     ->all(),
+                // The form keeps every field as text; empty means not filled in.
+                'educations' => $employee->educations
+                    ->map(fn (UserEducation $e) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->education($e), 'id')))
+                    ->all(),
             ],
             'options' => [
                 'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
@@ -284,6 +290,9 @@ class EmployeeController extends Controller
                 fn (array $child) => ['full_name' => $child['full_name'], 'birth_date' => $child['birth_date'] ?? null],
                 $data['children'],
             ));
+
+            $employee->educations()->delete();
+            $employee->educations()->createMany($data['educations']);
         });
 
         return to_route('employees.show', $employee);
@@ -556,6 +565,22 @@ class EmployeeController extends Controller
             ->map(fn (Language $l) => ['id' => $l->id, 'name' => $l->name, 'level' => $l->pivot->level])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function education(UserEducation $education): array
+    {
+        return [
+            'id' => $education->id,
+            'institution' => $education->institution,
+            'faculty' => $education->faculty,
+            'specialty' => $education->specialty,
+            'started_year' => $education->started_year,
+            'graduated_year' => $education->graduated_year,
+            'diploma_number' => $education->diploma_number,
+        ];
     }
 
     /**

@@ -84,6 +84,14 @@ class UpdateEmployeeRequest extends FormRequest
             'children' => ['present', 'array', 'max:20'],
             'children.*.full_name' => ['required', 'string', 'max:150'],
             'children.*.birth_date' => $date,
+
+            'educations' => ['present', 'array', 'max:10'],
+            'educations.*.institution' => ['required', 'string', 'max:200'],
+            'educations.*.faculty' => ['required', 'string', 'max:150'],
+            'educations.*.specialty' => ['required', 'string', 'max:150'],
+            'educations.*.started_year' => ['required', 'integer', 'min:1950', 'max:'.date('Y')],
+            'educations.*.graduated_year' => ['nullable', 'integer', 'gte:educations.*.started_year', 'max:'.(date('Y') + 10)],
+            'educations.*.diploma_number' => ['nullable', 'string', 'max:50'],
         ];
     }
 
@@ -155,6 +163,12 @@ class UpdateEmployeeRequest extends FormRequest
             'passport_issued_by' => 'кем выдан',
             'children.*.full_name' => 'ФИО ребёнка',
             'children.*.birth_date' => 'дата рождения ребёнка',
+            'educations.*.institution' => 'учебное заведение',
+            'educations.*.faculty' => 'факультет',
+            'educations.*.specialty' => 'специальность',
+            'educations.*.started_year' => 'год поступления',
+            'educations.*.graduated_year' => 'год окончания',
+            'educations.*.diploma_number' => 'номер диплома',
         ];
     }
 

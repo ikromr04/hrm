@@ -128,4 +128,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserChild::class)->orderBy('birth_date');
     }
+
+    /**
+     * Where the employee studied, earliest first; private, like details.
+     */
+    public function educations(): HasMany
+    {
+        return $this->hasMany(UserEducation::class)->orderBy('started_year')->orderBy('id');
+    }
 }

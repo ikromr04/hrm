@@ -43,6 +43,7 @@ class EmployeeEditTest extends TestCase
             'departments' => [],
             'languages' => [],
             'children' => [],
+            'educations' => [],
             ...$overrides,
         ];
     }
@@ -106,6 +107,10 @@ class EmployeeEditTest extends TestCase
                 'sos_contact' => 'Сестра — Мехринисо',
                 'passport_number' => '01234567',
                 'children' => [['full_name' => 'Каримов Далер', 'birth_date' => '2018-06-01']],
+                'educations' => [
+                    ['institution' => 'ТНУ', 'faculty' => 'Экономический', 'specialty' => 'Финансы', 'started_year' => '2010', 'graduated_year' => '2015', 'diploma_number' => 'AB 123456'],
+                    ['institution' => 'Курсы', 'faculty' => 'Бухгалтерия', 'specialty' => 'Бухучёт', 'started_year' => '2024', 'graduated_year' => '', 'diploma_number' => ''],
+                ],
             ]))
             ->assertSessionHasNoErrors()
             ->assertRedirect("/employees/{$employee->id}");
@@ -122,6 +127,10 @@ class EmployeeEditTest extends TestCase
         $this->assertSame('+992935554433', $employee->details->sos_phone);
         $this->assertSame('Сестра — Мехринисо', $employee->details->sos_contact);
         $this->assertSame(['Каримов Далер'], $employee->children()->pluck('full_name')->all());
+        $this->assertSame(
+            [['ТНУ', 'Экономический', 'Финансы', 2010, 2015, 'AB 123456'], ['Курсы', 'Бухгалтерия', 'Бухучёт', 2024, null, null]],
+            $employee->educations->map(fn ($e) => [$e->institution, $e->faculty, $e->specialty, $e->started_year, $e->graduated_year, $e->diploma_number])->all(),
+        );
 
         // Staying keeps the head flag; a new department starts without it.
         $this->assertEqualsCanonicalizing([$keep->id, $join->id], $employee->departments->pluck('id')->all());
@@ -141,8 +150,9 @@ class EmployeeEditTest extends TestCase
                 'phone' => '12',
                 'birth_date' => now()->addDay()->toDateString(),
                 'children' => [['full_name' => '']],
+                'educations' => [['institution' => '', 'specialty' => 'X', 'started_year' => '2020', 'graduated_year' => '2018']],
             ]))
-            ->assertSessionHasErrors(['surname', 'email', 'roles.0', 'phone', 'birth_date', 'children.0.full_name']);
+            ->assertSessionHasErrors(['surname', 'email', 'roles.0', 'phone', 'birth_date', 'children.0.full_name', 'educations.0.institution', 'educations.0.graduated_year']);
     }
 
     public function test_an_admin_cannot_drop_their_own_admin_role()

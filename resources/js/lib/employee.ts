@@ -53,6 +53,17 @@ export function tenure(since: string): string {
 /** "5 сотрудников" */
 export const peopleLabel = (count: number) => `${count} ${plural(count, ['сотрудник', 'сотрудника', 'сотрудников'])}`;
 
+/** One place of study; private. */
+export interface Education {
+    institution: string;
+    faculty: string;
+    specialty: string;
+    started_year: number;
+    /** Null while still studying. */
+    graduated_year: number | null;
+    diploma_number: string | null;
+}
+
 export type LanguageLevel = 'beginner' | 'intermediate' | 'advanced';
 
 /** From least to most fluent. */

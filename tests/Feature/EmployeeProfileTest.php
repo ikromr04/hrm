@@ -6,6 +6,7 @@ use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
+use App\Models\UserEducation;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -50,6 +51,7 @@ class EmployeeProfileTest extends TestCase
     {
         $user = User::factory()->has(UserDetail::factory(), 'details')->create();
         UserChild::factory(2)->for($user)->create();
+        UserEducation::factory()->for($user)->create();
 
         $this->actingAs($user)
             ->get("/employees/{$user->id}")
@@ -59,6 +61,8 @@ class EmployeeProfileTest extends TestCase
                 ->where('employee.private.birth_place', $user->details->birth_place)
                 ->where('employee.private.sos_phone', $user->details->sos_phone)
                 ->has('employee.private.children', 2)
+                ->has('employee.private.educations', 1)
+                ->where('employee.private.educations.0.institution', $user->educations->first()->institution)
             );
     }
 
