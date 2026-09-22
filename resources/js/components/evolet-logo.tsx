@@ -11,6 +11,17 @@ const MARK = [
     'M36.4136 6.46482H17.5676L29.8132 28.5686L27.5474 28.568C23.0874 20.5184 18.6269 12.4685 14.168 4.41992H37.5453L36.4134 6.46467L36.4136 6.46482Z',
 ];
 
+/** The triangle mark on its own, for tight spaces such as a collapsed sidebar. */
+export function EvoletMark({ className, ...props }: SVGAttributes<SVGSVGElement>) {
+    return (
+        <svg viewBox="14 0 33 30" fill="none" aria-hidden="true" className={cn('block shrink-0', className)} {...props}>
+            {MARK.map((d) => (
+                <path key={d} fill="#A8CF45" d={d} />
+            ))}
+        </svg>
+    );
+}
+
 interface EvoletLogoProps extends SVGAttributes<SVGSVGElement> {
     /** `dark` for light backgrounds, `light` for dark backgrounds. */
     tone?: 'dark' | 'light';

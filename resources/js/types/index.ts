@@ -21,6 +21,18 @@ export interface NavItem {
     isActive?: boolean;
 }
 
+export interface SidebarNavItem {
+    title: string;
+    icon: LucideIcon;
+    /** Omit for modules that are not built yet; the item renders as disabled. */
+    url?: string;
+}
+
+export interface SidebarNavGroup {
+    title?: string;
+    items: SidebarNavItem[];
+}
+
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };

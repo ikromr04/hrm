@@ -1,32 +1,37 @@
-import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
+import { type SidebarNavGroup } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-react';
+import { BarChart3, Bell, Briefcase, CalendarDays, Laptop, LayoutGrid, Settings, Target, Users, Wallet } from 'lucide-react';
 import AppLogo from './app-logo';
 
-const mainNavItems: NavItem[] = [
+const navGroups: SidebarNavGroup[] = [
     {
-        title: 'Dashboard',
-        url: '/dashboard',
-        icon: LayoutGrid,
+        items: [
+            { title: 'Главная', url: '/dashboard', icon: LayoutGrid },
+            { title: 'Сотрудники', icon: Users },
+            { title: 'Оборудование', icon: Laptop },
+            { title: 'Отпуска', icon: CalendarDays },
+        ],
+    },
+    {
+        title: 'Процессы',
+        items: [
+            { title: 'Найм', icon: Briefcase },
+            { title: 'Зарплата', icon: Wallet },
+            { title: 'Оценка', icon: Target },
+            { title: 'Отчёты', icon: BarChart3 },
+        ],
     },
 ];
 
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        url: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        url: 'https://laravel.com/docs/starter-kits',
-        icon: BookOpen,
-    },
-];
+const footerGroup: SidebarNavGroup = {
+    items: [
+        { title: 'Настройки', url: '/settings', icon: Settings },
+        { title: 'Уведомления', icon: Bell },
+    ],
+};
 
 export function AppSidebar() {
     return (
@@ -34,8 +39,12 @@ export function AppSidebar() {
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
-                            <Link href="/dashboard" prefetch>
+                        <SidebarMenuButton
+                            size="lg"
+                            asChild
+                            className="h-14 group-data-[collapsible=icon]:p-1! hover:bg-transparent active:bg-transparent"
+                        >
+                            <Link href="/dashboard" prefetch aria-label="Evolet HRM — на главную">
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -44,11 +53,13 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                {navGroups.map((group) => (
+                    <NavMain key={group.items[0].title} group={group} />
+                ))}
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
+                <NavMain group={footerGroup} className="p-0" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>
