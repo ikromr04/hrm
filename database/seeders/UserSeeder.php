@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Department;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
@@ -22,6 +23,7 @@ class UserSeeder extends Seeder
         }
 
         $this->callOnce(RoleSeeder::class);
+        $this->callOnce(DepartmentSeeder::class);
 
         $admin = $this->account(['name' => 'Некруз', 'surname' => 'Абдуллоев', 'patronymic' => 'Саидович', 'sex' => 'male', 'email' => 'admin@evolet.test']);
         $admin->assignRole('admin');
@@ -46,6 +48,7 @@ class UserSeeder extends Seeder
         }
 
         $this->assignRoles();
+        $this->assignDepartments();
         $this->addChildren();
     }
 
@@ -70,6 +73,36 @@ class UserSeeder extends Seeder
                     ->ofFamily($user->surname)
                     ->state(fn () => ['birth_date' => fake()->dateTimeBetween($earliest, '-1 month')])
                     ->create();
+            });
+    }
+
+    /**
+     * Heads sit in the unit they lead; everyone else is in one unit, a few in
+     * two, and a few in none. The admin belongs to no department.
+     */
+    private function assignDepartments(): void
+    {
+        $top = Department::whereNull('parent_id')->orderBy('id')->get();
+        $units = Department::whereNotNull('parent_id')->orderBy('id')->get();
+        $all = $top->concat($units);
+
+        User::doesntHave('departments')
+            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'))
+            ->with('roles')
+            ->orderBy('id')
+            ->get()
+            ->each(function (User $user) use ($top, $units, $all) {
+                $roles = $user->roles->pluck('name');
+
+                $departments = match (true) {
+                    $roles->contains('department-head') => [$top->random()],
+                    $roles->contains('division-head') => [$units->random()],
+                    fake()->boolean(7) => [],
+                    fake()->boolean(9) => $all->random(2)->all(),
+                    default => [fake()->boolean(80) ? $units->random() : $top->random()],
+                };
+
+                $user->departments()->sync(collect($departments)->pluck('id'));
             });
     }
 
