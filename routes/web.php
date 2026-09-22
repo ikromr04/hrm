@@ -5,6 +5,7 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\Directories;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeStatusController;
+use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
@@ -13,6 +14,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+    Route::get('search', SearchController::class)->name('search');
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });
