@@ -214,7 +214,41 @@ class EmployeeController extends Controller
                     'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
                 ] : null,
             ],
+            'neighbours' => $this->neighbours($employee),
         ]);
+    }
+
+    /**
+     * The previous and next person in the same list (working, transferred or
+     * fired), in the default order of the employee table: by surname and name.
+     *
+     * @return array{prev: array{id: int, name: string}|null, next: array{id: int, name: string}|null}
+     */
+    private function neighbours(User $employee): array
+    {
+        $order = fn (string $direction) => User::query()
+            ->where('status', $employee->status)
+            ->whereKeyNot($employee->id)
+            ->orderBy('surname', $direction)
+            ->orderBy('name', $direction)
+            ->orderBy('id', $direction);
+
+        // "Before" means earlier in (surname, name, id) order; ties on the name fall back to the id.
+        $before = fn (Builder $q) => $q->where(fn (Builder $q) => $q
+            ->where('surname', '<', $employee->surname)
+            ->orWhere(fn (Builder $q) => $q->where('surname', $employee->surname)->where('name', '<', $employee->name))
+            ->orWhere(fn (Builder $q) => $q->where('surname', $employee->surname)->where('name', $employee->name)->where('id', '<', $employee->id)));
+        $after = fn (Builder $q) => $q->where(fn (Builder $q) => $q
+            ->where('surname', '>', $employee->surname)
+            ->orWhere(fn (Builder $q) => $q->where('surname', $employee->surname)->where('name', '>', $employee->name))
+            ->orWhere(fn (Builder $q) => $q->where('surname', $employee->surname)->where('name', $employee->name)->where('id', '>', $employee->id)));
+
+        $person = fn (?User $u) => $u ? ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"] : null;
+
+        return [
+            'prev' => $person($order('desc')->tap($before)->first(['id', 'name', 'surname'])),
+            'next' => $person($order('asc')->tap($after)->first(['id', 'name', 'surname'])),
+        ];
     }
 
     public function edit(User $employee): Response

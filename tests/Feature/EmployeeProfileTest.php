@@ -47,6 +47,24 @@ class EmployeeProfileTest extends TestCase
             );
     }
 
+    public function test_the_profile_links_to_the_previous_and_next_colleague_in_the_same_list()
+    {
+        $a = User::factory()->create(['surname' => 'Азимов', 'name' => 'Далер']);
+        $b = User::factory()->create(['surname' => 'Азимов', 'name' => 'Фаррух']);
+        $c = User::factory()->create(['surname' => 'Бобоева', 'name' => 'Нигина']);
+        User::factory()->create(['surname' => 'Абдуллоев', 'name' => 'Умед', 'status' => 'fired']);
+
+        $this->actingAs($a);
+
+        $this->get("/employees/{$b->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('neighbours.prev', ['id' => $a->id, 'name' => 'Азимов Далер'])
+            ->where('neighbours.next', ['id' => $c->id, 'name' => 'Бобоева Нигина'])
+        );
+        // First and last of the list; someone who left is not in it.
+        $this->get("/employees/{$a->id}")->assertInertia(fn (Assert $page) => $page->where('neighbours.prev', null));
+        $this->get("/employees/{$c->id}")->assertInertia(fn (Assert $page) => $page->where('neighbours.next', null));
+    }
+
     public function test_employee_sees_their_full_profile_including_passport()
     {
         $user = User::factory()->has(UserDetail::factory(), 'details')->create();

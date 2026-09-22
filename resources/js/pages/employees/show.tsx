@@ -21,9 +21,9 @@ import {
 } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { Lock, Mail, Pencil, Phone } from 'lucide-react';
-import { type ReactNode } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { ChevronLeft, ChevronRight, Lock, Mail, Pencil, Phone } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
 
 interface ProfilePrivate extends PrivateDetails {
     educations: (Education & { id: number })[];
@@ -128,7 +128,51 @@ function Educations({ items }: { items: ProfilePrivate['educations'] }) {
     );
 }
 
-export default function EmployeeProfile({ employee }: { employee: Employee }) {
+type Neighbour = { id: number; name: string } | null;
+
+/** Arrows to the previous and next colleague in the list; ← and → keys do the same. */
+function Neighbours({ prev, next }: { prev: Neighbour; next: Neighbour }) {
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+            const target = event.target as HTMLElement;
+            if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+            const to = event.key === 'ArrowLeft' ? prev : event.key === 'ArrowRight' ? next : null;
+            if (to) router.visit(route('employees.show', to.id));
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [prev, next]);
+
+    const arrow = (to: Neighbour, label: string, Icon: typeof ChevronLeft) => (
+        <Button
+            variant="outline"
+            size="icon"
+            className="size-9"
+            disabled={!to}
+            aria-label={to ? `${label}: ${to.name}` : label}
+            title={to?.name}
+            asChild={!!to}
+        >
+            {to ? (
+                <Link href={route('employees.show', to.id)} prefetch>
+                    <Icon />
+                </Link>
+            ) : (
+                <Icon />
+            )}
+        </Button>
+    );
+
+    return (
+        <div className="flex gap-1">
+            {arrow(prev, 'Предыдущий сотрудник', ChevronLeft)}
+            {arrow(next, 'Следующий сотрудник', ChevronRight)}
+        </div>
+    );
+}
+
+export default function EmployeeProfile({ employee, neighbours }: { employee: Employee; neighbours: { prev: Neighbour; next: Neighbour } }) {
     const shortName = `${employee.surname} ${employee.name}`;
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
     const details = employee.private;
@@ -196,14 +240,17 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                         </div>
                     </div>
 
-                    {auth.can.manageEmployees && (
-                        <Button variant="outline" className="self-start sm:self-center" asChild>
-                            <Link href={route('employees.edit', employee.id)}>
-                                <Pencil />
-                                Редактировать
-                            </Link>
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                        {auth.can.manageEmployees && (
+                            <Button variant="outline" asChild>
+                                <Link href={route('employees.edit', employee.id)}>
+                                    <Pencil />
+                                    Редактировать
+                                </Link>
+                            </Button>
+                        )}
+                        <Neighbours prev={neighbours.prev} next={neighbours.next} />
+                    </div>
                 </Card>
 
                 {details ? (
