@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
@@ -25,7 +26,7 @@ class EmployeeController extends Controller
      */
     private const PUBLIC_COLUMNS = ['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email'];
 
-    private const PUBLIC_SORTS = ['name', 'position', 'department', 'sex'];
+    private const PUBLIC_SORTS = ['name', 'role', 'department', 'position', 'sex'];
 
     /** @var Collection<int, Department>|null All departments keyed by id; the tree is small. */
     private ?Collection $departments = null;
@@ -51,9 +52,12 @@ class EmployeeController extends Controller
             'sort' => ['nullable', Rule::in($sortable)],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
 
+            'q' => ['nullable', 'string', 'max:100'],
             'search' => ['nullable', 'string', 'max:100'],
             'position' => ['nullable', 'array'],
-            'position.*' => ['string', Rule::exists('roles', 'name')],
+            'position.*' => ['integer', Rule::exists('positions', 'id')],
+            'role' => ['nullable', 'array'],
+            'role.*' => ['string', Rule::exists('roles', 'name')],
             'department' => ['nullable', 'array'],
             'department.*' => ['integer', Rule::exists('departments', 'id')],
             'sex' => ['nullable', Rule::in(['male', 'female'])],
@@ -74,8 +78,10 @@ class EmployeeController extends Controller
         ]);
 
         $filters = [
+            'q' => trim($input['q'] ?? ''),
             'search' => trim($input['search'] ?? ''),
-            'position' => array_values($input['position'] ?? []),
+            'position' => array_map('intval', $input['position'] ?? []),
+            'role' => array_values($input['role'] ?? []),
             'department' => array_map('intval', $input['department'] ?? []),
             'sex' => $input['sex'] ?? null,
             'birth_from' => $input['birth_from'] ?? null,
@@ -94,7 +100,8 @@ class EmployeeController extends Controller
         $direction = $input['direction'] ?? 'asc';
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
-        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'departments:id,name,parent_id']);
+        $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id']);
+        $this->applySearch($query, $filters['q'], $privateAccess);
         $this->applyFilters($query, $filters);
         $this->applySort($query, $sort, $direction);
 
@@ -113,7 +120,8 @@ class EmployeeController extends Controller
             'avatar' => $user->avatar,
             'sex' => $user->sex,
             'email' => $user->email,
-            'roles' => $this->positions($user),
+            'roles' => $this->roleTitles($user),
+            'positions' => $this->positionNames($user),
             'departments' => $this->departmentList($user),
             'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
         ]);
@@ -127,7 +135,8 @@ class EmployeeController extends Controller
             'privateAccess' => $privateAccess,
             'sortable' => $sortable,
             'options' => [
-                'positions' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
                 'nationalities' => $privateAccess ? $this->distinctDetail('nationality') : [],
                 'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
@@ -138,7 +147,7 @@ class EmployeeController extends Controller
 
     public function show(Request $request, User $employee): Response
     {
-        $employee->load('roles:id,name,title');
+        $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id']);
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
 
         if ($canSeePrivate) {
@@ -154,7 +163,9 @@ class EmployeeController extends Controller
                 'avatar' => $employee->avatar,
                 'sex' => $employee->sex,
                 'email' => $employee->email,
-                'roles' => $this->positions($employee),
+                'roles' => $this->roleTitles($employee),
+                'positions' => $this->positionNames($employee),
+                'departments' => $this->departmentList($employee),
                 'private' => $canSeePrivate ? [
                     ...$this->privateDetails($employee),
                     'birth_place' => $employee->details?->birth_place,
@@ -170,6 +181,71 @@ class EmployeeController extends Controller
     }
 
     /**
+     * Toolbar search across every column. Each word must match some field, so
+     * "Назарова Дилноза" finds a person whose surname and name hold the words.
+     * Private fields are searched only for viewers who may see them for
+     * everyone; otherwise a search would reveal them.
+     */
+    private function applySearch(Builder $query, string $term, bool $privateAccess): void
+    {
+        // "90 555 44 33" is one phone number, not four words.
+        $words = preg_match('/^[\d\s+()\-]+$/', $term)
+            ? [preg_replace('/\D/', '', $term)]
+            : preg_split('/\s+/u', $term, -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach ($words as $word) {
+            $like = "%{$word}%";
+            $lower = mb_strtolower($word);
+
+            $query->where(function (Builder $q) use ($like, $lower, $word, $privateAccess) {
+                foreach (['surname', 'name', 'patronymic', 'email'] as $column) {
+                    $q->orWhere($column, 'like', $like);
+                }
+
+                $q->orWhereHas('roles', fn (Builder $q) => $q->where('title', 'like', $like))
+                    ->orWhereHas('positions', fn (Builder $q) => $q->where('name', 'like', $like))
+                    ->orWhereHas('departments', fn (Builder $q) => $q->where('name', 'like', $like));
+
+                foreach (['male' => 'мужской', 'female' => 'женский'] as $sex => $label) {
+                    if (str_starts_with($label, $lower)) {
+                        $q->orWhere('sex', $sex);
+                    }
+                }
+
+                if (! $privateAccess) {
+                    return;
+                }
+
+                // Grouped, so the OR conditions stay inside the "belongs to this employee" constraint.
+                $q->orWhereHas('details', fn (Builder $q) => $q->where(function (Builder $q) use ($like, $lower, $word) {
+                    foreach (['home_address', 'nationality', 'citizenship', 'birth_place'] as $column) {
+                        $q->orWhere($column, 'like', $like);
+                    }
+
+                    $digits = preg_replace('/\D/', '', $word);
+                    if (strlen($digits) >= 3) {
+                        $q->orWhere('phone', 'like', "%{$digits}%")->orWhere('sos_phone', 'like', "%{$digits}%");
+                    }
+
+                    // "14.05.1992" or a year such as "1992" matches the dates shown in the table.
+                    if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $word, $m)) {
+                        $q->orWhereDate('birth_date', "{$m[3]}-{$m[2]}-{$m[1]}")->orWhereDate('hired_at', "{$m[3]}-{$m[2]}-{$m[1]}");
+                    } elseif (preg_match('/^(19|20)\d{2}$/', $word)) {
+                        $q->orWhereYear('birth_date', (int) $word)->orWhereYear('hired_at', (int) $word);
+                    }
+
+                    $marital = ['married' => ['женат', 'замужем'], 'single' => ['не женат', 'не замужем', 'холост']];
+                    foreach ($marital as $status => $labels) {
+                        if (collect($labels)->contains(fn ($l) => str_starts_with($l, $lower))) {
+                            $q->orWhere('marital_status', $status);
+                        }
+                    }
+                }))->orWhereHas('children', fn (Builder $q) => $q->where('full_name', 'like', $like));
+            });
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     private function applyFilters(Builder $query, array $filters): void
@@ -180,7 +256,8 @@ class EmployeeController extends Controller
                     $q->orWhere($column, 'like', "%{$filters['search']}%");
                 }
             }))
-            ->when($filters['position'], fn (Builder $q, array $positions) => $q->role($positions))
+            ->when($filters['role'], fn (Builder $q, array $roles) => $q->role($roles))
+            ->when($filters['position'], fn (Builder $q, array $ids) => $q->whereHas('positions', fn (Builder $q) => $q->whereIn('positions.id', $ids)))
             // Picking a department also matches everyone in its sub-departments.
             ->when($filters['department'], fn (Builder $q, array $ids) => $q->whereHas(
                 'departments',
@@ -240,13 +317,20 @@ class EmployeeController extends Controller
                     ->selectRaw('min(departments.name)'),
                 $direction,
             ),
-            'position' => $query->orderBy(
+            'role' => $query->orderBy(
                 Role::select('roles.title')
                     ->join('model_has_roles', 'model_has_roles.role_id', '=', 'roles.id')
                     ->whereColumn('model_has_roles.model_id', 'users.id')
                     ->where('model_has_roles.model_type', User::class)
                     ->orderBy('roles.title')
                     ->limit(1),
+                $direction,
+            ),
+            'position' => $query->orderBy(
+                DB::table('position_user')
+                    ->join('positions', 'positions.id', '=', 'position_user.position_id')
+                    ->whereColumn('position_user.user_id', 'users.id')
+                    ->selectRaw('min(positions.name)'),
                 $direction,
             ),
             'children' => $query->orderBy(
@@ -328,13 +412,23 @@ class EmployeeController extends Controller
     }
 
     /**
-     * An employee can hold several positions; titles in alphabetical order.
+     * Access roles shown as "Позиция"; titles in alphabetical order.
      *
      * @return list<string>
      */
-    private function positions(User $user): array
+    private function roleTitles(User $user): array
     {
         return $user->roles->pluck('title')->sort()->values()->all();
+    }
+
+    /**
+     * An employee can hold several positions; names in alphabetical order.
+     *
+     * @return list<string>
+     */
+    private function positionNames(User $user): array
+    {
+        return $user->positions->pluck('name')->sort()->values()->all();
     }
 
     /**

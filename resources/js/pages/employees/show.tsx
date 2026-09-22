@@ -23,8 +23,11 @@ interface Employee {
     avatar: string | null;
     sex: Sex;
     email: string;
-    /** Position titles; an employee can hold several. */
+    /** Access roles, shown as "Позиция". */
     roles: string[];
+    /** Positions, shown as "Должность"; an employee can hold several. */
+    positions: string[];
+    departments: { id: number; name: string; path: string }[];
     /** Null when the viewer may not see this person's private data. */
     private: ProfilePrivate | null;
 }
@@ -48,6 +51,16 @@ function Field({ label, children, wide }: { label: string; children: ReactNode; 
             <dt className="text-muted-foreground text-[13px]">{label}</dt>
             <dd className="text-sm font-medium break-words">{children ?? <span className="text-muted-foreground font-normal">—</span>}</dd>
         </div>
+    );
+}
+
+function Departments({ items }: { items: Employee['departments'] }) {
+    return (
+        <ul className="flex flex-col gap-1">
+            {items.map((department) => (
+                <li key={department.id}>{department.path}</li>
+            ))}
+        </ul>
     );
 }
 
@@ -76,9 +89,9 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                     <div className="flex min-w-0 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <h1 className="text-[28px] leading-tight font-bold tracking-tight">{fullName}</h1>
-                            {employee.roles.map((role) => (
-                                <StatusBadge key={role} tone="success">
-                                    {role}
+                            {employee.positions.map((title) => (
+                                <StatusBadge key={title} tone="success">
+                                    {title}
                                 </StatusBadge>
                             ))}
                         </div>
@@ -163,6 +176,12 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                                     <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'} wide>
                                         {employee.roles.length > 0 ? employee.roles.join(', ') : null}
                                     </Field>
+                                    <Field label={employee.positions.length > 1 ? 'Должности' : 'Должность'} wide>
+                                        {employee.positions.length > 0 ? employee.positions.join(', ') : null}
+                                    </Field>
+                                    <Field label={employee.departments.length > 1 ? 'Отделы' : 'Отдел'} wide>
+                                        {employee.departments.length > 0 ? <Departments items={employee.departments} /> : null}
+                                    </Field>
                                     <Field label="Начало работы">{formatDate(details.hired_at)}</Field>
                                     <Field label="Стаж в компании">{details.hired_at && tenure(details.hired_at)}</Field>
                                 </Fields>
@@ -200,6 +219,12 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                             <Fields>
                                 <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'} wide>
                                     {employee.roles.length > 0 ? employee.roles.join(', ') : null}
+                                </Field>
+                                <Field label={employee.positions.length > 1 ? 'Должности' : 'Должность'} wide>
+                                    {employee.positions.length > 0 ? employee.positions.join(', ') : null}
+                                </Field>
+                                <Field label={employee.departments.length > 1 ? 'Отделы' : 'Отдел'} wide>
+                                    {employee.departments.length > 0 ? <Departments items={employee.departments} /> : null}
                                 </Field>
                                 <Field label="Пол">{sexLabels[employee.sex]}</Field>
                             </Fields>

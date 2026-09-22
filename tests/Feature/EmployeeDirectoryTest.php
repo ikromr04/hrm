@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Department;
+use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
+use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -19,7 +21,19 @@ class EmployeeDirectoryTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(RoleSeeder::class);
+        $this->seed([RoleSeeder::class, PositionSeeder::class]);
+    }
+
+    private function giveTitles(User $user, string ...$names): User
+    {
+        $user->positions()->attach(Position::whereIn('name', $names)->pluck('id'));
+
+        return $user;
+    }
+
+    private function titleId(string $name): int
+    {
+        return Position::firstWhere('name', $name)->id;
     }
 
     public function test_guests_are_redirected_to_the_login_page()
@@ -39,7 +53,7 @@ class EmployeeDirectoryTest extends TestCase
                 ->has('employees.data', 10)
                 ->where('employees.total', 12)
                 ->where('total', 12)
-                ->has('options.positions', 24)
+                ->has('options.positions', 39)
                 ->where('perPage', 10)
             );
 
@@ -50,7 +64,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_colleagues_see_public_fields_only()
     {
         $colleague = User::factory()->has(UserDetail::factory(), 'details')->create(['surname' => 'Азимова']);
-        $colleague->assignRole('translator');
+        $this->giveTitles($colleague, 'Переводчик');
         UserChild::factory()->for($colleague)->create();
         $viewer = User::factory()->create(['surname' => 'Шарипов']);
 
@@ -58,10 +72,10 @@ class EmployeeDirectoryTest extends TestCase
             ->get('/employees')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('employees.data.0.surname', 'Азимова')
-                ->where('employees.data.0.roles', ['Переводчик'])
+                ->where('employees.data.0.positions', ['Переводчик'])
                 ->where('employees.data.0.private', null)
                 ->has('employees.data.0', fn (Assert $row) => $row
-                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'departments', 'private'])
+                    ->hasAll(['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email', 'roles', 'positions', 'departments', 'private'])
                     ->missing('details')
                     ->missing('children')
                 )
@@ -116,20 +130,68 @@ class EmployeeDirectoryTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('employees.data.0.surname', 'Назарова'));
     }
 
-    public function test_position_filter_accepts_several_positions()
+    public function test_toolbar_search_matches_every_public_column()
     {
-        User::factory(3)->create()->each->assignRole('intern');
-        User::factory(2)->create()->each->assignRole('analyst');
-        $this->actingAs(User::first());
+        $design = Department::create(['name' => 'Отдел Дизайна']);
+        $target = $this->giveTitles(User::factory()->create(['surname' => 'Назарова', 'name' => 'Дилноза', 'sex' => 'female']), 'Графический дизайнер');
+        $target->assignRole('kpg');
+        $target->departments()->attach($design);
+        $this->giveTitles(User::factory()->create(['surname' => 'Шарипов', 'name' => 'Алишер', 'sex' => 'male']), 'Переводчик');
+        $this->actingAs(User::factory()->create(['surname' => 'Бобоев', 'sex' => 'male']));
 
-        $this->get('/employees?position[]=intern')
+        $finds = fn (string $q) => $this->get('/employees?q='.urlencode($q))
+            ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $target->id));
+
+        $finds('Графический');       // position
+        $finds('Дизайна');           // department (SQLite in tests only folds ASCII case)
+        $finds('КПГ');               // role
+        $finds('Дилноза Назарова');  // several words across fields
+        $finds('женский');           // sex
+
+        $this->get('/employees?q=Назарова')->assertInertia(fn (Assert $page) => $page->where('filters.q', 'Назарова'));
+    }
+
+    public function test_toolbar_search_ignores_private_fields_without_access()
+    {
+        User::factory()->has(UserDetail::factory(['home_address' => 'г. Душанбе, ул. Уникальная 7']), 'details')->create();
+        $this->actingAs(User::factory()->create());
+
+        $this->get('/employees?q=Уникальная')->assertInertia(fn (Assert $page) => $page->has('employees.data', 0));
+    }
+
+    public function test_admin_search_also_matches_private_fields()
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+        $target = User::factory()->has(UserDetail::factory([
+            'home_address' => 'г. Душанбе, ул. Уникальная 7',
+            'phone' => '+992905554433',
+            'birth_date' => '1977-03-09',
+        ]), 'details')->create();
+        UserChild::factory()->for($target)->create(['full_name' => 'Уникалов Самир']);
+        $this->actingAs($admin);
+
+        foreach (['Уникальная', '555 44 33', '09.03.1977', 'Самир'] as $q) {
+            $this->get('/employees?q='.urlencode($q))
+                ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $target->id));
+        }
+    }
+
+    public function test_position_filter_accepts_several_titles()
+    {
+        User::factory(3)->create()->each(fn (User $u) => $this->giveTitles($u, 'Стажер'));
+        User::factory(2)->create()->each(fn (User $u) => $this->giveTitles($u, 'Аналитик'));
+        $this->actingAs(User::first());
+        [$intern, $analyst] = [$this->titleId('Стажер'), $this->titleId('Аналитик')];
+
+        $this->get('/employees?position[]='.$intern)
             ->assertInertia(fn (Assert $page) => $page
                 ->has('employees.data', 3)
-                ->where('employees.data.0.roles', ['Стажер'])
-                ->where('filters.position', ['intern'])
+                ->where('employees.data.0.positions', ['Стажер'])
+                ->where('filters.position', [$intern])
             );
 
-        $this->get('/employees?position[]=intern&position[]=analyst')
+        $this->get('/employees?position[]='.$intern.'&position[]='.$analyst)
             ->assertInertia(fn (Assert $page) => $page->has('employees.data', 5));
     }
 
@@ -137,14 +199,14 @@ class EmployeeDirectoryTest extends TestCase
     {
         $viewer = User::factory()->create(['surname' => 'Бобоев']);
         $both = User::factory()->create(['surname' => 'Азимов']);
-        $both->assignRole(['translator', 'copywriter']);
+        $this->giveTitles($both, 'Переводчик', 'Копирайтер');
         $this->actingAs($viewer);
 
         $this->get('/employees')
-            ->assertInertia(fn (Assert $page) => $page->where('employees.data.0.roles', ['Копирайтер', 'Переводчик']));
+            ->assertInertia(fn (Assert $page) => $page->where('employees.data.0.positions', ['Копирайтер', 'Переводчик']));
 
-        foreach (['translator', 'copywriter'] as $position) {
-            $this->get('/employees?position[]='.$position)
+        foreach (['Переводчик', 'Копирайтер'] as $title) {
+            $this->get('/employees?position[]='.$this->titleId($title))
                 ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $both->id));
         }
     }
@@ -209,18 +271,45 @@ class EmployeeDirectoryTest extends TestCase
             );
     }
 
+    public function test_roles_are_shown_as_a_separate_position_column()
+    {
+        $user = $this->giveTitles(User::factory()->create(), 'Переводчик');
+        $user->assignRole(['translator', 'analyst']);
+        User::factory()->create()->assignRole('intern');
+        $this->actingAs($user);
+
+        $this->get('/employees')
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('options.roles', 24)
+                ->where('employees.data', fn ($rows) => collect($rows)->firstWhere('id', $user->id)['roles'] === ['Аналитик', 'Переводчик'])
+            );
+
+        $this->get('/employees?role[]=analyst')
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('employees.data', 1)
+                ->where('employees.data.0.id', $user->id)
+                ->where('filters.role', ['analyst'])
+            );
+
+        // Аналитик < Стажер
+        $this->get('/employees?sort=role')
+            ->assertInertia(fn (Assert $page) => $page->where('employees.data.0.id', $user->id));
+
+        $this->get('/employees?role[]=wizard')->assertSessionHasErrors('role.0');
+    }
+
     public function test_directory_sorts_by_public_columns()
     {
         $viewer = User::factory()->create(['surname' => 'Бобоев']);
-        User::factory()->create(['surname' => 'Азимов'])->assignRole('translator');
-        User::factory()->create(['surname' => 'Юсупов'])->assignRole('analyst');
+        $this->giveTitles(User::factory()->create(['surname' => 'Азимов']), 'Переводчик');
+        $this->giveTitles(User::factory()->create(['surname' => 'Юсупов']), 'Аналитик');
         $this->actingAs($viewer);
 
         $this->get('/employees')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('sort.key', 'name')
                 ->where('employees.data.0.surname', 'Азимов')
-                ->where('sortable', ['name', 'position', 'department', 'sex'])
+                ->where('sortable', ['name', 'role', 'department', 'position', 'sex'])
             );
 
         $this->get('/employees?sort=name&direction=desc')
@@ -229,8 +318,8 @@ class EmployeeDirectoryTest extends TestCase
         // Аналитик < Переводчик; the viewer without a position sorts first.
         $this->get('/employees?sort=position')
             ->assertInertia(fn (Assert $page) => $page
-                ->where('employees.data.1.roles', ['Аналитик'])
-                ->where('employees.data.2.roles', ['Переводчик'])
+                ->where('employees.data.1.positions', ['Аналитик'])
+                ->where('employees.data.2.positions', ['Переводчик'])
             );
     }
 
@@ -256,7 +345,7 @@ class EmployeeDirectoryTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('employees.data.0.id', $oldest->id)
                 ->where('employees.data.2.id', $youngest->id)
-                ->has('sortable', 12)
+                ->has('sortable', 13)
             );
 
         $this->get('/employees?sort=children&direction=desc')
@@ -305,7 +394,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_admin_can_filter_by_private_fields()
     {
-        $admin = User::factory()->has(UserDetail::factory(['birth_date' => '1960-01-01', 'nationality' => 'узбек']), 'details')->create();
+        $admin = User::factory()->has(UserDetail::factory(['birth_date' => '1960-01-01', 'nationality' => 'узбек', 'hired_at' => '2015-05-01', 'phone' => '+992500000000', 'sos_phone' => '+992500000001']), 'details')->create();
         $admin->assignRole('admin');
         $young = User::factory()->has(UserDetail::factory([
             'birth_date' => '2000-06-15',
@@ -340,6 +429,6 @@ class EmployeeDirectoryTest extends TestCase
     {
         $this->actingAs(User::factory()->create());
 
-        $this->get('/employees?position[]=wizard')->assertSessionHasErrors('position.0');
+        $this->get('/employees?position[]=999999')->assertSessionHasErrors('position.0');
     }
 }

@@ -21,7 +21,6 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
 import { capitalize, formatDate, maritalLabels, sexLabels, type Marital, type PrivateDetails, type Sex } from '@/lib/employee';
-import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -54,16 +53,22 @@ interface EmployeeRow {
     avatar: string | null;
     sex: Sex;
     email: string;
-    /** Position titles; an employee can hold several. */
+    /** Access roles, shown as "Позиция". */
     roles: string[];
+    /** Positions, shown as "Должность"; an employee can hold several. */
+    positions: string[];
     departments: { id: number; name: string; path: string }[];
     /** Null when the viewer may not see this person's private data. */
     private: PrivateDetails | null;
 }
 
 interface Filters {
+    /** Toolbar search across every column. */
+    q: string;
+    /** "Сотрудник" column filter: name and e-mail only. */
     search: string;
-    position: string[];
+    role: string[];
+    position: number[];
     department: number[];
     sex: Sex | null;
     birth_from: string | null;
@@ -80,6 +85,7 @@ interface Filters {
 
 type ColumnKey =
     | 'name'
+    | 'role'
     | 'position'
     | 'department'
     | 'birth_date'
@@ -107,7 +113,8 @@ interface EmployeesProps {
     privateAccess: boolean;
     sortable: ColumnKey[];
     options: {
-        positions: { name: string; title: string }[];
+        roles: { name: string; title: string }[];
+        positions: { id: number; name: string }[];
         /** The department tree flattened, parents first. */
         departments: { id: number; name: string; depth: number }[];
         nationalities: string[];
@@ -122,7 +129,7 @@ type Option<T> = { value: T; label: string; depth?: number };
 type FilterDef =
     | { type: 'text'; param: 'search' | 'address' | 'phone'; placeholder: string }
     | { type: 'select'; param: 'sex' | 'marital_status'; options: Option<string>[] }
-    | { type: 'multi'; param: 'position' | 'department' | 'nationality' | 'citizenship' | 'children'; options: Option<string | number>[] }
+    | { type: 'multi'; param: 'role' | 'position' | 'department' | 'nationality' | 'citizenship' | 'children'; options: Option<string | number>[] }
     | { type: 'dates'; from: 'birth_from' | 'hired_from'; to: 'birth_to' | 'hired_to' };
 
 interface ColumnDef {
@@ -140,12 +147,24 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Сотрудники', href: '/
 
 const fullName = (row: EmployeeRow) => [row.surname, row.name].filter(Boolean).join(' ');
 
-function PositionBadges({ roles }: { roles: string[] }) {
+function RoleBadges({ titles }: { titles: string[] }) {
     return (
         <div className="flex flex-wrap gap-1 whitespace-normal">
-            {roles.map((role) => (
-                <StatusBadge key={role} tone="success">
-                    {role}
+            {titles.map((title) => (
+                <StatusBadge key={title} tone="info">
+                    {title}
+                </StatusBadge>
+            ))}
+        </div>
+    );
+}
+
+function PositionBadges({ titles }: { titles: string[] }) {
+    return (
+        <div className="flex flex-wrap gap-1 whitespace-normal">
+            {titles.map((title) => (
+                <StatusBadge key={title} tone="success">
+                    {title}
                 </StatusBadge>
             ))}
         </div>
@@ -216,12 +235,12 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
             ),
         },
         {
-            key: 'position',
+            key: 'role',
             label: 'Позиция',
             width: 240,
             private: false,
-            filter: { type: 'multi', param: 'position', options: options.positions.map((p) => ({ value: p.name, label: p.title })) },
-            cell: (row) => (row.roles.length ? <PositionBadges roles={row.roles} /> : <Empty />),
+            filter: { type: 'multi', param: 'role', options: options.roles.map((r) => ({ value: r.name, label: r.title })) },
+            cell: (row) => (row.roles.length ? <RoleBadges titles={row.roles} /> : <Empty />),
         },
         {
             key: 'department',
@@ -234,6 +253,14 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
                 options: options.departments.map((d) => ({ value: d.id, label: d.name, depth: d.depth })),
             },
             cell: (row) => (row.departments.length ? <DepartmentBadges departments={row.departments} /> : <Empty />),
+        },
+        {
+            key: 'position',
+            label: 'Должность',
+            width: 240,
+            private: false,
+            filter: { type: 'multi', param: 'position', options: options.positions.map((t) => ({ value: t.id, label: t.name })) },
+            cell: (row) => (row.positions.length ? <PositionBadges titles={row.positions} /> : <Empty />),
         },
         {
             key: 'birth_date',
@@ -340,7 +367,7 @@ interface ViewState {
     pinned: { left: ColumnKey[]; right: ColumnKey[] };
 }
 
-const STORAGE_KEY = 'employees.table.view.v1';
+const STORAGE_KEY = 'employees.table.view.v4';
 
 function defaultView(columns: ColumnDef[], privateAccess: boolean): ViewState {
     return {
@@ -350,10 +377,14 @@ function defaultView(columns: ColumnDef[], privateAccess: boolean): ViewState {
     };
 }
 
-function loadView(fallback: ViewState): ViewState {
+function loadView(fallback: ViewState, keys: ColumnKey[]): ViewState {
     try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-        return saved?.hidden && saved?.pinned ? saved : fallback;
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as ViewState | null;
+        if (!saved?.hidden || !saved?.pinned) return fallback;
+
+        // A saved view may mention columns that were renamed or removed since.
+        const known = (list: ColumnKey[]) => list.filter((key) => keys.includes(key));
+        return { hidden: known(saved.hidden), pinned: { left: known(saved.pinned.left), right: known(saved.pinned.right) } };
     } catch {
         return fallback;
     }
@@ -560,11 +591,16 @@ function ColumnFilter({ column, filters, onApply }: { column: ColumnDef; filters
 
 /* ---------------------------------------------------------------- page */
 
-export default function Employees({ employees, filters, sort, perPage, perPageOptions, privateAccess, sortable, options, total }: EmployeesProps) {
+export default function Employees({ employees, filters, sort, perPage, perPageOptions, privateAccess, sortable, options }: EmployeesProps) {
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(() => defaultView(columns, privateAccess), [columns, privateAccess]);
-    const [view, setView] = useState<ViewState>(() => loadView(defaults));
-    const [search, setSearch] = useState(filters.search);
+    const [view, setView] = useState<ViewState>(() =>
+        loadView(
+            defaults,
+            columns.map((c) => c.key),
+        ),
+    );
+    const [search, setSearch] = useState(filters.q);
     const firstRender = useRef(true);
 
     useEffect(() => saveView(view), [view]);
@@ -578,16 +614,15 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
     };
     const applyFilters = (changes: Partial<Filters>) => visit({ filters: changes });
 
-    // The toolbar search and the "Сотрудник" column filter share one parameter.
-    useEffect(() => setSearch(filters.search), [filters.search]);
+    useEffect(() => setSearch(filters.q), [filters.q]);
     useEffect(() => {
         if (firstRender.current) {
             firstRender.current = false;
             return;
         }
-        if (search === filters.search) return;
+        if (search === filters.q) return;
 
-        const timer = setTimeout(() => applyFilters({ search }), 300);
+        const timer = setTimeout(() => applyFilters({ q: search }), 300);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search]);
@@ -651,28 +686,17 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
             <Head title="Сотрудники" />
 
             <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div className="flex flex-1 flex-col gap-1">
-                        <h1 className="text-2xl font-semibold tracking-tight">Сотрудники</h1>
-                        <p className="text-muted-foreground text-sm">
-                            {total} {plural(total, ['человек', 'человека', 'человек'])}
-                        </p>
-                    </div>
-                    <Button className="h-9">
-                        <Plus />
-                        Добавить сотрудника
-                    </Button>
-                </div>
+                <h1 className="text-xl font-semibold tracking-tight">Сотрудники</h1>
 
-                <div className="flex flex-wrap items-center gap-3">
-                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-9 w-full max-w-sm items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
+                <div className="-mb-2 flex flex-wrap items-center gap-2">
+                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-8 w-full max-w-sm items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
                         <Search className="size-4 shrink-0" />
-                        <span className="sr-only">Поиск сотрудника</span>
+                        <span className="sr-only">Поиск по всем полям</span>
                         <input
                             type="search"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="ФИО или почта"
+                            placeholder="Поиск по всем полям"
                             className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
                         />
                     </label>
@@ -680,7 +704,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                     {activeFilters > 0 && (
                         <Button
                             variant="ghost"
-                            className="h-9"
+                            className="h-8"
                             onClick={() =>
                                 applyFilters(
                                     columns.filter(canFilter).reduce<Partial<Filters>>((acc, c) => ({ ...acc, ...clearedFilter(c.filter!) }), {}),
@@ -696,7 +720,7 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="h-9 font-normal">
+                            <Button variant="outline" className="h-8 font-normal">
                                 <Columns3 />
                                 Колонки
                                 <ChevronDown className="text-muted-foreground" />
@@ -727,6 +751,11 @@ export default function Employees({ employees, filters, sort, perPage, perPageOp
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <Button className="h-8">
+                        <Plus />
+                        Добавить сотрудника
+                    </Button>
                 </div>
 
                 <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">

@@ -96,10 +96,10 @@ export default function Dashboard({ stats, pendingRequests, absentToday, probati
             <div className="flex flex-1 flex-col gap-4 p-3 md:px-5 md:py-4">
                 <div className="flex flex-wrap items-end gap-4">
                     <div className="flex flex-1 flex-col gap-1">
-                        <h1 className="text-2xl font-semibold tracking-tight">Обзор</h1>
+                        <h1 className="text-xl font-semibold tracking-tight">Обзор</h1>
                         <p className="text-muted-foreground text-sm">{today}</p>
                     </div>
-                    <Button className="h-9">
+                    <Button className="h-8">
                         <Plus />
                         Добавить сотрудника
                     </Button>

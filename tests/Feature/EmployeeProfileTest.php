@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
+use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -18,7 +20,7 @@ class EmployeeProfileTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(RoleSeeder::class);
+        $this->seed([RoleSeeder::class, PositionSeeder::class]);
     }
 
     public function test_guests_are_redirected_to_the_login_page()
@@ -31,7 +33,7 @@ class EmployeeProfileTest extends TestCase
     public function test_colleagues_see_only_the_public_profile()
     {
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
-        $employee->assignRole('translator');
+        $employee->positions()->attach(Position::firstWhere('name', 'Переводчик'));
 
         $this->actingAs(User::factory()->create())
             ->get("/employees/{$employee->id}")
@@ -39,7 +41,7 @@ class EmployeeProfileTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('employees/show')
                 ->where('employee.surname', $employee->surname)
-                ->where('employee.roles', ['Переводчик'])
+                ->where('employee.positions', ['Переводчик'])
                 ->where('employee.private', null)
             );
     }
