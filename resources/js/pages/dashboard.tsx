@@ -93,7 +93,7 @@ export default function Dashboard({ stats, pendingRequests, absentToday, probati
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Главная" />
 
-            <div className="flex flex-1 flex-col gap-6 p-4 md:px-8 md:py-6">
+            <div className="flex flex-1 flex-col gap-4 p-3 md:px-5 md:py-4">
                 <div className="flex flex-wrap items-end gap-4">
                     <div className="flex flex-1 flex-col gap-1">
                         <h1 className="text-2xl font-semibold tracking-tight">Обзор</h1>

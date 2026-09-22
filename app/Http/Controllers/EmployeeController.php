@@ -2,137 +2,269 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Models\UserChild;
+use App\Models\UserDetail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\Permission\Models\Role;
 
 class EmployeeController extends Controller
 {
-    private const PER_PAGE = 10;
+    public const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
-    private const STATUSES = ['active', 'probation', 'leave', 'dismissed'];
+    /**
+     * Public columns. Private details (user_details, user_children) are loaded
+     * separately, and only for rows the viewer is allowed to see.
+     */
+    private const PUBLIC_COLUMNS = ['id', 'name', 'surname', 'patronymic', 'avatar', 'sex', 'email'];
+
+    private const PUBLIC_SORTS = ['name', 'position', 'sex'];
+
+    /**
+     * Sorting or filtering by these reveals how colleagues compare on private
+     * data even without showing it, so only viewers who may see everyone's
+     * private details can use them.
+     */
+    private const PRIVATE_SORTS = [
+        'birth_date', 'nationality', 'citizenship', 'home_address', 'phone', 'marital_status', 'children', 'hired_at',
+    ];
 
     public function index(Request $request): Response
     {
-        $filters = $request->validate([
-            'status' => ['nullable', Rule::in(self::STATUSES)],
-            'department' => ['nullable', 'string', 'max:100'],
-            'position' => ['nullable', 'string', 'max:100'],
-            'location' => ['nullable', 'string', 'max:100'],
+        $viewer = $request->user();
+        $privateAccess = $viewer->can('viewAnyPrivateDetails', User::class);
+        $sortable = $privateAccess ? [...self::PUBLIC_SORTS, ...self::PRIVATE_SORTS] : self::PUBLIC_SORTS;
+        $private = fn (array $rules) => $privateAccess ? $rules : ['prohibited'];
+
+        $input = $request->validate([
+            'per_page' => ['nullable', 'integer', Rule::in(self::PER_PAGE_OPTIONS)],
+            'sort' => ['nullable', Rule::in($sortable)],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+
+            'search' => ['nullable', 'string', 'max:100'],
+            'position' => ['nullable', 'array'],
+            'position.*' => ['string', Rule::exists('roles', 'name')],
+            'sex' => ['nullable', Rule::in(['male', 'female'])],
+
+            'birth_from' => $private(['nullable', 'date']),
+            'birth_to' => $private(['nullable', 'date']),
+            'nationality' => $private(['nullable', 'array']),
+            'nationality.*' => ['string', 'max:100'],
+            'citizenship' => $private(['nullable', 'array']),
+            'citizenship.*' => ['string', 'max:100'],
+            'address' => $private(['nullable', 'string', 'max:100']),
+            'phone' => $private(['nullable', 'string', 'max:32']),
+            'marital_status' => $private(['nullable', Rule::in(['single', 'married'])]),
+            'children' => $private(['nullable', 'array']),
+            'children.*' => ['integer', 'between:0,3'],
+            'hired_from' => $private(['nullable', 'date']),
+            'hired_to' => $private(['nullable', 'date']),
         ]);
 
-        $all = $this->demoEmployees();
+        $filters = [
+            'search' => trim($input['search'] ?? ''),
+            'position' => array_values($input['position'] ?? []),
+            'sex' => $input['sex'] ?? null,
+            'birth_from' => $input['birth_from'] ?? null,
+            'birth_to' => $input['birth_to'] ?? null,
+            'nationality' => array_values($input['nationality'] ?? []),
+            'citizenship' => array_values($input['citizenship'] ?? []),
+            'address' => trim($input['address'] ?? ''),
+            'phone' => trim($input['phone'] ?? ''),
+            'marital_status' => $input['marital_status'] ?? null,
+            'children' => array_map('intval', $input['children'] ?? []),
+            'hired_from' => $input['hired_from'] ?? null,
+            'hired_to' => $input['hired_to'] ?? null,
+        ];
 
-        // Dropdown filters narrow every tab, so the tab counters follow them.
-        $filtered = $all
-            ->when($filters['department'] ?? null, fn (Collection $c, string $v) => $c->where('department', $v))
-            ->when($filters['position'] ?? null, fn (Collection $c, string $v) => $c->where('position', $v))
-            ->when($filters['location'] ?? null, fn (Collection $c, string $v) => $c->where('location', $v));
+        $sort = $input['sort'] ?? 'name';
+        $direction = $input['direction'] ?? 'asc';
+        $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
-        $counts = ['all' => $filtered->count()]
-            + collect(self::STATUSES)->mapWithKeys(fn (string $s) => [$s => $filtered->where('status', $s)->count()])->all();
+        $query = User::query()->select(self::PUBLIC_COLUMNS)->with('roles:id,name,title');
+        $this->applyFilters($query, $filters);
+        $this->applySort($query, $sort, $direction);
 
-        $rows = $filtered
-            ->when($filters['status'] ?? null, fn (Collection $c, string $v) => $c->where('status', $v))
-            ->sortBy('name')
-            ->values();
+        $employees = $query->paginate($perPage)->withQueryString();
 
-        $page = LengthAwarePaginator::resolveCurrentPage();
-        $employees = new LengthAwarePaginator(
-            $rows->forPage($page, self::PER_PAGE)->values(),
-            $rows->count(),
-            self::PER_PAGE,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()],
-        );
+        // Private data is loaded only for the rows the viewer may see, so it
+        // never reaches the browser for anyone else.
+        $visible = $employees->getCollection()->filter(fn (User $user) => $viewer->can('viewPrivateDetails', $user));
+        $visible->load(['details', 'children']);
+
+        $employees->through(fn (User $user) => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'surname' => $user->surname,
+            'patronymic' => $user->patronymic,
+            'avatar' => $user->avatar,
+            'sex' => $user->sex,
+            'email' => $user->email,
+            'role' => $user->roles->first()?->title,
+            'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
+        ]);
 
         return Inertia::render('employees/index', [
             'employees' => $employees,
-            'counts' => $counts,
-            'filters' => [
-                'status' => $filters['status'] ?? null,
-                'department' => $filters['department'] ?? null,
-                'position' => $filters['position'] ?? null,
-                'location' => $filters['location'] ?? null,
-            ],
+            'filters' => $filters,
+            'sort' => ['key' => $sort, 'direction' => $direction],
+            'perPage' => $perPage,
+            'perPageOptions' => self::PER_PAGE_OPTIONS,
+            'privateAccess' => $privateAccess,
+            'sortable' => $sortable,
             'options' => [
-                'departments' => $all->pluck('department')->unique()->sort()->values(),
-                'positions' => $all->pluck('position')->unique()->sort()->values(),
-                'locations' => $all->pluck('location')->unique()->sort()->values(),
+                'positions' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'nationalities' => $privateAccess ? $this->distinctDetail('nationality') : [],
+                'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
             ],
-            'summary' => [
-                'people' => $all->count(),
-                'departments' => $all->pluck('department')->unique()->count(),
+            'total' => User::count(),
+        ]);
+    }
+
+    public function show(Request $request, User $employee): Response
+    {
+        $employee->load('roles:id,name,title');
+        $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
+
+        if ($canSeePrivate) {
+            $employee->load(['details', 'children']);
+        }
+
+        return Inertia::render('employees/show', [
+            'employee' => [
+                'id' => $employee->id,
+                'name' => $employee->name,
+                'surname' => $employee->surname,
+                'patronymic' => $employee->patronymic,
+                'avatar' => $employee->avatar,
+                'sex' => $employee->sex,
+                'email' => $employee->email,
+                'role' => $employee->roles->first()?->title,
+                'private' => $canSeePrivate ? [
+                    ...$this->privateDetails($employee),
+                    'birth_place' => $employee->details?->birth_place,
+                    'passport' => [
+                        'series' => $employee->details?->passport_series,
+                        'number' => $employee->details?->passport_number,
+                        'issued_at' => $employee->details?->passport_issued_at?->toDateString(),
+                        'issued_by' => $employee->details?->passport_issued_by,
+                    ],
+                ] : null,
             ],
         ]);
     }
 
     /**
-     * Placeholder directory until the employees module has its own tables.
-     * Replace with an Eloquent query (the filters above map one-to-one to
-     * where clauses and ->paginate()).
-     *
-     * @return Collection<int, array<string, mixed>>
+     * @param  array<string, mixed>  $filters
      */
-    private function demoEmployees(): Collection
+    private function applyFilters(Builder $query, array $filters): void
     {
-        $rows = [
-            ['Фарход Рахимов', 'f.rakhimov', 'Senior Backend-разработчик', 'Разработка', 'active', '2021-03-12', 'Душанбе'],
-            ['Мадина Каримова', 'm.karimova', 'Менеджер по продажам', 'Продажи', 'active', '2022-07-04', 'Душанбе'],
-            ['Алишер Шарипов', 'a.sharipov', 'Frontend-разработчик', 'Разработка', 'probation', '2026-08-01', 'Душанбе'],
-            ['Нигина Саидова', 'n.saidova', 'Бухгалтер', 'Финансы', 'active', '2020-01-15', 'Душанбе'],
-            ['Рустам Азимов', 'r.azimov', 'Руководитель склада', 'Операции', 'leave', '2019-09-22', 'Худжанд'],
-            ['Зарина Хасанова', 'z.khasanova', 'Специалист поддержки', 'Поддержка', 'active', '2023-05-10', 'Душанбе'],
-            ['Тимур Юсупов', 't.yusupov', 'Product-дизайнер', 'Разработка', 'probation', '2026-07-15', 'Душанбе'],
-            ['Бехруз Мирзоев', 'b.mirzoev', 'Аккаунт-менеджер', 'Продажи', 'active', '2024-02-03', 'Худжанд'],
-            ['Шахноза Ибрагимова', 'sh.ibragimova', 'Маркетолог', 'Маркетинг', 'active', '2022-11-19', 'Душанбе'],
-            ['Ориф Давлатов', 'o.davlatov', 'DevOps-инженер', 'Разработка', 'dismissed', '2021-04-08', 'Душанбе'],
-            ['Сухроб Каримов', 's.karimov', 'Руководитель разработки', 'Разработка', 'active', '2018-06-01', 'Душанбе'],
-            ['Азиз Нуров', 'a.nurov', 'Руководитель продаж', 'Продажи', 'active', '2017-10-16', 'Душанбе'],
-            ['Лола Рашидова', 'l.rashidova', 'Финансовый директор', 'Финансы', 'active', '2016-02-01', 'Душанбе'],
-            ['Джамшед Олимов', 'j.olimov', 'Директор по операциям', 'Операции', 'active', '2017-03-20', 'Душанбе'],
-            ['Парвина Юнусова', 'p.yunusova', 'Руководитель поддержки', 'Поддержка', 'active', '2019-05-13', 'Душанбе'],
-            ['Фируза Алиева', 'f.alieva', 'Руководитель маркетинга', 'Маркетинг', 'active', '2020-08-24', 'Душанбе'],
-            ['Дилноза Назарова', 'd.nazarova', 'HR-директор', 'HR и админ.', 'active', '2018-01-09', 'Душанбе'],
-            ['Далер Сафаров', 'd.safarov', 'Backend-разработчик', 'Разработка', 'active', '2023-09-04', 'Душанбе'],
-            ['Малика Холова', 'm.kholova', 'QA-инженер', 'Разработка', 'leave', '2022-03-14', 'Душанбе'],
-            ['Комрон Шарифов', 'k.sharifov', 'Медицинский представитель', 'Продажи', 'active', '2021-11-01', 'Бохтар'],
-            ['Нилуфар Раджабова', 'n.radzhabova', 'Медицинский представитель', 'Продажи', 'probation', '2026-08-18', 'Худжанд'],
-            ['Умед Одинаев', 'u.odinaev', 'Логист', 'Операции', 'active', '2020-06-29', 'Душанбе'],
-            ['Гулноза Кодирова', 'g.kodirova', 'Кладовщик', 'Операции', 'active', '2024-04-15', 'Худжанд'],
-            ['Парвиз Султонов', 'p.sultonov', 'Специалист поддержки', 'Поддержка', 'active', '2025-01-20', 'Душанбе'],
-            ['Тахмина Турсунова', 't.tursunova', 'Бухгалтер', 'Финансы', 'leave', '2021-07-05', 'Душанбе'],
-            ['Хуршед Каюмов', 'kh.kayumov', 'Контент-менеджер', 'Маркетинг', 'dismissed', '2023-02-27', 'Душанбе'],
-            ['Ситора Бобоева', 's.boboeva', 'Специалист по кадрам', 'HR и админ.', 'active', '2022-10-10', 'Душанбе'],
-            ['Некруз Абдуллоев', 'n.abdulloev', 'Системный администратор', 'HR и админ.', 'probation', '2026-06-30', 'Душанбе'],
-            ['Мунира Гафурова', 'm.gafurova', 'Медицинский представитель', 'Продажи', 'active', '2023-12-04', 'Бохтар'],
-            ['Зафар Шукуров', 'z.shukurov', 'Водитель-экспедитор', 'Операции', 'active', '2019-03-18', 'Душанбе'],
-        ];
+        $query
+            ->when($filters['search'] !== '', fn (Builder $q) => $q->where(function (Builder $q) use ($filters) {
+                foreach (['surname', 'name', 'patronymic', 'email'] as $column) {
+                    $q->orWhere($column, 'like', "%{$filters['search']}%");
+                }
+            }))
+            ->when($filters['position'], fn (Builder $q, array $positions) => $q->role($positions))
+            ->when($filters['sex'], fn (Builder $q, string $sex) => $q->where('sex', $sex))
+            ->when($filters['children'], fn (Builder $q, array $counts) => $q->where(function (Builder $q) use ($counts) {
+                $count = UserChild::selectRaw('count(*)')->whereColumn('user_children.user_id', 'users.id');
+                foreach ($counts as $n) {
+                    $q->orWhere($count->clone(), $n >= 3 ? '>=' : '=', $n);
+                }
+            }));
 
-        $managers = [
-            'Разработка' => 'Сухроб Каримов',
-            'Продажи' => 'Азиз Нуров',
-            'Финансы' => 'Лола Рашидова',
-            'Операции' => 'Джамшед Олимов',
-            'Поддержка' => 'Парвина Юнусова',
-            'Маркетинг' => 'Фируза Алиева',
-            'HR и админ.' => 'Дилноза Назарова',
-        ];
-
-        return collect($rows)->map(fn (array $row, int $index) => [
-            'id' => $index + 1,
-            'name' => $row[0],
-            'email' => "{$row[1]}@evolet.test",
-            'position' => $row[2],
-            'department' => $row[3],
-            'status' => $row[4],
-            'hired_at' => $row[5],
-            'location' => $row[6],
-            // Heads of department have no manager in this demo.
-            'manager' => $managers[$row[3]] === $row[0] ? null : $managers[$row[3]],
+        $details = array_filter([
+            'birth_from' => $filters['birth_from'],
+            'birth_to' => $filters['birth_to'],
+            'nationality' => $filters['nationality'],
+            'citizenship' => $filters['citizenship'],
+            'address' => $filters['address'],
+            'phone' => $filters['phone'],
+            'marital_status' => $filters['marital_status'],
+            'hired_from' => $filters['hired_from'],
+            'hired_to' => $filters['hired_to'],
         ]);
+
+        if ($details === []) {
+            return;
+        }
+
+        $query->whereHas('details', function (Builder $q) use ($details) {
+            $q->when($details['birth_from'] ?? null, fn (Builder $q, string $d) => $q->whereDate('birth_date', '>=', $d))
+                ->when($details['birth_to'] ?? null, fn (Builder $q, string $d) => $q->whereDate('birth_date', '<=', $d))
+                ->when($details['hired_from'] ?? null, fn (Builder $q, string $d) => $q->whereDate('hired_at', '>=', $d))
+                ->when($details['hired_to'] ?? null, fn (Builder $q, string $d) => $q->whereDate('hired_at', '<=', $d))
+                ->when($details['nationality'] ?? null, fn (Builder $q, array $v) => $q->whereIn('nationality', $v))
+                ->when($details['citizenship'] ?? null, fn (Builder $q, array $v) => $q->whereIn('citizenship', $v))
+                ->when($details['address'] ?? null, fn (Builder $q, string $v) => $q->where('home_address', 'like', "%{$v}%"))
+                ->when($details['marital_status'] ?? null, fn (Builder $q, string $v) => $q->where('marital_status', $v))
+                ->when($details['phone'] ?? null, function (Builder $q, string $v) {
+                    $digits = preg_replace('/\D/', '', $v);
+                    $q->where(fn (Builder $q) => $q->where('phone', 'like', "%{$digits}%")->orWhere('sos_phone', 'like', "%{$digits}%"));
+                });
+        });
+    }
+
+    private function applySort(Builder $query, string $sort, string $direction): void
+    {
+        $detail = fn (string $column) => UserDetail::select($column)->whereColumn('user_details.user_id', 'users.id');
+
+        match ($sort) {
+            'name' => $query->orderBy('surname', $direction)->orderBy('name', $direction),
+            'sex' => $query->orderBy('sex', $direction),
+            'position' => $query->orderBy(
+                Role::select('roles.title')
+                    ->join('model_has_roles', 'model_has_roles.role_id', '=', 'roles.id')
+                    ->whereColumn('model_has_roles.model_id', 'users.id')
+                    ->where('model_has_roles.model_type', User::class)
+                    ->orderBy('roles.title')
+                    ->limit(1),
+                $direction,
+            ),
+            'children' => $query->orderBy(
+                UserChild::selectRaw('count(*)')->whereColumn('user_children.user_id', 'users.id'),
+                $direction,
+            ),
+            default => $query->orderBy($detail($sort), $direction),
+        };
+
+        // Stable order within equal values, so pages never shuffle.
+        $query->orderBy('surname')->orderBy('name')->orderBy('users.id');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function distinctDetail(string $column): array
+    {
+        return UserDetail::query()->whereNotNull($column)->distinct()->orderBy($column)->pluck($column)->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function privateDetails(User $user): array
+    {
+        $details = $user->details;
+
+        return [
+            'birth_date' => $details?->birth_date?->toDateString(),
+            'nationality' => $details?->nationality,
+            'citizenship' => $details?->citizenship,
+            'home_address' => $details?->home_address,
+            'phone' => $details?->phone,
+            'sos_phone' => $details?->sos_phone,
+            'marital_status' => $details?->marital_status,
+            'hired_at' => $details?->hired_at?->toDateString(),
+            'children' => $user->children->map(fn ($child) => [
+                'full_name' => $child->full_name,
+                'birth_date' => $child->birth_date?->toDateString(),
+            ])->all(),
+        ];
     }
 }
