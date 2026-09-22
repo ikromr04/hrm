@@ -244,6 +244,7 @@ class EmployeeController extends Controller
                 'home_address' => $details?->home_address ?? '',
                 'phone' => $details?->phone ?? '',
                 'sos_phone' => $details?->sos_phone ?? '',
+                'sos_contact' => $details?->sos_contact ?? '',
                 'passport_series' => $details?->passport_series ?? '',
                 'passport_number' => $details?->passport_number ?? '',
                 'passport_issued_at' => $details?->passport_issued_at?->toDateString() ?? '',
@@ -327,7 +328,7 @@ class EmployeeController extends Controller
 
                 // Grouped, so the OR conditions stay inside the "belongs to this employee" constraint.
                 $q->orWhereHas('details', fn (Builder $q) => $q->where(function (Builder $q) use ($like, $lower, $word) {
-                    foreach (['home_address', 'nationality', 'citizenship', 'birth_place'] as $column) {
+                    foreach (['home_address', 'nationality', 'citizenship', 'birth_place', 'sos_contact'] as $column) {
                         $q->orWhere($column, 'like', $like);
                     }
 
@@ -579,6 +580,7 @@ class EmployeeController extends Controller
             'home_address' => $details?->home_address,
             'phone' => $details?->phone,
             'sos_phone' => $details?->sos_phone,
+            'sos_contact' => $details?->sos_contact,
             'marital_status' => $details?->marital_status,
             'hired_at' => $details?->hired_at?->toDateString(),
             'children' => $user->children->map(fn ($child) => [

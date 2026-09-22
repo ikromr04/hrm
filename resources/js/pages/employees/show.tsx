@@ -213,7 +213,9 @@ export default function EmployeeProfile({ employee }: { employee: Employee }) {
                                             </a>
                                         )}
                                     </Field>
-                                    <Field label="Телефон SOS">{details.sos_phone && <SosPhone phone={details.sos_phone} />}</Field>
+                                    <Field label="Телефон SOS">
+                                        {details.sos_phone && <SosPhone phone={details.sos_phone} contact={details.sos_contact} />}
+                                    </Field>
                                     <Field label="Домашний адрес" wide>
                                         {details.home_address}
                                     </Field>

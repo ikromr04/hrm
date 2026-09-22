@@ -12,6 +12,8 @@ export interface PrivateDetails {
     home_address: string | null;
     phone: string | null;
     sos_phone: string | null;
+    /** Whose number the SOS phone is: "Мама — Дилором". */
+    sos_contact: string | null;
     marital_status: Marital | null;
     hired_at: string | null;
     children: { full_name: string; birth_date: string | null }[];

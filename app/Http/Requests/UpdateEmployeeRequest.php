@@ -74,6 +74,7 @@ class UpdateEmployeeRequest extends FormRequest
             'home_address' => ['nullable', 'string', 'max:255'],
             'phone' => $phone,
             'sos_phone' => $phone,
+            'sos_contact' => ['nullable', 'string', 'max:100'],
 
             'passport_series' => ['nullable', 'string', 'max:10'],
             'passport_number' => ['nullable', 'string', 'max:20'],
@@ -147,6 +148,7 @@ class UpdateEmployeeRequest extends FormRequest
             'home_address' => 'домашний адрес',
             'phone' => 'телефон',
             'sos_phone' => 'телефон SOS',
+            'sos_contact' => 'чей телефон SOS',
             'passport_series' => 'серия паспорта',
             'passport_number' => 'номер паспорта',
             'passport_issued_at' => 'дата выдачи',

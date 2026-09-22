@@ -31,6 +31,7 @@ class UserDetail extends Model
         'home_address',
         'phone',
         'sos_phone',
+        'sos_contact',
     ];
 
     /**

@@ -44,6 +44,7 @@ type EmployeeForm = {
     home_address: string;
     phone: string;
     sos_phone: string;
+    sos_contact: string;
     passport_series: string;
     passport_number: string;
     passport_issued_at: string;
@@ -113,6 +114,7 @@ export default function EditEmployee({ employee, options }: Props) {
         home_address: employee.home_address,
         phone: employee.phone && formatPhone(employee.phone),
         sos_phone: employee.sos_phone && formatPhone(employee.sos_phone),
+        sos_contact: employee.sos_contact,
         passport_series: employee.passport_series,
         passport_number: employee.passport_number,
         passport_issued_at: employee.passport_issued_at,
@@ -403,6 +405,9 @@ export default function EditEmployee({ employee, options }: Props) {
                                 </Field>
                                 <Field label="Телефон SOS" error={errors.sos_phone}>
                                     {(id) => <Input id={id} type="tel" placeholder="+992 90 123 45 67" {...text('sos_phone')} />}
+                                </Field>
+                                <Field label="Чей это телефон" error={errors.sos_contact} wide>
+                                    {(id) => <Input id={id} placeholder="Мама — Дилором" {...text('sos_contact')} />}
                                 </Field>
                                 <Field label="Домашний адрес" error={errors.home_address} wide>
                                     {(id) => <Input id={id} {...text('home_address')} />}

@@ -19,6 +19,10 @@ class UserDetailFactory extends Factory
         ['таджик', 'таджичка'], ['таджик', 'таджичка'], ['узбек', 'узбечка'], ['русский', 'русская'],
     ];
 
+    private const FEMALE_NAMES = ['Дилором', 'Мехринисо', 'Зарина', 'Малика', 'Нигина', 'Фарзона', 'Мадина', 'Гулнора'];
+
+    private const MALE_NAMES = ['Рустам', 'Фаррух', 'Далер', 'Умед', 'Джамшед', 'Азиз', 'Сухроб', 'Бахтиёр'];
+
     private const STREETS = ['пр. Рудаки', 'ул. Айни', 'ул. А. Навои', 'ул. Бохтар', 'ул. Шотемур', 'пр. И. Сомони', 'ул. Лахути', 'ул. Фирдавси'];
 
     /**
@@ -43,6 +47,7 @@ class UserDetailFactory extends Factory
             'home_address' => sprintf('г. Душанбе, %s %d, кв. %d', fake()->randomElement(self::STREETS), fake()->numberBetween(1, 120), fake()->numberBetween(1, 180)),
             'phone' => $this->phone(),
             'sos_phone' => $this->phone(),
+            'sos_contact' => null, // picked in configure(): a relative, named to match the sex
         ];
     }
 
@@ -55,6 +60,15 @@ class UserDetailFactory extends Factory
             if ($details->nationality === null && $details->user) {
                 [$male, $female] = fake()->randomElement(self::NATIONALITIES);
                 $details->nationality = $details->user->sex === 'female' ? $female : $male;
+            }
+
+            if ($details->sos_contact === null && $details->user) {
+                $married = $details->marital_status === 'married';
+                $relation = fake()->randomElement($married
+                    ? ($details->user->sex === 'female' ? ['Муж', 'Мама', 'Сестра'] : ['Жена', 'Мама', 'Брат'])
+                    : ['Мама', 'Папа', 'Сестра', 'Брат']);
+                $female = in_array($relation, ['Жена', 'Мама', 'Сестра'], true);
+                $details->sos_contact = "{$relation} — ".fake()->randomElement($female ? self::FEMALE_NAMES : self::MALE_NAMES);
             }
         });
     }

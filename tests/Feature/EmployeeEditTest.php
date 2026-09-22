@@ -103,6 +103,7 @@ class EmployeeEditTest extends TestCase
                 'marital_status' => 'married',
                 'phone' => '90 123 45 67',
                 'sos_phone' => '+992 (93) 555-44-33',
+                'sos_contact' => 'Сестра — Мехринисо',
                 'passport_number' => '01234567',
                 'children' => [['full_name' => 'Каримов Далер', 'birth_date' => '2018-06-01']],
             ]))
@@ -119,6 +120,7 @@ class EmployeeEditTest extends TestCase
         $this->assertSame('married', $employee->details->marital_status);
         $this->assertSame('+992901234567', $employee->details->phone);
         $this->assertSame('+992935554433', $employee->details->sos_phone);
+        $this->assertSame('Сестра — Мехринисо', $employee->details->sos_contact);
         $this->assertSame(['Каримов Далер'], $employee->children()->pluck('full_name')->all());
 
         // Staying keeps the head flag; a new department starts without it.

@@ -33,6 +33,8 @@ return new class extends Migration
             $table->string('home_address')->nullable();
             $table->string('phone', 32)->nullable();
             $table->string('sos_phone', 32)->nullable();
+            // Whose number that is: "Мама — Дилором".
+            $table->string('sos_contact', 100)->nullable();
 
             $table->timestamps();
         });

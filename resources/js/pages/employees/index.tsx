@@ -384,7 +384,7 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
             width: 200,
             private: true,
             filter: { type: 'text', param: 'phone', placeholder: 'Цифры номера' },
-            cell: (_, d) => <Phones phone={d.phone} sos={d.sos_phone} />,
+            cell: (_, d) => <Phones phone={d.phone} sos={d.sos_phone} sosContact={d.sos_contact} />,
         },
         {
             key: 'marital_status',
