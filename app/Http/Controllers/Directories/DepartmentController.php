@@ -8,7 +8,6 @@ use App\Models\User;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -23,14 +22,7 @@ class DepartmentController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'parent_id']);
 
-        $children = $departments->groupBy('parent_id');
-        // Working people in a department and all its sub-departments, heads included and
-        // each counted once, like the employee list the number links to.
-        $staff = function (Department $d, array $seen = []) use (&$staff, $children): Collection {
-            return $children->get($d->id, collect())
-                ->reject(fn (Department $child) => in_array($child->id, $seen, true))
-                ->reduce(fn (Collection $ids, Department $child) => $ids->merge($staff($child, [...$seen, $d->id])), $d->users->pluck('id'));
-        };
+        $totals = Department::staffTotals($departments);
 
         return Inertia::render('directories/departments', [
             'items' => $departments
@@ -40,7 +32,7 @@ class DepartmentController extends Controller
                     'parent_id' => $d->parent_id,
                     // Working members of this department itself, heads included.
                     'users_count' => $d->users->count(),
-                    'total_count' => $staff($d)->unique()->count(),
+                    'total_count' => $totals[$d->id],
                     'heads' => $d->heads
                         ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"])
                         ->sortBy('name')

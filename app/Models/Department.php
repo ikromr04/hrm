@@ -73,6 +73,28 @@ class Department extends Model
     }
 
     /**
+     * How many working people each department has together with all its
+     * sub-departments, heads included and each person counted once, like the
+     * employee list filtered by that department.
+     *
+     * @param  iterable<Department>  $departments  the whole tree, with `users` loaded (working staff only)
+     * @return array<int, int> department id => number of people
+     */
+    public static function staffTotals(iterable $departments): array
+    {
+        $departments = collect($departments);
+        $children = $departments->groupBy('parent_id');
+
+        $staff = function (Department $d, array $seen = []) use (&$staff, $children): Collection {
+            return $children->get($d->id, collect())
+                ->reject(fn (Department $child) => in_array($child->id, $seen, true))
+                ->reduce(fn (Collection $ids, Department $child) => $ids->merge($staff($child, [...$seen, $d->id])), $d->users->pluck('id'));
+        };
+
+        return $departments->mapWithKeys(fn (Department $d) => [$d->id => $staff($d)->unique()->count()])->all();
+    }
+
+    /**
      * "Департамент маркетинга › Отдел Дизайна"
      */
     public function path(): string
