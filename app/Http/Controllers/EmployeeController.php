@@ -220,6 +220,8 @@ class EmployeeController extends Controller
             // Each card is edited in place, so the suggestions its dialog needs
             // travel with the page — and only for viewers who may edit.
             'canEdit' => $canEdit,
+            // Nobody transfers, fires or deletes themselves.
+            'isSelf' => $request->user()->is($employee),
             'options' => $canEdit ? [
                 'nationalities' => $this->distinctDetail('nationality'),
                 'citizenships' => $this->distinctDetail('citizenship'),

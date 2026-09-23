@@ -83,6 +83,21 @@ class EmployeeDetailsController extends Controller
     }
 
     /**
+     * The hire date, shown bare at the top of the sidebar. Tenure is counted
+     * from it, so a date in the future would read as negative service.
+     */
+    public function employment(Request $request, User $employee): RedirectResponse
+    {
+        $data = $request->validate([
+            'hired_at' => ['nullable', 'date', 'before_or_equal:today'],
+        ], attributes: ['hired_at' => 'начало работы']);
+
+        $employee->details()->updateOrCreate([], $data);
+
+        return back();
+    }
+
+    /**
      * The "Знание языков" card. Unlike the other cards here, languages are
      * public: every colleague sees them.
      */

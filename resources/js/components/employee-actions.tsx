@@ -4,10 +4,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { ArrowRightLeft, Ellipsis, LoaderCircle, RotateCcw, Trash2, UserX } from 'lucide-react';
-import { type FormEventHandler, useState } from 'react';
+import { Fragment, useState, type FormEventHandler } from 'react';
 
 export type EmploymentStatus = 'active' | 'transferred' | 'fired';
 
@@ -20,50 +21,75 @@ export interface ActionTarget {
 
 type OpenDialog = 'transfer' | 'fire' | 'delete' | null;
 
-/** "⋯" menu for one employee: transfer, fire, restore, delete. */
-export function EmployeeActions({ employee, isSelf }: { employee: ActionTarget; isSelf: boolean }) {
+/** Red, for the one action that cannot be undone. */
+const dangerItem = 'text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!';
+
+/**
+ * Transfer, fire, restore and delete for one employee, either behind a "⋯"
+ * menu (the list) or as a segmented group of buttons (the profile sidebar).
+ * Both share the same dialogs, so the confirmations stay in one place.
+ */
+export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employee: ActionTarget; isSelf: boolean; variant?: 'menu' | 'group' }) {
     const [dialog, setDialog] = useState<OpenDialog>(null);
     const name = `${employee.surname} ${employee.name}`;
 
     const restore = () => router.post(route('employees.restore', employee.id), {}, { preserveScroll: true });
 
+    // A working employee can leave; one who already left can only come back.
+    // `asks` marks the ones that open a dialog, which the menu spells with "…".
+    const actions = [
+        ...(employee.status === 'active'
+            ? [
+                  { key: 'transfer', label: 'Перевести', Icon: ArrowRightLeft, disabled: isSelf, asks: true, run: () => setDialog('transfer') },
+                  { key: 'fire', label: 'Уволить', Icon: UserX, disabled: isSelf, asks: true, run: () => setDialog('fire') },
+              ]
+            : [{ key: 'restore', label: 'Восстановить', Icon: RotateCcw, disabled: false, asks: false, run: restore }]),
+        { key: 'delete', label: 'Удалить', Icon: Trash2, disabled: isSelf, asks: true, run: () => setDialog('delete') },
+    ];
+
     return (
         <>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground size-8" aria-label={`Действия: ${name}`}>
-                        <Ellipsis className="size-5!" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                    {employee.status === 'active' ? (
-                        <>
-                            <DropdownMenuItem disabled={isSelf} onSelect={() => setDialog('transfer')}>
-                                <ArrowRightLeft />
-                                Перевести…
-                            </DropdownMenuItem>
-                            <DropdownMenuItem disabled={isSelf} onSelect={() => setDialog('fire')}>
-                                <UserX />
-                                Уволить…
-                            </DropdownMenuItem>
-                        </>
-                    ) : (
-                        <DropdownMenuItem onSelect={restore}>
-                            <RotateCcw />
-                            Восстановить
-                        </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                        disabled={isSelf}
-                        onSelect={() => setDialog('delete')}
-                        className="text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!"
-                    >
-                        <Trash2 />
-                        Удалить…
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            {variant === 'menu' ? (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground size-8" aria-label={`Действия: ${name}`}>
+                            <Ellipsis className="size-5!" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                        {actions.map(({ key, label, Icon, disabled, asks, run }) => (
+                            <Fragment key={key}>
+                                {key === 'delete' && <DropdownMenuSeparator />}
+                                <DropdownMenuItem disabled={disabled} onSelect={run} className={cn(key === 'delete' && dangerItem)}>
+                                    <Icon />
+                                    {asks ? `${label}…` : label}
+                                </DropdownMenuItem>
+                            </Fragment>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ) : (
+                // One segmented control: shared borders, rounded only at the ends.
+                // The labels drop their "…" here, where every pixel of width counts.
+                <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border">
+                    {actions.map(({ key, label, Icon, disabled, run }, index) => (
+                        <button
+                            key={key}
+                            type="button"
+                            disabled={disabled}
+                            onClick={run}
+                            className={cn(
+                                'hover:bg-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50',
+                                index > 0 && 'border-l',
+                                key === 'delete' && 'text-[#B42318] dark:text-[#F7A19A]',
+                            )}
+                        >
+                            <Icon className="size-4 shrink-0" />
+                            <span className="truncate">{label}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {(dialog === 'transfer' || dialog === 'fire') && (
                 <LeaveDialog kind={dialog} employee={employee} name={name} onClose={() => setDialog(null)} />

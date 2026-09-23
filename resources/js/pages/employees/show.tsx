@@ -1,3 +1,4 @@
+import { EmployeeActions } from '@/components/employee-actions';
 import InputError from '@/components/input-error';
 import { LevelBadge } from '@/components/language-badges';
 import { MultiSelect } from '@/components/multi-select';
@@ -381,6 +382,12 @@ function PersonalDialog({
     );
 }
 
+/** The area left under the tabs, split into a main column and a sidebar. */
+const paneGrid = 'grid gap-4 md:min-h-0 md:flex-1 lg:grid-cols-[1fr_20rem]';
+
+/** One scrolling column of that area; scroll-soft keeps its bar out of sight until needed. */
+const pane = 'scroll-soft flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto';
+
 /**
  * Contacts are dialled and written to, so they carry the brand colour and an
  * icon rather than looking like the plain text of the fields around them.
@@ -556,6 +563,54 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
                             />
                             <InputError message={form.errors.sos_contact} />
                         </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Отмена
+                        </Button>
+                        <Button type="submit" disabled={form.processing}>
+                            {form.processing && <LoaderCircle className="animate-spin" />}
+                            Сохранить
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** The hire date on its own; tenure follows from it and is not stored. */
+function EmploymentDialog({ employee, details, onClose }: { employee: Employee; details: ProfilePrivate; onClose: () => void }) {
+    const form = useForm({ hired_at: details.hired_at ?? '' });
+
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
+        form.put(route('employees.employment', employee.id), { preserveScroll: true, onSuccess: onClose });
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-sm">
+                {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
+                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+                    <DialogHeader>
+                        <DialogTitle>Начало работы</DialogTitle>
+                        <DialogDescription className="sr-only">Измените дату и сохраните.</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="employment-hired-at">Дата приёма</Label>
+                        <Input
+                            id="employment-hired-at"
+                            type="date"
+                            max={new Date().toISOString().slice(0, 10)}
+                            value={form.data.hired_at}
+                            onChange={(e) => form.setData('hired_at', e.target.value)}
+                            aria-invalid={!!form.errors.hired_at}
+                        />
+                        <InputError message={form.errors.hired_at} />
+                        <p className="text-muted-foreground text-[13px]">Стаж считается от неё.</p>
                     </div>
 
                     <DialogFooter className="gap-2">
@@ -919,8 +974,10 @@ function Section({ title, children, className, action }: { title: string; childr
  * Columns end at different heights, so the gap below stays on the last one
  * too — trimming it would leave the card lopsided.
  */
-function Fields({ children, columns }: { children: ReactNode; columns?: 1 }) {
-    return <dl className={cn('gap-x-6', columns === 1 ? 'columns-1' : 'columns-1 sm:columns-2 lg:columns-3')}>{children}</dl>;
+function Fields({ children, columns }: { children: ReactNode; columns?: 1 | 2 }) {
+    const fixed = { 1: 'columns-1', 2: 'columns-2' } as const;
+
+    return <dl className={cn('gap-x-6', columns ? fixed[columns] : 'columns-1 sm:columns-2 lg:columns-3')}>{children}</dl>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -1074,17 +1131,19 @@ export default function EmployeeProfile({
     employee,
     neighbours,
     canEdit,
+    isSelf,
     options,
     assigned,
 }: {
     employee: Employee;
     neighbours: { prev: Neighbour; next: Neighbour };
     canEdit: boolean;
+    isSelf: boolean;
     /** Choices for the edit dialogs; null for viewers who may not edit. */
     options: EditOptions | null;
     assigned: Assigned | null;
 }) {
-    const [editing, setEditing] = useState<'personal' | 'passport' | 'contacts' | 'languages' | 'family' | null>(null);
+    const [editing, setEditing] = useState<'personal' | 'passport' | 'contacts' | 'languages' | 'employment' | 'family' | null>(null);
     const shortName = `${employee.surname} ${employee.name}`;
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
     const details = employee.private;
@@ -1098,10 +1157,11 @@ export default function EmployeeProfile({
     ];
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <AppLayout breadcrumbs={breadcrumbs} fitViewport>
             <Head title={shortName} />
 
-            <div className="flex flex-1 flex-col gap-4 p-3 md:px-5 md:py-4">
+            {/* The header and tabs stay put; each column below scrolls on its own. */}
+            <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
                 <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:items-end">
                     {employee.avatar ? (
                         <img src={employee.avatar} alt="" className="size-28 shrink-0 rounded-full object-cover" />
@@ -1163,42 +1223,49 @@ export default function EmployeeProfile({
 
                 <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
-                {tab !== 'profile' && TABS.find((t) => t.key === tab && 'soon' in t) && <Soon title={TABS.find((t) => t.key === tab)!.title} />}
+                {/* One card per tab, in a pane of its own that takes the height left over. */}
+                {tab !== 'profile' && (
+                    <div className="scroll-soft flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
+                        {TABS.find((t) => t.key === tab && 'soon' in t) && <Soon title={TABS.find((t) => t.key === tab)!.title} />}
 
-                {tab === 'education' && details && (
-                    <Section title="Образование">
-                        {details.educations.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Не указано</p>
-                        ) : (
-                            <Educations items={details.educations} />
+                        {tab === 'education' && details && (
+                            <Section title="Образование">
+                                {details.educations.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">Не указано</p>
+                                ) : (
+                                    <Educations items={details.educations} />
+                                )}
+                            </Section>
                         )}
-                    </Section>
-                )}
 
-                {tab === 'experience' && details && (
-                    <Section title="Трудовая деятельность">
-                        {details.work_experiences.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Не указана</p>
-                        ) : (
-                            <WorkExperiences items={details.work_experiences} />
+                        {tab === 'experience' && details && (
+                            <Section title="Трудовая деятельность">
+                                {details.work_experiences.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">Не указана</p>
+                                ) : (
+                                    <WorkExperiences items={details.work_experiences} />
+                                )}
+                            </Section>
                         )}
-                    </Section>
-                )}
 
-                {tab === 'equipment' && details && (
-                    <Section title="Оборудование">
-                        {details.equipment.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Не выдано</p>
-                        ) : (
-                            <EquipmentList items={details.equipment} />
+                        {tab === 'equipment' && details && (
+                            <Section title="Оборудование">
+                                {details.equipment.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">Не выдано</p>
+                                ) : (
+                                    <EquipmentList items={details.equipment} />
+                                )}
+                            </Section>
                         )}
-                    </Section>
+                    </div>
                 )}
 
                 {tab === 'profile' &&
                     (details ? (
-                        <div className="grid items-start gap-4 lg:grid-cols-[1fr_20rem]">
-                            <div className="flex flex-col gap-4">
+                        // Narrow: one column, the grid scrolls. Wide: two columns,
+                        // each scrolling on its own so neither drags the other along.
+                        <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
+                            <div className={pane}>
                                 <Section
                                     title="Основные данные"
                                     action={
@@ -1332,13 +1399,32 @@ export default function EmployeeProfile({
                                 </Section>
                             </div>
 
-                            <aside className="flex flex-col gap-4">
-                                <Section title="Работа">
-                                    <Fields columns={1}>
-                                        <Field label="Начало работы">{formatDate(details.hired_at)}</Field>
+                            <aside className={pane}>
+                                {/* Bare, without a card of its own: two facts that need no heading.
+                                    Two fields across two columns end level, so the gap below one
+                                    field is the gap below both, and trimming it is exact. */}
+                                <div className="-mb-4 px-1">
+                                    <Fields columns={2}>
+                                        <Field label="Начало работы">
+                                            {/* The pencil sits by the value it edits, not by the block. */}
+                                            <span className="flex items-center gap-1">
+                                                {formatDate(details.hired_at) ?? <span className="text-muted-foreground font-normal">—</span>}
+                                                {canEdit && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-muted-foreground -my-1 size-6 shrink-0"
+                                                        aria-label="Редактировать начало работы"
+                                                        onClick={() => setEditing('employment')}
+                                                    >
+                                                        <Pencil className="size-3.5" />
+                                                    </Button>
+                                                )}
+                                            </span>
+                                        </Field>
                                         <Field label="Стаж в компании">{details.hired_at && tenure(details.hired_at)}</Field>
                                     </Fields>
-                                </Section>
+                                </div>
 
                                 <Section
                                     title="Знание языков"
@@ -1399,11 +1485,24 @@ export default function EmployeeProfile({
                                         </Field>
                                     </Fields>
                                 </Section>
+
+                                {canEdit && (
+                                    <EmployeeActions
+                                        variant="group"
+                                        isSelf={isSelf}
+                                        employee={{
+                                            id: employee.id,
+                                            name: employee.name,
+                                            surname: employee.surname,
+                                            status: employee.status,
+                                        }}
+                                    />
+                                )}
                             </aside>
                         </div>
                     ) : (
-                        <div className="grid items-start gap-4 lg:grid-cols-[1fr_20rem]">
-                            <div className="flex flex-col gap-4">
+                        <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
+                            <div className={pane}>
                                 <Section title="Основное">
                                     <Fields>
                                         <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'}>
@@ -1430,7 +1529,7 @@ export default function EmployeeProfile({
 
                             {/* Hire date, phones and the rest are private, so a colleague's sidebar
                             holds languages alone — those are public. */}
-                            <aside className="flex flex-col gap-4">
+                            <aside className={pane}>
                                 <Section
                                     title="Знание языков"
                                     action={
@@ -1465,6 +1564,8 @@ export default function EmployeeProfile({
             {editing === 'passport' && details && <PassportDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
 
             {editing === 'contacts' && details && <ContactsDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+
+            {editing === 'employment' && details && <EmploymentDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
 
             {/* Languages are public, so this one needs no private details. */}
             {editing === 'languages' && options && <LanguagesDialog employee={employee} options={options} onClose={() => setEditing(null)} />}

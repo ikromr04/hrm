@@ -26,6 +26,7 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee
     Route::put('passport', [EmployeeDetailsController::class, 'passport'])->name('passport');
     Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->name('contacts');
     Route::put('languages', [EmployeeDetailsController::class, 'languages'])->name('languages');
+    Route::put('employment', [EmployeeDetailsController::class, 'employment'])->name('employment');
     Route::put('family', [EmployeeDetailsController::class, 'family'])->name('family');
     Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
     Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');
