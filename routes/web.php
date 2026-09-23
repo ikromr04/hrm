@@ -3,6 +3,7 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\Directories;
+use App\Http\Controllers\EmployeeAvatarController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeDetailsController;
 use App\Http\Controllers\EmployeeEducationController;
@@ -25,6 +26,10 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee}')->name('employees.')->group(function () {
     // One card of the profile at a time, edited from its own dialog.
+    // Multipart, so the upload is a POST rather than a PUT.
+    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->name('avatar.update');
+    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->name('avatar.destroy');
+
     Route::put('personal', [EmployeeDetailsController::class, 'personal'])->name('personal');
     Route::put('passport', [EmployeeDetailsController::class, 'passport'])->name('passport');
     Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->name('contacts');

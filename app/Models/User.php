@@ -5,12 +5,14 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -38,6 +40,7 @@ class User extends Authenticatable
         'surname',
         'patronymic',
         'avatar',
+        'avatar_original',
         'sex',
         'status',
         'status_changed_at',
@@ -70,6 +73,26 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Both columns hold a path on the public disk, but every reader wants a
+     * URL, so they hand one out. The path itself is still reachable through
+     * getRawOriginal(), which is what deleting the file needs.
+     */
+    protected function avatar(): Attribute
+    {
+        return Attribute::get(fn (?string $path) => self::publicUrl($path));
+    }
+
+    protected function avatarOriginal(): Attribute
+    {
+        return Attribute::get(fn (?string $path) => self::publicUrl($path));
+    }
+
+    private static function publicUrl(?string $path): ?string
+    {
+        return $path ? Storage::disk('public')->url($path) : null;
     }
 
     /**

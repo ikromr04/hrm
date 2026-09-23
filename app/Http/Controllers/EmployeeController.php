@@ -194,6 +194,8 @@ class EmployeeController extends Controller
                 'surname' => $employee->surname,
                 'patronymic' => $employee->patronymic,
                 'avatar' => $employee->avatar,
+                // The upload itself, for opening the photo at full size.
+                'avatar_original' => $employee->avatar_original,
                 'sex' => $employee->sex,
                 'email' => $employee->email,
                 'status' => $employee->status,

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,8 +37,8 @@ import {
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight, Construction, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useState, type FormEventHandler, type ReactNode } from 'react';
+import { Camera, ChevronLeft, ChevronRight, Construction, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
 
 interface ProfilePrivate extends PrivateDetails {
     educations: (Education & { id: number })[];
@@ -54,7 +55,10 @@ interface Employee {
     name: string;
     surname: string;
     patronymic: string | null;
+    /** Square thumbnail for the interface. */
     avatar: string | null;
+    /** The upload itself, opened at full size. */
+    avatar_original: string | null;
     sex: Sex;
     email: string;
     status: 'active' | 'transferred' | 'fired';
@@ -1597,6 +1601,96 @@ function EquipmentList({
     );
 }
 
+/**
+ * The photo, and the ways to change it. The thumbnail is what the interface
+ * shows; the upload itself opens in a new tab, so a face can be seen properly.
+ */
+function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: boolean; onDelete: () => void }) {
+    const picker = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(false);
+
+    const upload = (file: File) =>
+        router.post(
+            route('employees.avatar.update', employee.id),
+            { avatar: file },
+            {
+                preserveScroll: true,
+                forceFormData: true,
+                onStart: () => setUploading(true),
+                onFinish: () => setUploading(false),
+            },
+        );
+
+    const face = employee.avatar ? (
+        <img src={employee.avatar} alt={`Фотография: ${employee.surname} ${employee.name}`} className="size-28 rounded-full object-cover" />
+    ) : (
+        <PersonAvatar name={`${employee.name} ${employee.surname}`} className="size-28 text-4xl" />
+    );
+
+    return (
+        <div className="relative shrink-0 self-start sm:self-auto">
+            {employee.avatar_original ? (
+                <a href={employee.avatar_original} target="_blank" rel="noopener" title="Открыть оригинал" className="block">
+                    {face}
+                </a>
+            ) : (
+                face
+            )}
+
+            {uploading && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                    <LoaderCircle className="size-6 animate-spin text-white" />
+                </span>
+            )}
+
+            {canEdit && (
+                <>
+                    <input
+                        ref={picker}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            // Cleared so picking the same file twice fires again.
+                            event.target.value = '';
+                            if (file) upload(file);
+                        }}
+                    />
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="absolute right-0 bottom-0 size-8 rounded-full shadow-sm"
+                                aria-label="Изменить фотографию"
+                            >
+                                <Camera className="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-52">
+                            <DropdownMenuItem onSelect={() => picker.current?.click()}>
+                                <Upload />
+                                {employee.avatar ? 'Заменить фотографию' : 'Загрузить фотографию'}
+                            </DropdownMenuItem>
+                            {employee.avatar && (
+                                <DropdownMenuItem
+                                    onSelect={onDelete}
+                                    className="text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!"
+                                >
+                                    <Trash2 />
+                                    Удалить фотографию
+                                </DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </>
+            )}
+        </div>
+    );
+}
+
 type Neighbour = { id: number; name: string } | null;
 
 /** Links to the previous and next colleague in the list; ← and → keys do the same. */
@@ -1672,6 +1766,7 @@ export default function EmployeeProfile({
     const [deletingJob, setDeletingJob] = useState<JobRecord | null>(null);
     const [unit, setUnit] = useState<UnitRecord | 'new' | null>(null);
     const [deletingUnit, setDeletingUnit] = useState<UnitRecord | null>(null);
+    const [deletingAvatar, setDeletingAvatar] = useState(false);
     const shortName = `${employee.surname} ${employee.name}`;
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
     const details = employee.private;
@@ -1691,11 +1786,7 @@ export default function EmployeeProfile({
             {/* The header and tabs stay put; each column below scrolls on its own. */}
             <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
                 <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:items-end">
-                    {employee.avatar ? (
-                        <img src={employee.avatar} alt="" className="size-28 shrink-0 rounded-full object-cover" />
-                    ) : (
-                        <PersonAvatar name={`${employee.name} ${employee.surname}`} className="size-28 text-4xl" />
-                    )}
+                    <Avatar employee={employee} canEdit={canEdit} onDelete={() => setDeletingAvatar(true)} />
 
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
@@ -2137,6 +2228,20 @@ export default function EmployeeProfile({
             {editing === 'languages' && options && <LanguagesDialog employee={employee} options={options} onClose={() => setEditing(null)} />}
 
             {editing === 'family' && details && <FamilyDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+
+            {deletingAvatar && (
+                <DeleteRecordDialog
+                    title="Удалить фотографию?"
+                    description="Вместо неё снова будут показаны инициалы. Отменить удаление нельзя."
+                    onConfirm={() =>
+                        router.delete(route('employees.avatar.destroy', employee.id), {
+                            preserveScroll: true,
+                            onFinish: () => setDeletingAvatar(false),
+                        })
+                    }
+                    onClose={() => setDeletingAvatar(false)}
+                />
+            )}
 
             {education && <EducationDialog employee={employee} education={education} onClose={() => setEducation(null)} />}
 

@@ -18,7 +18,10 @@ return new class extends Migration
             $table->string('name');
             $table->string('surname');
             $table->string('patronymic')->nullable();
+            // The square thumbnail the interface shows, and the file as it was
+            // uploaded, kept so the photo can be opened at full size.
             $table->string('avatar')->nullable();
+            $table->string('avatar_original')->nullable();
             $table->enum('sex', ['male', 'female']);
 
             // Employment status: people who left stay in the database, apart
