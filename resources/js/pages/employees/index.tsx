@@ -1,3 +1,12 @@
+import {
+    clearedFilter,
+    countActiveFilters,
+    DataTable,
+    resetView,
+    useTableView,
+    type ColumnDef as TableColumn,
+    type FilterDef as TableFilter,
+} from '@/components/data-table';
 import { EmployeeActions, type EmploymentStatus } from '@/components/employee-actions';
 import { LanguageBadges } from '@/components/language-badges';
 import { Pagination, type Paginated } from '@/components/pagination';
@@ -5,8 +14,6 @@ import { PersonAvatar } from '@/components/person-avatar';
 import { Phones } from '@/components/phones';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -18,33 +25,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
 import { capitalize, formatDate, maritalLabels, sexLabels, type Marital, type PrivateDetails, type Sex, type SpokenLanguage } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import {
-    ArrowDown,
-    ArrowUp,
-    ArrowUpDown,
-    ChevronDown,
-    Columns3,
-    Crown,
-    EllipsisVertical,
-    EyeOff,
-    ListFilter,
-    Lock,
-    Pin,
-    PinOff,
-    Plus,
-    RotateCcw,
-    Search,
-    X,
-} from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ChevronDown, Columns3, Crown, Lock, Plus, RotateCcw, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 /* ------------------------------------------------------------------ types */
 
@@ -219,9 +206,6 @@ const statusTabs: { status: EmploymentStatus; label: string }[] = [
     { status: 'transferred', label: 'Переведённые' },
     { status: 'fired', label: 'Уволенные' },
 ];
-
-/** Width of the trailing actions column, kept pinned to the right edge. */
-const ACTIONS_WIDTH = 56;
 
 /** "Уволена 12.03.2026 · По собственному желанию" under the name. */
 function LeftBadge({ row }: { row: EmployeeRow }) {
@@ -431,41 +415,14 @@ function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
 
 /* ------------------------------------------------------ view preferences */
 
-interface ViewState {
-    hidden: ColumnKey[];
-    pinned: { left: ColumnKey[]; right: ColumnKey[] };
-}
-
 const STORAGE_KEY = 'employees.table.view.v4';
 
-function defaultView(columns: ColumnDef[], privateAccess: boolean): ViewState {
+function defaultView(columns: ColumnDef[], privateAccess: boolean) {
     return {
         // Without private access those columns are locks for everyone but yourself.
-        hidden: privateAccess ? [] : columns.filter((c) => c.private).map((c) => c.key),
-        pinned: { left: ['name'], right: [] },
+        hidden: privateAccess ? [] : columns.filter((c) => c.private).map((c) => c.key as string),
+        pinned: { left: ['name'], right: [] as string[] },
     };
-}
-
-function loadView(fallback: ViewState, keys: ColumnKey[]): ViewState {
-    try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as ViewState | null;
-        if (!saved?.hidden || !saved?.pinned) return fallback;
-
-        // A saved view may mention columns that were renamed or removed since.
-        const known = (list: ColumnKey[]) => list.filter((key) => keys.includes(key));
-        return { hidden: known(saved.hidden), pinned: { left: known(saved.pinned.left), right: known(saved.pinned.right) } };
-    } catch {
-        return fallback;
-    }
-}
-
-function saveView(view: ViewState | null) {
-    try {
-        if (view) localStorage.setItem(STORAGE_KEY, JSON.stringify(view));
-        else localStorage.removeItem(STORAGE_KEY);
-    } catch {
-        // Storage can be unavailable (private mode); the view just won't persist.
-    }
 }
 
 /* ------------------------------------------------------------ URL params */
@@ -494,177 +451,6 @@ function toParams(
     ) as Record<string, Exclude<QueryValue, null>>;
 }
 
-function isFilterActive(filter: FilterDef, filters: Filters) {
-    switch (filter.type) {
-        case 'text':
-            return filters[filter.param] !== '';
-        case 'select':
-            return filters[filter.param] !== null;
-        case 'multi':
-            return filters[filter.param].length > 0;
-        case 'dates':
-            return filters[filter.from] !== null || filters[filter.to] !== null;
-    }
-}
-
-function clearedFilter(filter: FilterDef): Partial<Filters> {
-    switch (filter.type) {
-        case 'text':
-            return { [filter.param]: '' };
-        case 'select':
-            return { [filter.param]: null };
-        case 'multi':
-            return { [filter.param]: [] };
-        case 'dates':
-            return { [filter.from]: null, [filter.to]: null };
-    }
-}
-
-/* ---------------------------------------------------------- filter popover */
-
-function FilterBody({ filter, filters, onApply }: { filter: FilterDef; filters: Filters; onApply: (changes: Partial<Filters>) => void }) {
-    const [text, setText] = useState(filter.type === 'text' ? filters[filter.param] : '');
-    const [from, setFrom] = useState(filter.type === 'dates' ? (filters[filter.from] ?? '') : '');
-    const [to, setTo] = useState(filter.type === 'dates' ? (filters[filter.to] ?? '') : '');
-
-    if (filter.type === 'text') {
-        return (
-            <form
-                className="flex flex-col gap-2"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    onApply({ [filter.param]: text.trim() });
-                }}
-            >
-                <Input autoFocus value={text} onChange={(event) => setText(event.target.value)} placeholder={filter.placeholder} className="h-9" />
-                <Button type="submit" size="sm">
-                    Применить
-                </Button>
-            </form>
-        );
-    }
-
-    if (filter.type === 'select') {
-        const value = filters[filter.param];
-
-        return (
-            <div className="flex flex-col gap-1" role="radiogroup">
-                {[{ value: null, label: 'Все' }, ...filter.options].map((option) => (
-                    <button
-                        key={option.label}
-                        type="button"
-                        role="radio"
-                        aria-checked={value === option.value}
-                        onClick={() => onApply({ [filter.param]: option.value })}
-                        className={cn('hover:bg-accent rounded-md px-2 py-1.5 text-left text-sm', value === option.value && 'bg-accent font-medium')}
-                    >
-                        {option.label}
-                    </button>
-                ))}
-            </div>
-        );
-    }
-
-    if (filter.type === 'multi') {
-        const selected = filters[filter.param] as (string | number)[];
-        const toggle = (value: string | number, on: boolean) =>
-            onApply({ [filter.param]: on ? [...selected, value] : selected.filter((item) => item !== value) });
-
-        return (
-            <div className="flex max-h-72 flex-col gap-0.5 overflow-y-auto">
-                {filter.options.length === 0 && <p className="text-muted-foreground px-2 py-1.5 text-sm">Нет значений</p>}
-                {filter.options.map((option) => {
-                    const id = `filter-${filter.param}-${option.value}`;
-
-                    return (
-                        <div
-                            key={id}
-                            className="hover:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5"
-                            style={option.depth ? { paddingLeft: 8 + option.depth * 20 } : undefined}
-                        >
-                            <Checkbox id={id} checked={selected.includes(option.value)} onCheckedChange={(on) => toggle(option.value, on === true)} />
-                            <Label htmlFor={id} className="flex-1 cursor-pointer font-normal">
-                                {option.label}
-                            </Label>
-                        </div>
-                    );
-                })}
-            </div>
-        );
-    }
-
-    return (
-        <form
-            className="flex flex-col gap-2"
-            onSubmit={(event) => {
-                event.preventDefault();
-                onApply({ [filter.from]: from || null, [filter.to]: to || null });
-            }}
-        >
-            <Label className="flex flex-col gap-1.5 text-xs">
-                С
-                <Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9" />
-            </Label>
-            <Label className="flex flex-col gap-1.5 text-xs">
-                По
-                <Input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-9" />
-            </Label>
-            <Button type="submit" size="sm">
-                Применить
-            </Button>
-        </form>
-    );
-}
-
-function ColumnFilter({ column, filters, onApply }: { column: ColumnDef; filters: Filters; onApply: (changes: Partial<Filters>) => void }) {
-    const [open, setOpen] = useState(false);
-    const filter = column.filter!;
-    const active = isFilterActive(filter, filters);
-
-    return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    aria-label={`Фильтр: ${column.label}`}
-                    className={cn(
-                        'hover:bg-accent hover:text-foreground relative rounded p-1',
-                        active ? 'text-brand-strong dark:text-[#C5E27A]' : 'opacity-50 hover:opacity-100',
-                    )}
-                >
-                    <ListFilter className="size-3.5" />
-                    {active && <span className="bg-brand absolute top-0.5 right-0.5 size-1.5 rounded-full" />}
-                </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className={cn('p-3', filter.type === 'multi' && filter.param === 'department' ? 'w-96' : 'w-64')}>
-                <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-semibold">{column.label}</span>
-                    {active && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                onApply(clearedFilter(filter));
-                                setOpen(false);
-                            }}
-                            className="text-muted-foreground hover:text-foreground text-xs"
-                        >
-                            Сбросить
-                        </button>
-                    )}
-                </div>
-                <FilterBody
-                    filter={filter}
-                    filters={filters}
-                    onApply={(changes) => {
-                        onApply(changes);
-                        if (filter.type !== 'multi') setOpen(false);
-                    }}
-                />
-            </PopoverContent>
-        </Popover>
-    );
-}
-
 /* ---------------------------------------------------------------- page */
 
 export default function Employees({
@@ -683,16 +469,13 @@ export default function Employees({
     const canManage = auth.can.manageEmployees;
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(() => defaultView(columns, privateAccess), [columns, privateAccess]);
-    const [view, setView] = useState<ViewState>(() =>
-        loadView(
-            defaults,
-            columns.map((c) => c.key),
-        ),
+    const { view, setView, pin, toggleHidden } = useTableView(
+        STORAGE_KEY,
+        columns.map((c) => c.key),
+        defaults,
     );
     const [search, setSearch] = useState(filters.q);
     const firstRender = useRef(true);
-
-    useEffect(() => saveView(view), [view]);
 
     const visit = (next: { filters?: Partial<Filters>; sort?: Sort; perPage?: number; status?: EmploymentStatus }) => {
         router.get(
@@ -716,59 +499,16 @@ export default function Employees({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search]);
 
-    /* -- column layout: left-pinned, then the rest in order, then right-pinned */
-    const isHidden = (key: ColumnKey) => view.hidden.includes(key);
-    const pinSide = (key: ColumnKey) => (view.pinned.left.includes(key) ? 'left' : view.pinned.right.includes(key) ? 'right' : null);
-    const byKey = (key: ColumnKey) => columns.find((c) => c.key === key)!;
+    const isHidden = (key: string) => view.hidden.includes(key);
 
-    const left = view.pinned.left.filter((k) => !isHidden(k)).map(byKey);
-    const right = view.pinned.right.filter((k) => !isHidden(k)).map(byKey);
-    const center = columns.filter((c) => !isHidden(c.key) && !pinSide(c.key));
-    const visible = [...left, ...center, ...right];
-    const tableWidth = visible.reduce((sum, c) => sum + c.width, 0) + (canManage ? ACTIONS_WIDTH : 0);
+    // A column may carry a filter the viewer must not use on everyone.
+    const canFilter = (column: ColumnDef) => Boolean(column.filter) && (!column.private || privateAccess);
+    const activeFilters = countActiveFilters(columns as unknown as TableColumn[], filters as unknown as Record<string, unknown>, (column) =>
+        canFilter(column as unknown as ColumnDef),
+    );
 
-    const stickyStyle = (column: ColumnDef): CSSProperties => {
-        const side = pinSide(column.key);
-        if (side === 'left') {
-            const index = left.indexOf(column);
-            return { left: left.slice(0, index).reduce((sum, c) => sum + c.width, 0) };
-        }
-        if (side === 'right') {
-            const index = right.indexOf(column);
-            return { right: right.slice(index + 1).reduce((sum, c) => sum + c.width, canManage ? ACTIONS_WIDTH : 0) };
-        }
-        return {};
-    };
-
-    const stickyClass = (column: ColumnDef, header: boolean) => {
-        const side = pinSide(column.key);
-        if (!side) return '';
-
-        return cn(
-            'sticky',
-            header ? 'bg-sidebar z-20' : 'bg-card z-[1]',
-            side === 'left' && column === left[left.length - 1] && 'shadow-[1px_0_0_var(--border)]',
-            side === 'right' && column === right[0] && 'shadow-[-1px_0_0_var(--border)]',
-        );
-    };
-
-    const pin = (key: ColumnKey, side: 'left' | 'right' | null) =>
-        setView((current) => ({
-            ...current,
-            pinned: {
-                left: side === 'left' ? [...current.pinned.left.filter((k) => k !== key), key] : current.pinned.left.filter((k) => k !== key),
-                right: side === 'right' ? [key, ...current.pinned.right.filter((k) => k !== key)] : current.pinned.right.filter((k) => k !== key),
-            },
-        }));
-
-    const toggleHidden = (key: ColumnKey, hidden: boolean) =>
-        setView((current) => ({ ...current, hidden: hidden ? [...current.hidden, key] : current.hidden.filter((k) => k !== key) }));
-
-    const canFilter = (column: ColumnDef) => column.filter && (!column.private || privateAccess);
-    const activeFilters = columns.filter((c) => canFilter(c) && isFilterActive(c.filter!, filters)).length;
-
-    const sortBy = (key: ColumnKey, direction?: 'asc' | 'desc') =>
-        visit({ sort: { key, direction: direction ?? (sort.key === key && sort.direction === 'asc' ? 'desc' : 'asc') } });
+    const sortBy = (key: string, direction?: 'asc' | 'desc') =>
+        visit({ sort: { key: key as ColumnKey, direction: direction ?? (sort.key === key && sort.direction === 'asc' ? 'desc' : 'asc') } });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs} fitViewport>
@@ -851,7 +591,7 @@ export default function Employees({
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 onSelect={() => {
-                                    saveView(null);
+                                    resetView(STORAGE_KEY);
                                     setView(defaults);
                                 }}
                             >
@@ -867,189 +607,64 @@ export default function Employees({
                     </Button>
                 </div>
 
-                <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
-                    <div className="overflow-auto md:min-h-0 md:flex-1">
-                        <table className="min-w-full table-fixed border-collapse text-sm" style={{ width: tableWidth }}>
-                            <thead className="bg-sidebar sticky top-0 z-30 shadow-[0_1px_0_var(--border)]">
-                                <tr className="text-muted-foreground text-left text-[13px] whitespace-nowrap">
-                                    {visible.map((column, index) => {
-                                        const active = sort.key === column.key;
-                                        const canSort = sortable.includes(column.key);
-                                        const side = pinSide(column.key);
-                                        const SortIcon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+                <DataTable
+                    columns={columns as unknown as TableColumn[]}
+                    rows={employees.data}
+                    rowKey={(row) => row.id}
+                    renderCell={(column, row) => {
+                        const own = column as unknown as ColumnDef;
 
-                                        return (
-                                            <th
-                                                key={column.key}
-                                                scope="col"
-                                                aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
-                                                style={{ width: column.width, ...stickyStyle(column) }}
-                                                className={cn(
-                                                    'px-4 py-2.5 font-semibold',
-                                                    index === 0 && 'pl-6',
-                                                    index === visible.length - 1 && !canManage && 'pr-6',
-                                                    stickyClass(column, true),
-                                                )}
-                                            >
-                                                <div className="flex items-center gap-0.5">
-                                                    {canSort ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => sortBy(column.key)}
-                                                            className={cn(
-                                                                'hover:text-foreground -ml-1 inline-flex shrink-0 items-center gap-1.5 rounded px-1 py-0.5',
-                                                                active && 'text-foreground',
-                                                            )}
-                                                        >
-                                                            <span>{column.label}</span>
-                                                            <SortIcon
-                                                                className={cn('size-3.5 shrink-0', !active && 'opacity-40')}
-                                                                aria-hidden="true"
-                                                            />
-                                                        </button>
-                                                    ) : (
-                                                        <span>{column.label}</span>
-                                                    )}
+                        // A private column is a lock for anyone who may not see it.
+                        return own.private && !row.private ? (
+                            <Lock className="text-muted-foreground/60 size-4" aria-label="Закрытые данные" />
+                        ) : (
+                            own.cell(row, row.private as PrivateDetails)
+                        );
+                    }}
+                    sort={sort}
+                    sortable={sortable}
+                    onSort={sortBy}
+                    filters={filters as unknown as Record<string, unknown>}
+                    onFilter={(changes) => applyFilters(changes as Partial<Filters>)}
+                    canFilter={(column) => canFilter(column as unknown as ColumnDef)}
+                    wideFilter={(column) => {
+                        // The department tree needs more room than a short list.
+                        const filter = column.filter as TableFilter | undefined;
 
-                                                    <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                                                        {canFilter(column) && (
-                                                            <ColumnFilter column={column} filters={filters} onApply={applyFilters} />
-                                                        )}
-
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <button
-                                                                    type="button"
-                                                                    aria-label={`Действия с колонкой: ${column.label}`}
-                                                                    className="hover:bg-accent hover:text-foreground rounded p-1 opacity-50 hover:opacity-100"
-                                                                >
-                                                                    <EllipsisVertical className="size-3.5" />
-                                                                </button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end" className="w-52">
-                                                                {canSort && (
-                                                                    <>
-                                                                        <DropdownMenuItem onSelect={() => sortBy(column.key, 'asc')}>
-                                                                            <ArrowUp />
-                                                                            По возрастанию
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem onSelect={() => sortBy(column.key, 'desc')}>
-                                                                            <ArrowDown />
-                                                                            По убыванию
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuSeparator />
-                                                                    </>
-                                                                )}
-                                                                <DropdownMenuRadioGroup
-                                                                    value={side ?? 'none'}
-                                                                    onValueChange={(value) =>
-                                                                        pin(column.key, value === 'none' ? null : (value as 'left' | 'right'))
-                                                                    }
-                                                                >
-                                                                    <DropdownMenuRadioItem value="left">
-                                                                        <Pin className="size-4 -rotate-45" />
-                                                                        Закрепить слева
-                                                                    </DropdownMenuRadioItem>
-                                                                    <DropdownMenuRadioItem value="right">
-                                                                        <Pin className="size-4 rotate-45" />
-                                                                        Закрепить справа
-                                                                    </DropdownMenuRadioItem>
-                                                                    <DropdownMenuRadioItem value="none">
-                                                                        <PinOff className="size-4" />
-                                                                        Не закреплять
-                                                                    </DropdownMenuRadioItem>
-                                                                </DropdownMenuRadioGroup>
-                                                                {column.key !== 'name' && (
-                                                                    <>
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem onSelect={() => toggleHidden(column.key, true)}>
-                                                                            <EyeOff />
-                                                                            Скрыть колонку
-                                                                        </DropdownMenuItem>
-                                                                    </>
-                                                                )}
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </div>
-                                                </div>
-                                            </th>
-                                        );
-                                    })}
-                                    {canManage && (
-                                        <th
-                                            scope="col"
-                                            style={{ width: ACTIONS_WIDTH }}
-                                            className="bg-sidebar sticky right-0 z-20 shadow-[-1px_0_0_var(--border)]"
-                                        >
-                                            <span className="sr-only">Действия</span>
-                                        </th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {employees.data.map((row) => (
-                                    <tr key={row.id} className="border-t align-top">
-                                        {visible.map((column, index) => (
-                                            <td
-                                                key={column.key}
-                                                style={stickyStyle(column)}
-                                                className={cn(
-                                                    'truncate px-4 py-3',
-                                                    index === 0 && 'pl-6',
-                                                    index === visible.length - 1 && !canManage && 'pr-6',
-                                                    stickyClass(column, false),
-                                                )}
-                                            >
-                                                {column.private && !row.private ? (
-                                                    <Lock className="text-muted-foreground/60 size-4" aria-label="Закрытые данные" />
-                                                ) : (
-                                                    column.cell(row, row.private as PrivateDetails)
-                                                )}
-                                            </td>
-                                        ))}
-                                        {canManage && (
-                                            <td className="bg-card sticky right-0 z-[1] py-2 pr-3 pl-1 shadow-[-1px_0_0_var(--border)]">
-                                                <EmployeeActions employee={row} isSelf={row.id === auth.user.id} />
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
-
-                                {employees.data.length === 0 && (
-                                    <tr className="border-t">
-                                        <td colSpan={visible.length + (canManage ? 1 : 0)} className="text-muted-foreground px-6 py-16 text-center">
-                                            Никого не нашлось. Попробуйте изменить поиск или фильтры.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t px-6 py-3">
-                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                            Строк на странице
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 gap-1 px-2.5 tabular-nums">
-                                        {perPage}
-                                        <ChevronDown className="text-muted-foreground" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="min-w-20">
-                                    <DropdownMenuRadioGroup value={String(perPage)} onValueChange={(value) => visit({ perPage: Number(value) })}>
-                                        {perPageOptions.map((option) => (
-                                            <DropdownMenuRadioItem key={option} value={String(option)} className="tabular-nums">
-                                                {option}
-                                            </DropdownMenuRadioItem>
-                                        ))}
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                        <Pagination paginator={employees} className="min-w-0 flex-1" />
-                    </div>
-                </Card>
+                        return filter?.type === 'multi' && filter.param === 'department';
+                    }}
+                    view={view}
+                    onPin={pin}
+                    onHide={(key) => toggleHidden(key, true)}
+                    lockedKey="name"
+                    actions={canManage ? (row) => <EmployeeActions employee={row} isSelf={row.id === auth.user.id} /> : undefined}
+                    empty={<Empty />}
+                    footer={
+                        <>
+                            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                                Строк на странице
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-8 gap-1 px-2.5 tabular-nums">
+                                            {perPage}
+                                            <ChevronDown className="text-muted-foreground" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="min-w-20">
+                                        <DropdownMenuRadioGroup value={String(perPage)} onValueChange={(value) => visit({ perPage: Number(value) })}>
+                                            {perPageOptions.map((option) => (
+                                                <DropdownMenuRadioItem key={option} value={String(option)} className="tabular-nums">
+                                                    {option}
+                                                </DropdownMenuRadioItem>
+                                            ))}
+                                        </DropdownMenuRadioGroup>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                            <Pagination paginator={employees} className="min-w-0 flex-1" />
+                        </>
+                    }
+                />
             </div>
         </AppLayout>
     );
