@@ -94,6 +94,27 @@ class EmployeeStatusTest extends TestCase
         $this->assertSame(0, UserDetail::where('user_id', $employee->id)->count());
     }
 
+    public function test_deleting_from_the_profile_lands_on_the_employee_list()
+    {
+        $employee = User::factory()->create();
+        $this->actingAs($this->admin);
+
+        // Going back would mean the profile of someone who no longer exists.
+        $this->from("/employees/{$employee->id}")
+            ->delete("/employees/{$employee->id}")
+            ->assertRedirect('/employees');
+    }
+
+    public function test_deleting_from_the_list_goes_back_to_it_with_its_filters()
+    {
+        $employee = User::factory()->create();
+        $this->actingAs($this->admin);
+
+        $this->from('/employees?status=active&per_page=25')
+            ->delete("/employees/{$employee->id}")
+            ->assertRedirect('/employees?status=active&per_page=25');
+    }
+
     public function test_admins_cannot_fire_transfer_or_delete_themselves()
     {
         $this->actingAs($this->admin);

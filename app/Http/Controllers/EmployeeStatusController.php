@@ -39,10 +39,14 @@ class EmployeeStatusController extends Controller
     {
         abort_if($request->user()->is($employee), 403, 'Нельзя удалить самого себя.');
 
+        // Deleted from the list, going back keeps the filters; deleted from the
+        // employee's own profile, there is no page to go back to.
+        $fromProfile = url()->previous() === route('employees.show', $employee);
+
         // Details, children, roles, positions and departments go with the row.
         $employee->delete();
 
-        return back();
+        return $fromProfile ? to_route('employees.index') : back();
     }
 
     private function leave(Request $request, User $employee, string $status, bool $noteRequired): void
