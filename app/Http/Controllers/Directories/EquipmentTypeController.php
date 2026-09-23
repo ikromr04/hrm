@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentType;
-use App\Models\UserEquipment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -12,24 +11,19 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Kinds of hardware the company hands out; the units themselves live on the
- * employee, each with its own inventory number.
+ * Categories of hardware ("Ноутбуки", "Мониторы"); the units themselves live
+ * in the equipment section, each with its own inventory number.
  */
 class EquipmentTypeController extends Controller
 {
     public function index(): Response
     {
         return Inertia::render('directories/equipment', [
-            // Holders, not units: someone with two monitors counts once, and
-            // only working staff are counted.
+            // Units in the category, written-off ones aside: the directory
+            // counts hardware, and the number links nowhere else.
             'items' => EquipmentType::query()
                 ->select(['id', 'name'])
-                ->addSelect(['users_count' => UserEquipment::query()
-                    ->selectRaw('count(distinct user_equipment.user_id)')
-                    ->join('users', 'users.id', '=', 'user_equipment.user_id')
-                    ->whereColumn('user_equipment.equipment_type_id', 'equipment_types.id')
-                    ->where('users.status', 'active'),
-                ])
+                ->withCount(['equipment as users_count' => fn ($q) => $q->inService()])
                 ->orderBy('name')
                 ->get(),
         ]);

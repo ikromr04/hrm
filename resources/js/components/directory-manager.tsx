@@ -49,6 +49,8 @@ interface DirectoryManagerProps {
     labels: Labels;
     /** Link to the employee list filtered by this record; without it the count is plain text. */
     employeesUrl?: (item: DirectoryItem) => string;
+    /** Header over the count; equipment categories count units, not people. */
+    countLabel?: string;
     /** Show and edit the parent/child structure (departments). */
     tree?: boolean;
     /** When given, each record has heads and members chosen from these people (departments). */
@@ -86,7 +88,16 @@ function descendantIds(items: DirectoryItem[], id: number): Set<number> {
     return result;
 }
 
-export function DirectoryManager({ items, field, route: routeName, labels, employeesUrl, tree = false, people }: DirectoryManagerProps) {
+export function DirectoryManager({
+    items,
+    field,
+    route: routeName,
+    labels,
+    employeesUrl,
+    countLabel = 'Сотрудников',
+    tree = false,
+    people,
+}: DirectoryManagerProps) {
     const [query, setQuery] = useState('');
     const [editing, setEditing] = useState<DirectoryItem | 'new' | null>(null);
     const [deleting, setDeleting] = useState<DirectoryItem | null>(null);
@@ -128,7 +139,7 @@ export function DirectoryManager({ items, field, route: routeName, labels, emplo
                                     </th>
                                 )}
                                 <th scope="col" className="w-40 px-4 py-3 font-semibold">
-                                    Сотрудников
+                                    {countLabel}
                                 </th>
                                 <th scope="col" className="w-28 py-3 pr-6 pl-4">
                                     <span className="sr-only">Действия</span>

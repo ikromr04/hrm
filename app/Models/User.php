@@ -169,10 +169,12 @@ class User extends Authenticatable
     }
 
     /**
-     * Company hardware in this person's hands; private, like details.
+     * Company hardware this person holds right now. The units belong to the
+     * company and are handed out from the equipment section; the profile only
+     * shows what is currently on them.
      */
     public function equipment(): HasMany
     {
-        return $this->hasMany(UserEquipment::class)->orderBy('equipment_type_id')->orderBy('id');
+        return $this->hasMany(Equipment::class, 'holder_user_id')->orderBy('equipment_type_id')->orderBy('id');
     }
 }

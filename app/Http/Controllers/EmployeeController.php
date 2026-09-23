@@ -3,14 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
-use App\Models\EquipmentType;
+use App\Models\Equipment;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
-use App\Models\UserEquipment;
 use App\Models\UserWorkExperience;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -216,7 +215,7 @@ class EmployeeController extends Controller
                     ],
                     'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
                     'work_experiences' => $employee->workExperiences->map(fn (UserWorkExperience $w) => $this->workExperience($w))->all(),
-                    'equipment' => $employee->equipment->map(fn (UserEquipment $e) => [...$this->equipment($e), 'type' => $e->type?->name])->all(),
+                    'equipment' => $employee->equipment->map(fn (Equipment $e) => $this->equipment($e))->all(),
                 ] : null,
             ],
             'neighbours' => $this->neighbours($employee),
@@ -234,7 +233,6 @@ class EmployeeController extends Controller
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
                 // Countries already on file, as suggestions for a previous job.
                 'countries' => UserWorkExperience::query()->distinct()->orderBy('country')->pluck('country'),
-                'equipment_types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
             ] : null,
             // The dialog edits these by id or name, not by the labels shown above.
             'assigned' => $canEdit ? [
@@ -548,15 +546,21 @@ class EmployeeController extends Controller
     }
 
     /**
+     * What the person holds right now. Read-only here: a unit is handed out and
+     * taken back in the equipment section, so its status has one home.
+     *
      * @return array<string, mixed>
      */
-    private function equipment(UserEquipment $unit): array
+    private function equipment(Equipment $unit): array
     {
         return [
             'id' => $unit->id,
-            'equipment_type_id' => $unit->equipment_type_id,
-            'description' => $unit->description,
+            'name' => $unit->name,
+            'maker' => $unit->maker,
+            'serial_number' => $unit->serial_number,
             'inventory_number' => $unit->inventory_number,
+            'type' => $unit->type?->name,
+            'issued_at' => $unit->issued_at?->toDateString(),
         ];
     }
 

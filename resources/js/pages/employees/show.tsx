@@ -37,7 +37,7 @@ import {
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { Camera, ChevronLeft, ChevronRight, Construction, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Construction, Laptop, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
 
 interface ProfilePrivate extends PrivateDetails {
@@ -45,7 +45,7 @@ interface ProfilePrivate extends PrivateDetails {
     /** The latest first. */
     work_experiences: (WorkExperience & { id: number })[];
     /** Grouped by kind, which is resolved to its directory name here. */
-    equipment: (Equipment & { id: number; type: string | null })[];
+    equipment: (Equipment & { id: number })[];
     birth_place: string | null;
     passport: { series: string | null; number: string | null; issued_at: string | null; issued_by: string | null };
 }
@@ -1246,112 +1246,6 @@ function WorkExperienceDialog({
     );
 }
 
-type UnitRecord = ProfilePrivate['equipment'][number];
-
-/** One unit of hardware, handed out or corrected on its own. */
-function EquipmentDialog({
-    employee,
-    unit,
-    options,
-    onClose,
-}: {
-    employee: Employee;
-    unit: UnitRecord | 'new';
-    options: EditOptions;
-    onClose: () => void;
-}) {
-    const existing = unit === 'new' ? null : unit;
-    const form = useForm({
-        equipment_type_id: existing ? String(existing.equipment_type_id) : '',
-        description: existing?.description ?? '',
-        inventory_number: existing?.inventory_number ?? '',
-    });
-
-    const submit: FormEventHandler = (event) => {
-        event.preventDefault();
-        const send = { preserveScroll: true, onSuccess: onClose };
-
-        if (existing) form.put(route('employees.equipment.update', [employee.id, existing.id]), send);
-        else form.post(route('employees.equipment.store', employee.id), send);
-    };
-
-    return (
-        <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-                {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
-                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-                    <DialogHeader>
-                        <DialogTitle>{existing ? 'Изменить оборудование' : 'Новое оборудование'}</DialogTitle>
-                        <DialogDescription className="sr-only">Заполните поля и сохраните.</DialogDescription>
-                    </DialogHeader>
-
-                    {options.equipment_types.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                            Справочник оборудования пуст — сначала добавьте виды в{' '}
-                            <Link href={route('directories.equipment.index')} className="underline">
-                                справочнике
-                            </Link>
-                            .
-                        </p>
-                    ) : (
-                        <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label htmlFor="unit-type">Оборудование</Label>
-                                <Select value={form.data.equipment_type_id} onValueChange={(value) => form.setData('equipment_type_id', value)}>
-                                    <SelectTrigger id="unit-type">
-                                        <SelectValue placeholder="Выберите" />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-72">
-                                        {options.equipment_types.map((type) => (
-                                            <SelectItem key={type.id} value={String(type.id)}>
-                                                {type.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <InputError message={form.errors.equipment_type_id} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="unit-inventory">Инвентарный номер</Label>
-                                <Input
-                                    id="unit-inventory"
-                                    value={form.data.inventory_number}
-                                    onChange={(e) => form.setData('inventory_number', e.target.value)}
-                                    aria-invalid={!!form.errors.inventory_number}
-                                />
-                                <InputError message={form.errors.inventory_number} />
-                            </div>
-
-                            <div className="grid gap-2 sm:col-span-2">
-                                <Label htmlFor="unit-description">Описание</Label>
-                                <Input
-                                    id="unit-description"
-                                    placeholder="Модель, конфигурация, состояние"
-                                    value={form.data.description}
-                                    onChange={(e) => form.setData('description', e.target.value)}
-                                    aria-invalid={!!form.errors.description}
-                                />
-                                <InputError message={form.errors.description} />
-                            </div>
-                        </div>
-                    )}
-
-                    <DialogFooter className="gap-2">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" disabled={form.processing || options.equipment_types.length === 0}>
-                            {form.processing && <LoaderCircle className="animate-spin" />}
-                            Сохранить
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 /** Confirms removing one record; deleting cannot be undone. */
 function DeleteRecordDialog({
     title,
@@ -1574,27 +1468,25 @@ function WorkExperiences({
     );
 }
 
-function EquipmentList({
-    items,
-    canEdit,
-    onEdit,
-    onDelete,
-}: {
-    items: ProfilePrivate['equipment'];
-    canEdit: boolean;
-    onEdit: (unit: UnitRecord) => void;
-    onDelete: (unit: UnitRecord) => void;
-}) {
+/**
+ * What the person holds right now, for reading only: a unit is handed out and
+ * taken back in the equipment section, so its status has a single home.
+ */
+function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
     return (
         <ul className="flex flex-col">
             {items.map((unit) => (
                 <li key={unit.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="text-sm font-medium">{unit.type ?? 'Без вида'}</span>
-                        {unit.description && <span className="text-sm">{unit.description}</span>}
-                        <span className="text-muted-foreground text-[13px] tabular-nums">Инв. № {unit.inventory_number}</span>
+                        <span className="text-sm font-medium">{unit.name}</span>
+                        <span className="text-muted-foreground text-[13px]">
+                            {[unit.type, unit.maker, unit.serial_number && `S/N ${unit.serial_number}`].filter(Boolean).join(' · ')}
+                        </span>
+                        <span className="text-muted-foreground text-[13px] tabular-nums">
+                            Инв. № {unit.inventory_number}
+                            {unit.issued_at && ` · выдано ${formatDate(unit.issued_at)}`}
+                        </span>
                     </div>
-                    {canEdit && <RowActions onEdit={() => onEdit(unit)} onDelete={() => onDelete(unit)} what="оборудование" />}
                 </li>
             ))}
         </ul>
@@ -1764,8 +1656,6 @@ export default function EmployeeProfile({
     const [deletingEducation, setDeletingEducation] = useState<EducationRecord | null>(null);
     const [job, setJob] = useState<JobRecord | 'new' | null>(null);
     const [deletingJob, setDeletingJob] = useState<JobRecord | null>(null);
-    const [unit, setUnit] = useState<UnitRecord | 'new' | null>(null);
-    const [deletingUnit, setDeletingUnit] = useState<UnitRecord | null>(null);
     const [deletingAvatar, setDeletingAvatar] = useState(false);
     const shortName = `${employee.surname} ${employee.name}`;
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
@@ -1902,14 +1792,17 @@ export default function EmployeeProfile({
                                     {details.equipment.length === 0 ? (
                                         <p className="text-muted-foreground text-sm">Не выдано</p>
                                     ) : (
-                                        <EquipmentList items={details.equipment} canEdit={canEdit} onEdit={setUnit} onDelete={setDeletingUnit} />
+                                        <EquipmentList items={details.equipment} />
                                     )}
                                 </Section>
 
                                 {canEdit && (
-                                    <Button type="button" variant="outline" className="self-start" onClick={() => setUnit('new')}>
-                                        <Plus />
-                                        Добавить оборудование
+                                    <Button variant="outline" className="self-start" asChild>
+                                        {/* "У кого" is a name search now, so the link passes the name. */}
+                                        <Link href={route('equipment.index', { holder: `${employee.surname} ${employee.name}` })}>
+                                            <Laptop />
+                                            Открыть в разделе оборудования
+                                        </Link>
                                     </Button>
                                 )}
                             </>
@@ -2246,22 +2139,6 @@ export default function EmployeeProfile({
             {education && <EducationDialog employee={employee} education={education} onClose={() => setEducation(null)} />}
 
             {job && options && <WorkExperienceDialog employee={employee} job={job} options={options} onClose={() => setJob(null)} />}
-
-            {unit && options && <EquipmentDialog employee={employee} unit={unit} options={options} onClose={() => setUnit(null)} />}
-
-            {deletingUnit && (
-                <DeleteRecordDialog
-                    title={`Удалить оборудование «${deletingUnit.type ?? deletingUnit.inventory_number}»?`}
-                    description="Запись исчезнет из профиля. Отменить удаление нельзя."
-                    onConfirm={() =>
-                        router.delete(route('employees.equipment.destroy', [employee.id, deletingUnit.id]), {
-                            preserveScroll: true,
-                            onFinish: () => setDeletingUnit(null),
-                        })
-                    }
-                    onClose={() => setDeletingUnit(null)}
-                />
-            )}
 
             {deletingJob && (
                 <DeleteRecordDialog

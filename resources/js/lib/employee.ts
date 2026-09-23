@@ -81,12 +81,19 @@ export interface WorkExperience {
     ended_year: number | null;
 }
 
-/** One unit of company hardware, identified by its inventory number; private. */
+/**
+ * One unit of company hardware the employee holds. It belongs to the company,
+ * so the profile only reads it: handing out and taking back live in the
+ * equipment section.
+ */
 export interface Equipment {
-    equipment_type_id: number;
-    /** Model or anything else worth noting about this unit. */
-    description: string | null;
+    name: string;
+    maker: string | null;
+    serial_number: string | null;
     inventory_number: string;
+    /** Category from the directory, e.g. "Ноутбуки". */
+    type: string | null;
+    issued_at: string | null;
 }
 
 export const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];

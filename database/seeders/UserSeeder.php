@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Department;
+use App\Models\Equipment;
 use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
@@ -10,7 +11,6 @@ use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
-use App\Models\UserEquipment;
 use App\Models\UserWorkExperience;
 use Illuminate\Database\Seeder;
 
@@ -89,8 +89,8 @@ class UserSeeder extends Seeder
     }
 
     /**
-     * A workplace set for most of the working staff: a computer first, then the
-     * peripherals that go with it, plus the odd printer or headset.
+     * A fleet of hardware: a workplace set handed to most of the working staff,
+     * plus spares on the shelf, a few units at the service and some written off.
      */
     private function addEquipment(): void
     {
@@ -100,29 +100,44 @@ class UserSeeder extends Seeder
             return;
         }
 
-        // The mouse and keyboard only make sense next to a desktop computer.
-        $desktopExtras = ['Монитор', 'Клавиатура', 'Мышь'];
-        $occasional = ['Гарнитура', 'ИБП', 'МФУ', 'Планшет', 'Принтер'];
+        // Peripherals only make sense next to a desktop computer.
+        $desktopExtras = ['Мониторы', 'Периферия'];
+        $occasional = ['Печать', 'Телефоны'];
 
-        User::doesntHave('equipment')->where('status', 'active')->get()->each(function (User $user) use ($types, $desktopExtras, $occasional) {
-            if (! fake()->boolean(85)) {
-                return;
-            }
-
-            $laptop = fake()->boolean(35);
-            $names = $laptop
-                ? ['Ноутбук', ...fake()->randomElements($desktopExtras, fake()->numberBetween(0, 1))]
-                : ['Персональный компьютер', ...$desktopExtras];
-            $names = [...$names, ...fake()->randomElements($occasional, fake()->numberBetween(0, 2))];
-
-            foreach (array_unique($names) as $name) {
-                if (! isset($types[$name])) {
-                    continue;
+        User::doesntHave('equipment')->where('status', 'active')->with('details')->get()
+            ->each(function (User $user) use ($types, $desktopExtras, $occasional) {
+                if (! fake()->boolean(85)) {
+                    return;
                 }
 
-                UserEquipment::factory()->for($user)->ofType($types[$name])->create();
+                $names = fake()->boolean(35)
+                    ? ['Ноутбуки', ...fake()->randomElements($desktopExtras, fake()->numberBetween(0, 1))]
+                    : ['Ноутбуки', ...$desktopExtras];
+                $names = [...$names, ...fake()->randomElements($occasional, fake()->numberBetween(0, 2))];
+                $since = $user->details?->hired_at?->toDateString();
+
+                foreach (array_unique($names) as $name) {
+                    Equipment::factory()->ofType($types[$name])->issuedTo($user->id, $since)->create();
+                }
+            });
+
+        // Not everything is in someone's hands: spares on the shelf, a few units
+        // away at the service, and some already out of the fleet.
+        $spread = [['stock', 26], ['repair', 8], ['written_off', 12]];
+
+        foreach ($spread as [$status, $count]) {
+            foreach (range(1, $count) as $ignored) {
+                $factory = Equipment::factory()->ofType($types->random());
+
+                $factory = match ($status) {
+                    'repair' => $factory->inRepair(),
+                    'written_off' => $factory->writtenOff(),
+                    default => $factory,
+                };
+
+                $factory->create();
             }
-        });
+        }
     }
 
     /**

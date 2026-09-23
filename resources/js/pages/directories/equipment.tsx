@@ -7,20 +7,21 @@ interface EquipmentTypeItem {
     users_count: number;
 }
 
-/** Kinds of hardware; the units themselves are filled in on the employee. */
+/** Categories of hardware; the units themselves live in the equipment section. */
 export default function Equipment({ items }: { items: EquipmentTypeItem[] }) {
     return (
-        <DirectoriesLayout title="Оборудование">
+        <DirectoriesLayout title="Категории техники">
             <DirectoryManager
                 items={items.map((item) => ({ id: item.id, label: item.name, users_count: item.users_count }))}
                 field="name"
                 route="directories.equipment"
                 labels={{
-                    add: 'Добавить оборудование',
-                    create: 'Новый вид оборудования',
-                    edit: 'Изменить вид оборудования',
-                    accusative: 'вид оборудования',
+                    add: 'Добавить категорию',
+                    create: 'Новая категория техники',
+                    edit: 'Изменить категорию',
+                    accusative: 'категорию',
                 }}
+                countLabel="Единиц"
             />
         </DirectoriesLayout>
     );

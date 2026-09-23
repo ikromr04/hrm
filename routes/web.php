@@ -7,9 +7,10 @@ use App\Http\Controllers\EmployeeAvatarController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeDetailsController;
 use App\Http\Controllers\EmployeeEducationController;
-use App\Http\Controllers\EmployeeEquipmentController;
 use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\EmployeeWorkExperienceController;
+use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\EquipmentStatusController;
 use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +21,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
     Route::get('search', SearchController::class)->name('search');
+    Route::get('equipment', [EquipmentController::class, 'index'])->name('equipment.index');
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });
@@ -48,10 +50,6 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee
     Route::put('experiences/{experience}', [EmployeeWorkExperienceController::class, 'update'])->name('experiences.update');
     Route::delete('experiences/{experience}', [EmployeeWorkExperienceController::class, 'destroy'])->name('experiences.destroy');
 
-    // "equipment" names the collection; one of them is a {unit}.
-    Route::post('equipment', [EmployeeEquipmentController::class, 'store'])->name('equipment.store');
-    Route::put('equipment/{unit}', [EmployeeEquipmentController::class, 'update'])->name('equipment.update');
-    Route::delete('equipment/{unit}', [EmployeeEquipmentController::class, 'destroy'])->name('equipment.destroy');
     Route::put('family', [EmployeeDetailsController::class, 'family'])->name('family');
     Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
     Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');
@@ -59,7 +57,20 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee
     Route::delete('/', [EmployeeStatusController::class, 'destroy'])->name('destroy');
 });
 
-// Directories: roles ("Позиция"), positions ("Должность"), departments, languages and equipment.
+// Putting a new unit on the books.
+Route::post('equipment', [EquipmentController::class, 'store'])
+    ->middleware(['auth', 'can:manage-employees'])
+    ->name('equipment.store');
+
+// A unit's life: handed out, taken back, repaired, written off.
+Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
+    Route::post('issue', [EquipmentStatusController::class, 'issue'])->name('issue');
+    Route::post('take', [EquipmentStatusController::class, 'take'])->name('take');
+    Route::post('repair', [EquipmentStatusController::class, 'repair'])->name('repair');
+    Route::post('write-off', [EquipmentStatusController::class, 'writeOff'])->name('write-off');
+});
+
+// Directories: roles ("Позиция"), positions ("Должность"), departments, languages and equipment categories.
 Route::middleware(['auth', 'can:manage-directories'])->prefix('directories')->name('directories.')->group(function () {
     Route::redirect('/', '/directories/roles');
 

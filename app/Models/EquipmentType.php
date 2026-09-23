@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * A kind of hardware the company hands out: "Монитор", "Ноутбук", "Мышь".
+ * A category of hardware: "Ноутбуки", "Мониторы", "Телефоны".
  */
 class EquipmentType extends Model
 {
@@ -25,10 +25,10 @@ class EquipmentType extends Model
     ];
 
     /**
-     * Every unit of this kind, whoever holds it.
+     * Every unit in this category, whoever holds it.
      */
     public function equipment(): HasMany
     {
-        return $this->hasMany(UserEquipment::class);
+        return $this->hasMany(Equipment::class);
     }
 }

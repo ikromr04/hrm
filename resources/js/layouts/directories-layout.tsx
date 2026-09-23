@@ -9,7 +9,7 @@ const tabs = [
     { title: 'Должности', href: '/directories/positions' },
     { title: 'Отделы', href: '/directories/departments' },
     { title: 'Языки', href: '/directories/languages' },
-    { title: 'Оборудование', href: '/directories/equipment' },
+    { title: 'Категории техники', href: '/directories/equipment' },
 ];
 
 /** Shell for the admin directories: title, tabs, then the current list. */

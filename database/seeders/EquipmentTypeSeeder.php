@@ -7,19 +7,13 @@ use Illuminate\Database\Seeder;
 
 class EquipmentTypeSeeder extends Seeder
 {
+    /** Categories, exactly as the design's "Категории техники" names them. */
     public const TYPES = [
-        'Ноутбук',
-        'Персональный компьютер',
-        'Монитор',
-        'Клавиатура',
-        'Мышь',
-        'Принтер',
-        'Сканер',
-        'МФУ',
-        'Телефон',
-        'Гарнитура',
-        'ИБП',
-        'Планшет',
+        'Ноутбуки',
+        'Мониторы',
+        'Телефоны',
+        'Печать',
+        'Периферия',
     ];
 
     public function run(): void

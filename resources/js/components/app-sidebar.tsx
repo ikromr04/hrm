@@ -12,7 +12,7 @@ const navGroups: SidebarNavGroup[] = [
             { title: 'Главная', url: '/dashboard', icon: LayoutGrid },
             { title: 'Сотрудники', url: '/employees', icon: Users },
             { title: 'Структура компании', url: '/departments', icon: Network },
-            { title: 'Оборудование', icon: Laptop },
+            { title: 'Оборудование', url: '/equipment', icon: Laptop },
             { title: 'Отпуска', icon: CalendarDays },
         ],
     },
