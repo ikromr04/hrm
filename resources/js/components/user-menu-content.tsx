@@ -1,4 +1,4 @@
-import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { type User } from '@/types';
@@ -14,11 +14,17 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
 
     return (
         <>
-            <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+            {/* The name is the way to one's own profile, as it is everywhere else. */}
+            <DropdownMenuItem asChild className="p-0 font-normal">
+                <Link
+                    className="flex w-full items-center gap-2 px-1 py-1.5 text-left text-sm"
+                    href={route('employees.show', user.id)}
+                    prefetch
+                    onClick={cleanup}
+                >
                     <UserInfo user={user} showEmail={true} />
-                </div>
-            </DropdownMenuLabel>
+                </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
