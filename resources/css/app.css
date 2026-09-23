@@ -167,4 +167,73 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /*
+     * Windows draws a wide, high-contrast scrollbar, and the profile now has
+     * two panes side by side. These are thinner, tied to the theme and only
+     * as loud as they need to be. Firefox takes the standard properties;
+     * Chromium and Safari take the WebKit pseudo-elements below.
+     */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: color-mix(in oklab, var(--muted-foreground) 30%, transparent) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    /* The border plus background-clip leaves the thumb floating in its track. */
+    ::-webkit-scrollbar-thumb {
+        background-color: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+        background-clip: content-box;
+        border: 3px solid transparent;
+        border-radius: 9999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+    }
+
+    ::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+
+    /*
+     * For panes that scroll inside a page that does not: the bar stays out of
+     * sight until the pointer is over the pane or something in it has focus.
+     * The gutter is reserved either way, so nothing shifts when it appears.
+     *
+     * Hiding it outright was tempting, but then nothing says a pane holds more
+     * than it shows, and the position within it is lost too.
+     */
+    .scroll-soft {
+        scrollbar-gutter: stable;
+        scrollbar-color: transparent transparent;
+        transition: scrollbar-color 150ms ease;
+    }
+
+    .scroll-soft:hover,
+    .scroll-soft:focus-within {
+        scrollbar-color: color-mix(in oklab, var(--muted-foreground) 30%, transparent) transparent;
+    }
+
+    .scroll-soft::-webkit-scrollbar-thumb {
+        background-color: transparent;
+        transition: background-color 150ms ease;
+    }
+
+    .scroll-soft:hover::-webkit-scrollbar-thumb,
+    .scroll-soft:focus-within::-webkit-scrollbar-thumb {
+        background-color: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+    }
+
+    .scroll-soft:hover::-webkit-scrollbar-thumb:hover {
+        background-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+    }
 }
