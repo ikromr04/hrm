@@ -29,7 +29,7 @@ interface Options {
 type NewEmployee = { id: number; name: string; email: string };
 
 const steps = [
-    { title: 'Основные данные', note: 'Кто это и где работает' },
+    { title: 'Основные данные', note: 'Кто это' },
     { title: 'Контакты и языки', note: 'Как связаться, чем владеет' },
     { title: 'Паспорт и семья', note: 'Документ и близкие' },
     { title: 'Образование', note: 'Где учился' },
