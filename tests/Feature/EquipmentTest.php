@@ -29,32 +29,6 @@ class EquipmentTest extends TestCase
         return User::factory()->create()->assignRole('admin');
     }
 
-    /**
-     * The edit form posts every section at once, so the other lists have to be
-     * present even when only equipment is under test.
-     *
-     * @param  array<int, array<string, string>>  $equipment
-     * @return array<string, mixed>
-     */
-    private function payload(User $employee, array $equipment): array
-    {
-        return [
-            'surname' => $employee->surname,
-            'name' => $employee->name,
-            'patronymic' => $employee->patronymic ?? '',
-            'sex' => $employee->sex,
-            'email' => $employee->email,
-            'roles' => [],
-            'positions' => [],
-            'departments' => [],
-            'languages' => [],
-            'children' => [],
-            'educations' => [],
-            'work_experiences' => [],
-            'equipment' => $equipment,
-        ];
-    }
-
     public function test_only_admins_manage_the_equipment_directory()
     {
         $this->actingAs(User::factory()->create())->get('/directories/equipment')->assertForbidden();
@@ -93,85 +67,6 @@ class EquipmentTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('items', fn ($items) => collect($items)->firstWhere('name', 'Монитор')['users_count'] === 1)
             );
-    }
-
-    public function test_an_admin_saves_several_units_for_one_employee()
-    {
-        $this->seed(EquipmentTypeSeeder::class);
-        $laptop = EquipmentType::firstWhere('name', 'Ноутбук');
-        $monitor = EquipmentType::firstWhere('name', 'Монитор');
-        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
-
-        $this->actingAs($this->admin())
-            ->put("/employees/{$employee->id}", $this->payload($employee, [
-                ['equipment_type_id' => (string) $laptop->id, 'description' => 'HP ProBook 450 G9', 'inventory_number' => 'ИНВ-000451'],
-                // Two of the same kind, and a unit with no description.
-                ['equipment_type_id' => (string) $monitor->id, 'description' => 'Dell P2422H, 24"', 'inventory_number' => 'ИНВ-000452'],
-                ['equipment_type_id' => (string) $monitor->id, 'description' => '', 'inventory_number' => 'ИНВ-000453'],
-            ]))
-            ->assertSessionHasNoErrors()
-            ->assertRedirect("/employees/{$employee->id}");
-
-        $this->assertSame(
-            [
-                [$laptop->id, 'HP ProBook 450 G9', 'ИНВ-000451'],
-                [$monitor->id, 'Dell P2422H, 24"', 'ИНВ-000452'],
-                [$monitor->id, null, 'ИНВ-000453'],
-            ],
-            $employee->refresh()->equipment->map(fn (UserEquipment $e) => [$e->equipment_type_id, $e->description, $e->inventory_number])->all(),
-        );
-    }
-
-    public function test_an_inventory_number_cannot_be_held_by_two_people()
-    {
-        $this->seed(EquipmentTypeSeeder::class);
-        $laptop = EquipmentType::firstWhere('name', 'Ноутбук');
-        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
-        UserEquipment::factory()->for(User::factory()->create())->ofType($laptop)->create(['inventory_number' => 'ИНВ-000451']);
-
-        $this->actingAs($this->admin())
-            ->put("/employees/{$employee->id}", $this->payload($employee, [
-                ['equipment_type_id' => (string) $laptop->id, 'description' => '', 'inventory_number' => 'ИНВ-000451'],
-            ]))
-            ->assertSessionHasErrors('equipment.0.inventory_number');
-    }
-
-    public function test_the_same_number_cannot_repeat_within_one_form()
-    {
-        $this->seed(EquipmentTypeSeeder::class);
-        $laptop = EquipmentType::firstWhere('name', 'Ноутбук');
-        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
-
-        $this->actingAs($this->admin())
-            ->put("/employees/{$employee->id}", $this->payload($employee, [
-                ['equipment_type_id' => (string) $laptop->id, 'description' => '', 'inventory_number' => 'ИНВ-000451'],
-                ['equipment_type_id' => (string) $laptop->id, 'description' => '', 'inventory_number' => 'ИНВ-000451'],
-                // No kind chosen, and no number typed.
-                ['equipment_type_id' => '', 'description' => 'Просто текст', 'inventory_number' => ''],
-            ]))
-            ->assertSessionHasErrors([
-                'equipment.1.inventory_number',
-                'equipment.2.equipment_type_id',
-                'equipment.2.inventory_number',
-            ]);
-    }
-
-    public function test_an_employee_keeps_their_numbers_when_saved_again()
-    {
-        $this->seed(EquipmentTypeSeeder::class);
-        $laptop = EquipmentType::firstWhere('name', 'Ноутбук');
-        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
-        UserEquipment::factory()->for($employee)->ofType($laptop)->create(['inventory_number' => 'ИНВ-000451']);
-
-        // The rows are replaced on every save, so the employee's own number
-        // must not count as taken by someone else.
-        $this->actingAs($this->admin())
-            ->put("/employees/{$employee->id}", $this->payload($employee, [
-                ['equipment_type_id' => (string) $laptop->id, 'description' => 'Заменили диск', 'inventory_number' => 'ИНВ-000451'],
-            ]))
-            ->assertSessionHasNoErrors();
-
-        $this->assertSame('Заменили диск', $employee->refresh()->equipment->first()->description);
     }
 
     public function test_equipment_is_private_and_shown_on_the_profile()

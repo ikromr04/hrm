@@ -1,6 +1,26 @@
-import { StatusBadge } from '@/components/status-badge';
+import { StatusBadge, type StatusTone } from '@/components/status-badge';
 import { languageLevelLabels, languageLevels, type LanguageLevel, type SpokenLanguage } from '@/lib/employee';
 import { cn } from '@/lib/utils';
+
+/**
+ * A colour per level, so the list can be read at a glance: grey for a beginner,
+ * blue in between, the brand green once someone is fluent.
+ */
+const levelTones: Record<LanguageLevel, StatusTone> = {
+    beginner: 'neutral',
+    intermediate: 'info',
+    advanced: 'success',
+};
+
+/** The level spelled out next to its meter, in a colour of its own. */
+export function LevelBadge({ level, className }: { level: LanguageLevel; className?: string }) {
+    return (
+        <StatusBadge tone={levelTones[level]} className={cn('gap-1.5', className)}>
+            <LevelMeter level={level} />
+            {languageLevelLabels[level]}
+        </StatusBadge>
+    );
+}
 
 /** Three bars, filled up to the level: one for beginner, all three for advanced. */
 export function LevelMeter({ level, className }: { level: LanguageLevel; className?: string }) {

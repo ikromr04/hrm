@@ -50,52 +50,6 @@ class LanguageTest extends TestCase
         $this->assertCount(0, $speaker->fresh()->languages);
     }
 
-    public function test_an_admin_sets_languages_and_levels()
-    {
-        $english = Language::create(['name' => 'Английский']);
-        $russian = Language::create(['name' => 'Русский']);
-        $german = Language::create(['name' => 'Немецкий']);
-        $employee = User::factory()->create();
-        $employee->languages()->attach($german, ['level' => 'beginner']);
-
-        $payload = fn (array $languages) => [
-            'surname' => $employee->surname,
-            'name' => $employee->name,
-            'sex' => $employee->sex,
-            'email' => $employee->email,
-            'roles' => [],
-            'positions' => [],
-            'departments' => [],
-            'children' => [],
-            'educations' => [],
-            'equipment' => [],
-            'work_experiences' => [],
-            'languages' => $languages,
-        ];
-
-        $this->actingAs($this->admin);
-
-        $this->get("/employees/{$employee->id}/edit")->assertInertia(fn (Assert $page) => $page
-            ->where('employee.languages', [['id' => $german->id, 'level' => 'beginner']])
-            ->has('options.languages', 3)
-        );
-
-        $this->put("/employees/{$employee->id}", $payload([
-            ['id' => $english->id, 'level' => 'intermediate'],
-            ['id' => $russian->id, 'level' => 'advanced'],
-        ]))->assertSessionHasNoErrors();
-
-        $this->assertSame(
-            ['Английский' => 'intermediate', 'Русский' => 'advanced'],
-            $employee->fresh()->languages->mapWithKeys(fn (Language $l) => [$l->name => $l->pivot->level])->all(),
-        );
-
-        $this->put("/employees/{$employee->id}", $payload([
-            ['id' => $english->id, 'level' => 'fluent'],
-            ['id' => $english->id, 'level' => 'advanced'],
-        ]))->assertSessionHasErrors(['languages.0.level', 'languages.0.id']);
-    }
-
     public function test_languages_show_in_the_list_and_profile_and_can_be_filtered()
     {
         $english = Language::create(['name' => 'Английский']);

@@ -15,6 +15,11 @@ export interface PrivateDetails {
     /** Whose number the SOS phone is: "Мама — Дилором". */
     sos_contact: string | null;
     marital_status: Marital | null;
+    /** At most one, so it sits here rather than in a list like the children. */
+    spouse_name: string | null;
+    spouse_birth_date: string | null;
+    /** null until anyone filled the card in, false once HR states there are none. */
+    has_children: boolean | null;
     hired_at: string | null;
     children: { full_name: string; birth_date: string | null }[];
 }

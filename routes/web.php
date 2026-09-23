@@ -4,6 +4,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\Directories;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeDetailsController;
 use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
@@ -20,8 +21,12 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee}')->name('employees.')->group(function () {
-    Route::get('edit', [EmployeeController::class, 'edit'])->name('edit');
-    Route::put('/', [EmployeeController::class, 'update'])->name('update');
+    // One card of the profile at a time, edited from its own dialog.
+    Route::put('personal', [EmployeeDetailsController::class, 'personal'])->name('personal');
+    Route::put('passport', [EmployeeDetailsController::class, 'passport'])->name('passport');
+    Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->name('contacts');
+    Route::put('languages', [EmployeeDetailsController::class, 'languages'])->name('languages');
+    Route::put('family', [EmployeeDetailsController::class, 'family'])->name('family');
     Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
     Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');
     Route::post('restore', [EmployeeStatusController::class, 'restore'])->name('restore');

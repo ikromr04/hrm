@@ -28,6 +28,9 @@ class UserDetail extends Model
         'passport_issued_at',
         'passport_issued_by',
         'marital_status',
+        'spouse_name',
+        'spouse_birth_date',
+        'has_children',
         'home_address',
         'phone',
         'sos_phone',
@@ -44,6 +47,8 @@ class UserDetail extends Model
         return [
             'hired_at' => 'date',
             'birth_date' => 'date',
+            'spouse_birth_date' => 'date',
+            'has_children' => 'boolean',
             'passport_issued_at' => 'date',
         ];
     }

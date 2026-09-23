@@ -222,11 +222,17 @@ class UserSeeder extends Seeder
                     return;
                 }
 
-                UserChild::factory(fake()->numberBetween(0, 3))
+                $count = fake()->numberBetween(0, 3);
+
+                UserChild::factory($count)
                     ->for($user)
                     ->ofFamily($user->surname)
                     ->state(fn () => ['birth_date' => fake()->dateTimeBetween($earliest, '-1 month')])
                     ->create();
+
+                // Childless here means HR asked and the answer was none, not
+                // that the card was left blank — the profile tells them apart.
+                $user->details->update(['has_children' => $count > 0]);
             });
     }
 

@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Department;
-use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
@@ -14,9 +12,7 @@ use App\Models\UserEducation;
 use App\Models\UserEquipment;
 use App\Models\UserWorkExperience;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -184,6 +180,7 @@ class EmployeeController extends Controller
     {
         $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name']);
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
+        $canEdit = $request->user()->can('manage-employees');
 
         if ($canSeePrivate) {
             $employee->load(['details', 'children', 'educations', 'workExperiences', 'equipment.type:id,name']);
@@ -200,7 +197,7 @@ class EmployeeController extends Controller
                 'email' => $employee->email,
                 'status' => $employee->status,
                 'status_changed_at' => $employee->status_changed_at?->toDateString(),
-                'status_note' => $request->user()->can('manage-employees') ? $employee->status_note : null,
+                'status_note' => $canEdit ? $employee->status_note : null,
                 'roles' => $this->roleTitles($employee),
                 'positions' => $this->positionNames($employee),
                 'departments' => $this->departmentList($employee),
@@ -220,6 +217,23 @@ class EmployeeController extends Controller
                 ] : null,
             ],
             'neighbours' => $this->neighbours($employee),
+            // Each card is edited in place, so the suggestions its dialog needs
+            // travel with the page — and only for viewers who may edit.
+            'canEdit' => $canEdit,
+            'options' => $canEdit ? [
+                'nationalities' => $this->distinctDetail('nationality'),
+                'citizenships' => $this->distinctDetail('citizenship'),
+                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
+                'departments' => $this->departmentOptions(),
+                'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
+            ] : null,
+            // The dialog edits these by id or name, not by the labels shown above.
+            'assigned' => $canEdit ? [
+                'roles' => $employee->roles->pluck('name'),
+                'positions' => $employee->positions->pluck('id'),
+                'departments' => $employee->departments->pluck('id'),
+            ] : null,
         ]);
     }
 
@@ -254,103 +268,6 @@ class EmployeeController extends Controller
             'prev' => $person($order('desc')->tap($before)->first(['id', 'name', 'surname'])),
             'next' => $person($order('asc')->tap($after)->first(['id', 'name', 'surname'])),
         ];
-    }
-
-    public function edit(User $employee): Response
-    {
-        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children', 'educations', 'workExperiences', 'equipment']);
-        $details = $employee->details;
-
-        return Inertia::render('employees/edit', [
-            'employee' => [
-                'id' => $employee->id,
-                'surname' => $employee->surname,
-                'name' => $employee->name,
-                'patronymic' => $employee->patronymic ?? '',
-                'sex' => $employee->sex,
-                'email' => $employee->email,
-                'status' => $employee->status,
-                'roles' => $employee->roles->pluck('name')->all(),
-                'positions' => $employee->positions->pluck('id')->all(),
-                'departments' => $employee->departments->pluck('id')->all(),
-                // Heads are chosen in the departments directory; shown here for context.
-                'head_of' => $employee->departments->filter(fn (Department $d) => $d->pivot->is_head)->pluck('id')->values()->all(),
-                'languages' => $employee->languages->map(fn (Language $l) => ['id' => $l->id, 'level' => $l->pivot->level])->all(),
-                'hired_at' => $details?->hired_at?->toDateString() ?? '',
-                'birth_date' => $details?->birth_date?->toDateString() ?? '',
-                'birth_place' => $details?->birth_place ?? '',
-                'nationality' => $details?->nationality ?? '',
-                'citizenship' => $details?->citizenship ?? '',
-                'marital_status' => $details?->marital_status ?? '',
-                'home_address' => $details?->home_address ?? '',
-                'phone' => $details?->phone ?? '',
-                'sos_phone' => $details?->sos_phone ?? '',
-                'sos_contact' => $details?->sos_contact ?? '',
-                'passport_series' => $details?->passport_series ?? '',
-                'passport_number' => $details?->passport_number ?? '',
-                'passport_issued_at' => $details?->passport_issued_at?->toDateString() ?? '',
-                'passport_issued_by' => $details?->passport_issued_by ?? '',
-                'children' => $employee->children
-                    ->map(fn (UserChild $c) => ['full_name' => $c->full_name, 'birth_date' => $c->birth_date?->toDateString() ?? ''])
-                    ->all(),
-                // The form keeps every field as text; empty means not filled in.
-                'educations' => $employee->educations
-                    ->map(fn (UserEducation $e) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->education($e), 'id')))
-                    ->all(),
-                'work_experiences' => $employee->workExperiences
-                    ->map(fn (UserWorkExperience $w) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->workExperience($w), 'id')))
-                    ->all(),
-                'equipment' => $employee->equipment
-                    ->map(fn (UserEquipment $e) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->equipment($e), 'id')))
-                    ->all(),
-            ],
-            'options' => [
-                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
-                'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
-                'departments' => $this->departmentOptions(),
-                'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
-                'nationalities' => $this->distinctDetail('nationality'),
-                'citizenships' => $this->distinctDetail('citizenship'),
-                'countries' => UserWorkExperience::query()->distinct()->orderBy('country')->pluck('country'),
-                'equipment_types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
-            ],
-        ]);
-    }
-
-    public function update(UpdateEmployeeRequest $request, User $employee): RedirectResponse
-    {
-        $data = $request->validated();
-
-        DB::transaction(function () use ($employee, $data) {
-            $employee->update(Arr::only($data, ['surname', 'name', 'patronymic', 'sex', 'email']));
-
-            $employee->syncRoles($data['roles']);
-            $employee->positions()->sync($data['positions']);
-            // Departments the employee stays in keep their head flag.
-            $employee->departments()->sync($data['departments']);
-            $employee->languages()->sync(collect($data['languages'])->mapWithKeys(fn (array $l) => [$l['id'] => ['level' => $l['level']]]));
-
-            $employee->details()->updateOrCreate([], Arr::only($data, (new UserDetail)->getFillable()));
-
-            $employee->children()->delete();
-            $employee->children()->createMany(array_map(
-                fn (array $child) => ['full_name' => $child['full_name'], 'birth_date' => $child['birth_date'] ?? null],
-                $data['children'],
-            ));
-
-            $employee->educations()->delete();
-            $employee->educations()->createMany($data['educations']);
-
-            $employee->workExperiences()->delete();
-            $employee->workExperiences()->createMany($data['work_experiences']);
-
-            // Rows are replaced wholesale, so the old ones go first and free
-            // their inventory numbers for the incoming set.
-            $employee->equipment()->delete();
-            $employee->equipment()->createMany($data['equipment']);
-        });
-
-        return to_route('employees.show', $employee);
     }
 
     /**
@@ -692,6 +609,9 @@ class EmployeeController extends Controller
             'sos_phone' => $details?->sos_phone,
             'sos_contact' => $details?->sos_contact,
             'marital_status' => $details?->marital_status,
+            'spouse_name' => $details?->spouse_name,
+            'spouse_birth_date' => $details?->spouse_birth_date?->toDateString(),
+            'has_children' => $details?->has_children,
             'hired_at' => $details?->hired_at?->toDateString(),
             'children' => $user->children->map(fn ($child) => [
                 'full_name' => $child->full_name,

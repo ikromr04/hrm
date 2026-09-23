@@ -62,6 +62,18 @@ class UserDetailFactory extends Factory
                 $details->nationality = $details->user->sex === 'female' ? $female : $male;
             }
 
+            // The spouse is of the other sex and shares the surname, which in
+            // Russian gains or drops its feminine "а" accordingly.
+            if ($details->spouse_name === null && $details->marital_status === 'married' && $details->user) {
+                $wife = $details->user->sex === 'male';
+                $surname = $wife
+                    ? $details->user->surname.'а'
+                    : rtrim($details->user->surname, 'а');
+
+                $details->spouse_name = $surname.' '.fake()->randomElement($wife ? self::FEMALE_NAMES : self::MALE_NAMES);
+                $details->spouse_birth_date = fake()->dateTimeBetween('-58 years', '-22 years');
+            }
+
             if ($details->sos_contact === null && $details->user) {
                 $married = $details->marital_status === 'married';
                 $relation = fake()->randomElement($married

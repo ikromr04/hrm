@@ -29,6 +29,14 @@ return new class extends Migration
             $table->string('passport_issued_by')->nullable();
 
             $table->enum('marital_status', ['single', 'married'])->nullable();
+            // There is at most one spouse, so they sit here rather than in a
+            // table of their own like the children.
+            $table->string('spouse_name', 150)->nullable();
+            $table->date('spouse_birth_date')->nullable();
+            // Three states: null while nobody has filled the card in, false once
+            // HR states there are none, true alongside rows in user_children.
+            // An empty list alone cannot tell "none" from "not asked yet".
+            $table->boolean('has_children')->nullable();
 
             $table->string('home_address')->nullable();
             $table->string('phone', 32)->nullable();
