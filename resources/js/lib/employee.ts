@@ -64,6 +64,29 @@ export interface Education {
     diploma_number: string | null;
 }
 
+/** A previous job, known to the month; private. */
+export interface WorkExperience {
+    organization: string;
+    position: string;
+    country: string;
+    started_month: number;
+    started_year: number;
+    /** Both null while the person still works there. */
+    ended_month: number | null;
+    ended_year: number | null;
+}
+
+export const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+/** "3 года 4 мес." between two months, the end month not counted. */
+export function monthsSpan(fromYear: number, fromMonth: number, toYear: number, toMonth: number): string {
+    const months = Math.max(1, toYear * 12 + toMonth - (fromYear * 12 + fromMonth));
+    const years = Math.floor(months / 12);
+    const rest = months % 12;
+
+    return [years > 0 && `${years} ${plural(years, ['год', 'года', 'лет'])}`, rest > 0 && `${rest} мес.`].filter(Boolean).join(' ');
+}
+
 export type LanguageLevel = 'beginner' | 'intermediate' | 'advanced';
 
 /** From least to most fluent. */

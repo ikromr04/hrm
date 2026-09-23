@@ -136,4 +136,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserEducation::class)->orderBy('started_year')->orderBy('id');
     }
+
+    /**
+     * Previous jobs, the latest first; private, like details.
+     */
+    public function workExperiences(): HasMany
+    {
+        return $this->hasMany(UserWorkExperience::class)->orderByDesc('started_year')->orderByDesc('started_month')->orderByDesc('id');
+    }
 }

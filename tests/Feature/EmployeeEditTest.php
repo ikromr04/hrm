@@ -44,6 +44,7 @@ class EmployeeEditTest extends TestCase
             'languages' => [],
             'children' => [],
             'educations' => [],
+            'work_experiences' => [],
             ...$overrides,
         ];
     }
@@ -111,6 +112,10 @@ class EmployeeEditTest extends TestCase
                     ['institution' => 'ТНУ', 'faculty' => 'Экономический', 'specialty' => 'Финансы', 'started_year' => '2010', 'graduated_year' => '2015', 'diploma_number' => 'AB 123456'],
                     ['institution' => 'Курсы', 'faculty' => 'Бухгалтерия', 'specialty' => 'Бухучёт', 'started_year' => '2024', 'graduated_year' => '', 'diploma_number' => ''],
                 ],
+                'work_experiences' => [
+                    ['organization' => 'ООО «Шифобахш»', 'position' => 'Фармацевт', 'country' => 'Таджикистан', 'started_month' => '3', 'started_year' => '2015', 'ended_month' => '6', 'ended_year' => '2018'],
+                    ['organization' => 'ТОО «Европа-Фарм»', 'position' => 'Аналитик', 'country' => 'Казахстан', 'started_month' => '9', 'started_year' => '2018', 'ended_month' => '', 'ended_year' => ''],
+                ],
             ]))
             ->assertSessionHasNoErrors()
             ->assertRedirect("/employees/{$employee->id}");
@@ -127,6 +132,11 @@ class EmployeeEditTest extends TestCase
         $this->assertSame('+992935554433', $employee->details->sos_phone);
         $this->assertSame('Сестра — Мехринисо', $employee->details->sos_contact);
         $this->assertSame(['Каримов Далер'], $employee->children()->pluck('full_name')->all());
+        // The latest job first.
+        $this->assertSame(
+            [['ТОО «Европа-Фарм»', 'Аналитик', 'Казахстан', 9, 2018, null, null], ['ООО «Шифобахш»', 'Фармацевт', 'Таджикистан', 3, 2015, 6, 2018]],
+            $employee->workExperiences->map(fn ($w) => [$w->organization, $w->position, $w->country, $w->started_month, $w->started_year, $w->ended_month, $w->ended_year])->all(),
+        );
         $this->assertSame(
             [['ТНУ', 'Экономический', 'Финансы', 2010, 2015, 'AB 123456'], ['Курсы', 'Бухгалтерия', 'Бухучёт', 2024, null, null]],
             $employee->educations->map(fn ($e) => [$e->institution, $e->faculty, $e->specialty, $e->started_year, $e->graduated_year, $e->diploma_number])->all(),
@@ -151,8 +161,16 @@ class EmployeeEditTest extends TestCase
                 'birth_date' => now()->addDay()->toDateString(),
                 'children' => [['full_name' => '']],
                 'educations' => [['institution' => '', 'specialty' => 'X', 'started_year' => '2020', 'graduated_year' => '2018']],
+                'work_experiences' => [
+                    ['organization' => 'X', 'position' => 'Y', 'country' => '', 'started_month' => '5', 'started_year' => '2020', 'ended_month' => '4', 'ended_year' => '2020'],
+                    ['organization' => 'X', 'position' => 'Y', 'country' => 'Z', 'started_month' => '13', 'started_year' => '2020', 'ended_month' => '4', 'ended_year' => ''],
+                ],
             ]))
-            ->assertSessionHasErrors(['surname', 'email', 'roles.0', 'phone', 'birth_date', 'children.0.full_name', 'educations.0.institution', 'educations.0.graduated_year']);
+            ->assertSessionHasErrors([
+                'surname', 'email', 'roles.0', 'phone', 'birth_date', 'children.0.full_name', 'educations.0.institution', 'educations.0.graduated_year',
+                // Left before joining; a month that does not exist; an end month without a year.
+                'work_experiences.0.country', 'work_experiences.0.ended_year', 'work_experiences.1.started_month', 'work_experiences.1.ended_year',
+            ]);
     }
 
     public function test_an_admin_cannot_drop_their_own_admin_role()

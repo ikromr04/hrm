@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
+use App\Models\UserWorkExperience;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +71,7 @@ class EmployeeProfileTest extends TestCase
         $user = User::factory()->has(UserDetail::factory(), 'details')->create();
         UserChild::factory(2)->for($user)->create();
         UserEducation::factory()->for($user)->create();
+        UserWorkExperience::factory()->for($user)->create(['organization' => 'ООО «Шифобахш»']);
 
         $this->actingAs($user)
             ->get("/employees/{$user->id}")
@@ -81,6 +83,7 @@ class EmployeeProfileTest extends TestCase
                 ->has('employee.private.children', 2)
                 ->has('employee.private.educations', 1)
                 ->where('employee.private.educations.0.institution', $user->educations->first()->institution)
+                ->where('employee.private.work_experiences.0.organization', 'ООО «Шифобахш»')
             );
     }
 

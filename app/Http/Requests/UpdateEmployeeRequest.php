@@ -92,6 +92,16 @@ class UpdateEmployeeRequest extends FormRequest
             'educations.*.started_year' => ['required', 'integer', 'min:1950', 'max:'.date('Y')],
             'educations.*.graduated_year' => ['nullable', 'integer', 'gte:educations.*.started_year', 'max:'.(date('Y') + 10)],
             'educations.*.diploma_number' => ['nullable', 'string', 'max:50'],
+
+            'work_experiences' => ['present', 'array', 'max:20'],
+            'work_experiences.*.organization' => ['required', 'string', 'max:200'],
+            'work_experiences.*.position' => ['required', 'string', 'max:150'],
+            'work_experiences.*.country' => ['required', 'string', 'max:100'],
+            'work_experiences.*.started_month' => ['required', 'integer', 'between:1,12'],
+            'work_experiences.*.started_year' => ['required', 'integer', 'min:1950', 'max:'.date('Y')],
+            // Both empty while the person still works there.
+            'work_experiences.*.ended_month' => ['nullable', 'required_with:work_experiences.*.ended_year', 'integer', 'between:1,12'],
+            'work_experiences.*.ended_year' => ['nullable', 'required_with:work_experiences.*.ended_month', 'integer', 'min:1950', 'max:'.date('Y')],
         ];
     }
 
@@ -127,6 +137,25 @@ class UpdateEmployeeRequest extends FormRequest
 
             if ($hadAdmin && ! $keepsAdmin && $employee->is($this->user())) {
                 $validator->errors()->add('roles', 'Нельзя снять с себя роль администратора.');
+            }
+        }, function ($validator) {
+            // Months counted from year 0, so a job's dates compare as plain numbers.
+            $month = fn ($year, $m) => is_numeric($year) && is_numeric($m) ? (int) $year * 12 + (int) $m : null;
+            $now = (int) date('Y') * 12 + (int) date('n');
+
+            foreach ((array) $this->input('work_experiences', []) as $i => $job) {
+                $start = $month($job['started_year'] ?? null, $job['started_month'] ?? null);
+                $end = $month($job['ended_year'] ?? null, $job['ended_month'] ?? null);
+
+                if ($start !== null && $start > $now) {
+                    $validator->errors()->add("work_experiences.{$i}.started_year", 'Дата вступления не может быть в будущем.');
+                }
+                if ($end !== null && $end > $now) {
+                    $validator->errors()->add("work_experiences.{$i}.ended_year", 'Дата ухода не может быть в будущем.');
+                }
+                if ($start !== null && $end !== null && $end < $start) {
+                    $validator->errors()->add("work_experiences.{$i}.ended_year", 'Дата ухода раньше даты вступления.');
+                }
             }
         }];
     }
@@ -169,6 +198,13 @@ class UpdateEmployeeRequest extends FormRequest
             'educations.*.started_year' => 'год поступления',
             'educations.*.graduated_year' => 'год окончания',
             'educations.*.diploma_number' => 'номер диплома',
+            'work_experiences.*.organization' => 'организация',
+            'work_experiences.*.position' => 'должность',
+            'work_experiences.*.country' => 'страна',
+            'work_experiences.*.started_month' => 'месяц вступления',
+            'work_experiences.*.started_year' => 'год вступления',
+            'work_experiences.*.ended_month' => 'месяц ухода',
+            'work_experiences.*.ended_year' => 'год ухода',
         ];
     }
 

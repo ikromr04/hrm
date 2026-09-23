@@ -12,12 +12,15 @@ import {
     formatPhone,
     languageLevelLabels,
     maritalLabels,
+    monthNames,
+    monthsSpan,
     sexLabels,
     tenure,
     type Education,
     type PrivateDetails,
     type Sex,
     type SpokenLanguage,
+    type WorkExperience,
 } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
@@ -27,6 +30,8 @@ import { useEffect, type ReactNode } from 'react';
 
 interface ProfilePrivate extends PrivateDetails {
     educations: (Education & { id: number })[];
+    /** The latest first. */
+    work_experiences: (WorkExperience & { id: number })[];
     birth_place: string | null;
     passport: { series: string | null; number: string | null; issued_at: string | null; issued_by: string | null };
 }
@@ -122,6 +127,31 @@ function Educations({ items }: { items: ProfilePrivate['educations'] }) {
                         {studyYears(education)}
                         {education.diploma_number && ` · диплом № ${education.diploma_number}`}
                     </span>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+/** "Март 2018 — Июнь 2021 · 3 года 3 мес." */
+function workPeriod(job: WorkExperience): string {
+    const now = new Date();
+    const [endYear, endMonth] = job.ended_year && job.ended_month ? [job.ended_year, job.ended_month] : [now.getFullYear(), now.getMonth() + 1];
+    const end = job.ended_year && job.ended_month ? `${monthNames[job.ended_month - 1]} ${job.ended_year}` : 'по настоящее время';
+
+    return `${monthNames[job.started_month - 1]} ${job.started_year} — ${end} · ${monthsSpan(job.started_year, job.started_month, endYear, endMonth)}`;
+}
+
+function WorkExperiences({ items }: { items: ProfilePrivate['work_experiences'] }) {
+    return (
+        <ul className="flex flex-col">
+            {items.map((job) => (
+                <li key={job.id} className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                    <span className="text-sm font-medium">{job.position}</span>
+                    <span className="text-sm">
+                        {job.organization} · {job.country}
+                    </span>
+                    <span className="text-muted-foreground text-[13px] tabular-nums">{workPeriod(job)}</span>
                 </li>
             ))}
         </ul>
@@ -281,6 +311,14 @@ export default function EmployeeProfile({ employee, neighbours }: { employee: Em
                                     <p className="text-muted-foreground text-sm">Не указано</p>
                                 ) : (
                                     <Educations items={details.educations} />
+                                )}
+                            </Section>
+
+                            <Section title="Трудовая деятельность">
+                                {details.work_experiences.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">Не указана</p>
+                                ) : (
+                                    <WorkExperiences items={details.work_experiences} />
                                 )}
                             </Section>
                         </div>

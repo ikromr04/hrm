@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
+use App\Models\UserWorkExperience;
 use Illuminate\Database\Seeder;
 
 class UserSeeder extends Seeder
@@ -81,6 +82,37 @@ class UserSeeder extends Seeder
         $this->assignLanguages();
         $this->addChildren();
         $this->addEducation();
+        $this->addWorkExperience();
+    }
+
+    /**
+     * About two in three worked somewhere before joining: one or two jobs
+     * between their studies and their start date here.
+     */
+    private function addWorkExperience(): void
+    {
+        User::doesntHave('workExperiences')->with(['details', 'educations'])->get()->each(function (User $user) {
+            $hired = $user->details?->hired_at;
+            $from = $user->educations->min('graduated_year') ?? ($user->details?->birth_date?->year ?? 1990) + 22;
+
+            if (! $hired || ! fake()->boolean(65) || $from >= $hired->year - 1) {
+                return;
+            }
+
+            $year = $from;
+            $month = fake()->numberBetween(6, 10);
+
+            foreach (range(1, fake()->numberBetween(1, 2)) as $ignored) {
+                if ($year * 12 + $month >= $hired->year * 12 + $hired->month - 12) {
+                    break;
+                }
+
+                $job = UserWorkExperience::factory()->for($user)->between($year, $month, $hired->year, $hired->month)->create();
+                // The next job starts a month or a few after this one ends.
+                $next = $job->ended_year * 12 + $job->ended_month + fake()->numberBetween(1, 4) - 1;
+                [$year, $month] = [intdiv($next, 12), $next % 12 + 1];
+            }
+        });
     }
 
     /**

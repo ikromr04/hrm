@@ -13,6 +13,7 @@ import {
     languageLevelLabels,
     languageLevels,
     maritalLabels,
+    monthNames,
     sexLabels,
     type LanguageLevel,
     type Marital,
@@ -53,6 +54,8 @@ type EmployeeForm = {
     /** Every field as text; years are parsed on the server. */
     educations: Record<'institution' | 'faculty' | 'specialty' | 'started_year' | 'graduated_year' | 'diploma_number', string>[];
     languages: { id: number; level: LanguageLevel }[];
+    /** Every field as text; empty end month and year mean "still works there". */
+    work_experiences: Record<'organization' | 'position' | 'country' | 'started_month' | 'started_year' | 'ended_month' | 'ended_year', string>[];
 };
 
 interface Props {
@@ -64,6 +67,8 @@ interface Props {
         nationalities: string[];
         citizenships: string[];
         languages: { id: number; name: string }[];
+        /** Countries already used, as suggestions. */
+        countries: string[];
     };
 }
 
@@ -124,6 +129,7 @@ export default function EditEmployee({ employee, options }: Props) {
         children: employee.children,
         educations: employee.educations,
         languages: employee.languages,
+        work_experiences: employee.work_experiences,
     });
 
     const { data, setData, processing } = form;
@@ -150,6 +156,14 @@ export default function EditEmployee({ employee, options }: Props) {
             data.educations.map((education, i) => (i === index ? { ...education, ...patch } : education)),
         );
     const emptyEducation = { institution: '', faculty: '', specialty: '', started_year: '', graduated_year: '', diploma_number: '' };
+
+    const setJob = (index: number, patch: Partial<EmployeeForm['work_experiences'][number]>) =>
+        setData(
+            'work_experiences',
+            data.work_experiences.map((job, i) => (i === index ? { ...job, ...patch } : job)),
+        );
+    const emptyJob = { organization: '', position: '', country: '', started_month: '', started_year: '', ended_month: '', ended_year: '' };
+    const countrySuggestions = [...new Set(['Таджикистан', ...options.countries])];
 
     const setChild = (index: number, patch: Partial<EmployeeForm['children'][number]>) =>
         setData(
@@ -597,6 +611,151 @@ export default function EditEmployee({ employee, options }: Props) {
                         >
                             <Plus />
                             Добавить образование
+                        </Button>
+                    </Section>
+
+                    <Section title="Трудовая деятельность" className="lg:col-span-3">
+                        {data.work_experiences.length === 0 && <p className="text-muted-foreground text-sm">Не указана</p>}
+                        <datalist id="work-countries">
+                            {countrySuggestions.map((country) => (
+                                <option key={country} value={country} />
+                            ))}
+                        </datalist>
+                        {data.work_experiences.map((job, index) => {
+                            const error = (field: string) => errors[`work_experiences.${index}.${field}`];
+
+                            return (
+                                <div key={index} className="flex items-start gap-2 border-t pt-4 first-of-type:border-t-0 first-of-type:pt-0">
+                                    <div className="grid flex-1 gap-x-4 gap-y-3 md:grid-cols-3 xl:grid-cols-[2fr_1.5fr_1fr_13rem_13rem]">
+                                        <Field label="Организация" error={error('organization')}>
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    required
+                                                    value={job.organization}
+                                                    onChange={(e) => setJob(index, { organization: e.target.value })}
+                                                />
+                                            )}
+                                        </Field>
+                                        <Field label="Должность" error={error('position')}>
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    required
+                                                    value={job.position}
+                                                    onChange={(e) => setJob(index, { position: e.target.value })}
+                                                />
+                                            )}
+                                        </Field>
+                                        <Field label="Страна" error={error('country')}>
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    required
+                                                    list="work-countries"
+                                                    value={job.country}
+                                                    onChange={(e) => setJob(index, { country: e.target.value })}
+                                                />
+                                            )}
+                                        </Field>
+                                        <Field label="Вступление" error={error('started_month') ?? error('started_year')}>
+                                            {(id) => (
+                                                <div className="grid grid-cols-[1fr_5.5rem] gap-2">
+                                                    <Select
+                                                        value={job.started_month}
+                                                        onValueChange={(value) => setJob(index, { started_month: value })}
+                                                    >
+                                                        <SelectTrigger id={id} aria-label="Месяц вступления">
+                                                            <SelectValue placeholder="Месяц" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {monthNames.map((name, m) => (
+                                                                <SelectItem key={name} value={String(m + 1)}>
+                                                                    {name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Input
+                                                        type="number"
+                                                        inputMode="numeric"
+                                                        aria-label="Год вступления"
+                                                        placeholder="Год"
+                                                        min={1950}
+                                                        max={new Date().getFullYear()}
+                                                        required
+                                                        value={job.started_year}
+                                                        onChange={(e) => setJob(index, { started_year: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </Field>
+                                        <Field label="Уход" error={error('ended_month') ?? error('ended_year')}>
+                                            {(id) => (
+                                                <div className="grid grid-cols-[1fr_5.5rem] gap-2">
+                                                    <Select
+                                                        value={job.ended_month || 'none'}
+                                                        onValueChange={(value) =>
+                                                            setJob(
+                                                                index,
+                                                                value === 'none' ? { ended_month: '', ended_year: '' } : { ended_month: value },
+                                                            )
+                                                        }
+                                                    >
+                                                        <SelectTrigger id={id} aria-label="Месяц ухода">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">Работает сейчас</SelectItem>
+                                                            {monthNames.map((name, m) => (
+                                                                <SelectItem key={name} value={String(m + 1)}>
+                                                                    {name}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Input
+                                                        type="number"
+                                                        inputMode="numeric"
+                                                        aria-label="Год ухода"
+                                                        placeholder="Год"
+                                                        min={1950}
+                                                        max={new Date().getFullYear()}
+                                                        disabled={!job.ended_month}
+                                                        required={!!job.ended_month}
+                                                        value={job.ended_year}
+                                                        onChange={(e) => setJob(index, { ended_year: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </Field>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground mt-6 shrink-0"
+                                        aria-label="Убрать место работы"
+                                        onClick={() =>
+                                            setData(
+                                                'work_experiences',
+                                                data.work_experiences.filter((_, i) => i !== index),
+                                            )
+                                        }
+                                    >
+                                        <Trash2 />
+                                    </Button>
+                                </div>
+                            );
+                        })}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="self-start"
+                            onClick={() => setData('work_experiences', [...data.work_experiences, emptyJob])}
+                        >
+                            <Plus />
+                            Добавить место работы
                         </Button>
                     </Section>
                 </div>

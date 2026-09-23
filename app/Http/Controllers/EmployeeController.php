@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
+use App\Models\UserWorkExperience;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -183,7 +184,7 @@ class EmployeeController extends Controller
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
 
         if ($canSeePrivate) {
-            $employee->load(['details', 'children', 'educations']);
+            $employee->load(['details', 'children', 'educations', 'workExperiences']);
         }
 
         return Inertia::render('employees/show', [
@@ -212,6 +213,7 @@ class EmployeeController extends Controller
                         'issued_by' => $employee->details?->passport_issued_by,
                     ],
                     'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
+                    'work_experiences' => $employee->workExperiences->map(fn (UserWorkExperience $w) => $this->workExperience($w))->all(),
                 ] : null,
             ],
             'neighbours' => $this->neighbours($employee),
@@ -253,7 +255,7 @@ class EmployeeController extends Controller
 
     public function edit(User $employee): Response
     {
-        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children', 'educations']);
+        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children', 'educations', 'workExperiences']);
         $details = $employee->details;
 
         return Inertia::render('employees/edit', [
@@ -292,6 +294,9 @@ class EmployeeController extends Controller
                 'educations' => $employee->educations
                     ->map(fn (UserEducation $e) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->education($e), 'id')))
                     ->all(),
+                'work_experiences' => $employee->workExperiences
+                    ->map(fn (UserWorkExperience $w) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->workExperience($w), 'id')))
+                    ->all(),
             ],
             'options' => [
                 'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
@@ -300,6 +305,7 @@ class EmployeeController extends Controller
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
                 'nationalities' => $this->distinctDetail('nationality'),
                 'citizenships' => $this->distinctDetail('citizenship'),
+                'countries' => UserWorkExperience::query()->distinct()->orderBy('country')->pluck('country'),
             ],
         ]);
     }
@@ -327,6 +333,9 @@ class EmployeeController extends Controller
 
             $employee->educations()->delete();
             $employee->educations()->createMany($data['educations']);
+
+            $employee->workExperiences()->delete();
+            $employee->workExperiences()->createMany($data['work_experiences']);
         });
 
         return to_route('employees.show', $employee);
@@ -599,6 +608,23 @@ class EmployeeController extends Controller
             ->map(fn (Language $l) => ['id' => $l->id, 'name' => $l->name, 'level' => $l->pivot->level])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function workExperience(UserWorkExperience $job): array
+    {
+        return [
+            'id' => $job->id,
+            'organization' => $job->organization,
+            'position' => $job->position,
+            'country' => $job->country,
+            'started_month' => $job->started_month,
+            'started_year' => $job->started_year,
+            'ended_month' => $job->ended_month,
+            'ended_year' => $job->ended_year,
+        ];
     }
 
     /**
