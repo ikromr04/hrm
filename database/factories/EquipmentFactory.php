@@ -38,6 +38,21 @@ class EquipmentFactory extends Factory
         ],
     ];
 
+    /** @var list<string> */
+    private const PROCESSORS = ['Intel Core i5-1335U', 'Intel Core i5-1235U', 'Intel Core i7-1255U', 'AMD Ryzen 5 5625U', 'AMD Ryzen 7 5825U'];
+
+    /** @var list<string> */
+    private const MEMORY = ['8 ГБ / SSD 256 ГБ', '16 ГБ / SSD 512 ГБ', '16 ГБ / SSD 1 ТБ', '32 ГБ / SSD 1 ТБ'];
+
+    /** What comes in the box with each kind of hardware. */
+    private const ACCESSORIES = [
+        'Ноутбуки' => ['Блок питания 65 Вт', 'Сумка', 'Мышь Logitech M185'],
+        'Мониторы' => ['Кабель HDMI', 'Кабель питания', 'Подставка'],
+        'Телефоны' => ['Зарядное устройство', 'Чехол'],
+        'Печать' => ['Кабель USB', 'Стартовый тонер'],
+        'Периферия' => ['Кабель USB'],
+    ];
+
     /**
      * Define the model's default state.
      *
@@ -45,12 +60,21 @@ class EquipmentFactory extends Factory
      */
     public function definition(): array
     {
+        $purchased = fake()->dateTimeBetween('-6 years', '-2 months');
+
         return [
             'equipment_type_id' => EquipmentType::factory(),
             'name' => fake()->words(2, true),
             'maker' => null,
             'serial_number' => strtoupper(fake()->bothify('#?#?#?#')),
             'inventory_number' => 'EV-'.fake()->unique()->numerify('####'),
+            'purchased_at' => $purchased,
+            'price' => fake()->numberBetween(4, 180) * 50,
+            // Two or three years of cover from the day it was bought.
+            'warranty_until' => (clone $purchased)->modify('+'.fake()->numberBetween(2, 3).' years'),
+            'condition' => fake()->randomElement(['Рабочее, без повреждений', 'Рабочее, следы эксплуатации', 'Новое, в упаковке']),
+            'checked_at' => fake()->dateTimeBetween('-8 months', 'now'),
+            'next_inventory_at' => fake()->dateTimeBetween('+2 months', '+14 months'),
             'status' => 'stock',
         ];
     }
@@ -69,6 +93,11 @@ class EquipmentFactory extends Factory
                 'equipment_type_id' => $type->id,
                 'name' => trim("{$kind} {$maker} {$model}"),
                 'maker' => $maker,
+                'model' => $model,
+                // Only computers have any of this worth writing down.
+                'processor' => $type->name === 'Ноутбуки' ? fake()->randomElement(self::PROCESSORS) : null,
+                'memory' => $type->name === 'Ноутбуки' ? fake()->randomElement(self::MEMORY) : null,
+                'accessories' => self::ACCESSORIES[$type->name] ?? [],
             ];
         });
     }

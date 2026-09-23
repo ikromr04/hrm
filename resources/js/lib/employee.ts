@@ -87,6 +87,7 @@ export interface WorkExperience {
  * equipment section.
  */
 export interface Equipment {
+    id: number;
     name: string;
     maker: string | null;
     serial_number: string | null;

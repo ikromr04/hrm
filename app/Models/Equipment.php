@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Database\Factories\EquipmentFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * One unit of company hardware, identified by its inventory number. It belongs
@@ -31,8 +34,18 @@ class Equipment extends Model
         'equipment_type_id',
         'name',
         'maker',
+        'model',
         'serial_number',
         'inventory_number',
+        'processor',
+        'memory',
+        'purchased_at',
+        'price',
+        'warranty_until',
+        'condition',
+        'checked_at',
+        'next_inventory_at',
+        'accessories',
         'status',
         'holder_user_id',
         'holder_department_id',
@@ -50,7 +63,48 @@ class Equipment extends Model
         return [
             'issued_at' => 'date',
             'written_off_at' => 'date',
+            'purchased_at' => 'date',
+            'warranty_until' => 'date',
+            'checked_at' => 'date',
+            'next_inventory_at' => 'date',
+            'price' => 'decimal:2',
+            'accessories' => 'array',
         ];
+    }
+
+    /**
+     * Whether the cover has run out; a unit with no warranty date never had any.
+     */
+    protected function warrantyExpired(): Attribute
+    {
+        return Attribute::get(fn (): bool => $this->warranty_until !== null && $this->warranty_until->isPast());
+    }
+
+    /**
+     * Where the unit has been, the spell it is in now first.
+     */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(EquipmentAssignment::class)->orderByDesc('issued_at')->orderByDesc('id');
+    }
+
+    /**
+     * The spell it is in now: with somebody, or in stock. Null before the first
+     * handover, for units added and never moved.
+     */
+    public function currentAssignment(): HasOne
+    {
+        return $this->hasOne(EquipmentAssignment::class)->open()->latestOfMany('issued_at');
+    }
+
+    public function repairs(): HasMany
+    {
+        return $this->hasMany(EquipmentRepair::class)->orderByDesc('started_at')->orderByDesc('id');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(EquipmentDocument::class)->orderByDesc('id');
     }
 
     public function type(): BelongsTo

@@ -26,8 +26,26 @@ return new class extends Migration
 
             $table->string('name', 200);
             $table->string('maker', 100)->nullable();
+            $table->string('model', 100)->nullable();
             $table->string('serial_number', 100)->nullable();
             $table->string('inventory_number', 50)->unique();
+
+            // What is inside it, for the card's "Характеристики".
+            $table->string('processor', 100)->nullable();
+            $table->string('memory', 100)->nullable();
+
+            // What it cost the company and how long it is covered for.
+            $table->date('purchased_at')->nullable();
+            $table->decimal('price', 12, 2)->nullable();
+            $table->date('warranty_until')->nullable();
+
+            // The state it was last seen in, and when it is due to be looked at again.
+            $table->string('condition', 200)->nullable();
+            $table->date('checked_at')->nullable();
+            $table->date('next_inventory_at')->nullable();
+
+            // What comes with it: "Блок питания 65 Вт", "Сумка", a bag of labels.
+            $table->json('accessories')->nullable();
 
             $table->enum('status', ['issued', 'stock', 'repair', 'written_off'])->default('stock')->index();
 
@@ -41,6 +59,56 @@ return new class extends Migration
 
             $table->timestamps();
         });
+
+        // Where a unit has been: one row per spell with somebody, the open one
+        // being where it is now. A row with no holder is a spell in stock, so
+        // the card's history reads "Фарход Рахимов", then "Склад", and so on.
+        Schema::create('equipment_assignments', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('equipment_id')->constrained()->cascadeOnDelete();
+
+            $table->foreignId('holder_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('holder_department_id')->nullable()->constrained('departments')->nullOnDelete();
+
+            $table->date('issued_at');
+            $table->date('returned_at')->nullable();
+            // Filled in when it comes back: "Новое, в упаковке", "Царапина на крышке".
+            $table->string('condition_on_return', 200)->nullable();
+            // The paper that went with the handover, "№ 214-1".
+            $table->string('act_number', 50)->nullable();
+
+            $table->timestamps();
+        });
+
+        // Every visit to a repair shop, planned maintenance included.
+        Schema::create('equipment_repairs', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('equipment_id')->constrained()->cascadeOnDelete();
+
+            $table->string('kind', 150);
+            $table->date('started_at');
+            // Still away while this is empty.
+            $table->date('ended_at')->nullable();
+            $table->string('contractor', 150)->nullable();
+            $table->decimal('cost', 12, 2)->nullable();
+            $table->string('note', 200)->nullable();
+
+            $table->timestamps();
+        });
+
+        // Scans kept with the unit: handover acts, invoices, warranty cards.
+        Schema::create('equipment_documents', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('equipment_id')->constrained()->cascadeOnDelete();
+
+            $table->string('title', 150);
+            $table->string('path');
+            $table->string('extension', 10)->nullable();
+            // What the date under the name means is up to whoever uploaded it.
+            $table->string('note', 100)->nullable();
+
+            $table->timestamps();
+        });
     }
 
     /**
@@ -48,6 +116,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('equipment_documents');
+        Schema::dropIfExists('equipment_repairs');
+        Schema::dropIfExists('equipment_assignments');
         Schema::dropIfExists('equipment');
         Schema::dropIfExists('equipment_types');
     }

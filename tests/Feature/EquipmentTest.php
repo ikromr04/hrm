@@ -11,6 +11,8 @@ use Database\Seeders\EquipmentTypeSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -220,13 +222,261 @@ class EquipmentTest extends TestCase
         $unit = Equipment::factory()->ofType($this->type())->create();
 
         $this->actingAs($this->admin())
-            ->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $employee->id, 'issued_at' => '2026-03-14'])
+            ->post("/equipment/{$unit->id}/issue", [
+                'holder_user_id' => $employee->id,
+                'issued_at' => '2026-03-14',
+                'act_number' => '№ 214-1',
+            ])
             ->assertSessionHasNoErrors();
 
         $unit->refresh();
         $this->assertSame('issued', $unit->status);
         $this->assertSame($employee->id, $unit->holder_user_id);
         $this->assertSame('2026-03-14', $unit->issued_at->toDateString());
+
+        // The handover is written into the unit's history, act and all.
+        $spell = $unit->currentAssignment;
+        $this->assertSame($employee->id, $spell->holder_user_id);
+        $this->assertSame('№ 214-1', $spell->act_number);
+        $this->assertNull($spell->returned_at);
+    }
+
+    public function test_the_history_closes_one_spell_before_it_opens_the_next()
+    {
+        $first = User::factory()->create();
+        $second = User::factory()->create();
+        $unit = Equipment::factory()->ofType($this->type())->create();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $first->id, 'issued_at' => '2026-01-10']);
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке']);
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $second->id, 'issued_at' => '2026-03-14']);
+
+        // With the first colleague, on the shelf between them, then with the
+        // second. The relation reads newest first; here the order of events is
+        // what matters, so the sort is replaced rather than added to.
+        $spells = $unit->assignments()->reorder('id')->get();
+        $this->assertCount(3, $spells);
+        $this->assertSame($first->id, $spells[0]->holder_user_id);
+        $this->assertSame('Царапина на крышке', $spells[0]->condition_on_return);
+        $this->assertNull($spells[1]->holder_user_id);
+        $this->assertNotNull($spells[1]->returned_at);
+        $this->assertSame($second->id, $spells[2]->holder_user_id);
+        $this->assertNull($spells[2]->returned_at);
+
+        // What came back is also what the card now says about its state.
+        $this->assertSame('Царапина на крышке', $unit->fresh()->condition);
+    }
+
+    public function test_the_card_shows_the_unit_its_history_and_its_repairs()
+    {
+        $employee = User::factory()->create(['surname' => 'Рахимов']);
+        $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create([
+            'name' => 'Ноутбук Dell Latitude 5440',
+            'processor' => 'Intel Core i5-1335U',
+            'warranty_until' => '2024-03-05',
+            'accessories' => ['Блок питания 65 Вт', 'Сумка'],
+        ]);
+        $unit->assignments()->create(['holder_user_id' => $employee->id, 'issued_at' => '2021-03-12', 'act_number' => '№ 214-1']);
+        $unit->repairs()->create(['kind' => 'Замена аккумулятора', 'started_at' => '2024-11-02', 'ended_at' => '2024-11-06']);
+
+        $this->actingAs($this->admin())
+            ->get("/equipment/{$unit->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('equipment/show')
+                ->where('unit.name', 'Ноутбук Dell Latitude 5440')
+                ->where('unit.processor', 'Intel Core i5-1335U')
+                // The cover ran out in 2024, so the card says so.
+                ->where('unit.warranty_expired', true)
+                ->where('unit.accessories.1', 'Сумка')
+                ->where('unit.act_number', '№ 214-1')
+                ->has('assignments', 1)
+                ->has('repairs', 1)
+                ->has('documents', 0)
+            );
+    }
+
+    public function test_the_card_points_at_the_units_either_side_of_it()
+    {
+        $first = Equipment::factory()->ofType($this->type())->create(['name' => 'Монитор Dell P2422H']);
+        $middle = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук Acer Aspire 5']);
+        $last = Equipment::factory()->ofType($this->type())->create(['name' => 'Телефон Xiaomi Redmi 12']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->get("/equipment/{$middle->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('neighbours.prev.name', $first->name)
+                ->where('neighbours.next.name', $last->name)
+            );
+
+        // At either end of the list there is nowhere further to go.
+        $this->actingAs($admin)
+            ->get("/equipment/{$first->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('neighbours.prev', null)
+                ->where('neighbours.next.name', $middle->name)
+            );
+    }
+
+    public function test_walking_the_fleet_stays_within_one_status()
+    {
+        $holder = User::factory()->create();
+        // In stock either side of the one that is out, and one more in repair.
+        Equipment::factory()->ofType($this->type())->create(['name' => 'А, на складе']);
+        $issued = Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Б, выдан']);
+        Equipment::factory()->ofType($this->type())->create(['name' => 'В, на складе']);
+        Equipment::factory()->ofType($this->type())->inRepair()->create(['name' => 'Г, в ремонте']);
+
+        $later = Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Я, тоже выдан']);
+
+        $this->actingAs($this->admin())
+            ->get("/equipment/{$issued->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                // Nothing issued comes before it, whatever sits there in stock.
+                ->where('neighbours.prev', null)
+                ->where('neighbours.next.name', $later->name)
+            );
+    }
+
+    public function test_the_card_blocks_are_edited_one_at_a_time()
+    {
+        $unit = Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0421']);
+        $taken = Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0999']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->put("/equipment/{$unit->id}/specs", [
+                'equipment_type_id' => $this->type('Мониторы')->id,
+                'name' => 'Монитор Dell P2422H',
+                'maker' => 'Dell',
+                'model' => 'P2422H',
+                'inventory_number' => 'EV-0421',
+                'price' => 1450,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $unit->refresh();
+        $this->assertSame('Монитор Dell P2422H', $unit->name);
+        $this->assertSame('P2422H', $unit->model);
+        $this->assertSame($this->type('Мониторы')->id, $unit->equipment_type_id);
+        // Its own number is not a clash with itself.
+        $this->assertSame('EV-0421', $unit->inventory_number);
+
+        // Somebody else's number still is.
+        $this->actingAs($admin)
+            ->put("/equipment/{$unit->id}/specs", [
+                'equipment_type_id' => $unit->equipment_type_id,
+                'name' => $unit->name,
+                'inventory_number' => $taken->inventory_number,
+            ])
+            ->assertSessionHasErrors('inventory_number');
+
+        // The list of accessories is replaced whole, blanks dropped.
+        $this->actingAs($admin)
+            ->put("/equipment/{$unit->id}/accessories", ['accessories' => ['Кабель HDMI', '  ', 'Подставка']])
+            ->assertSessionHasNoErrors();
+        $this->assertSame(['Кабель HDMI', 'Подставка'], $unit->fresh()->accessories);
+
+        $this->actingAs(User::factory()->create())
+            ->put("/equipment/{$unit->id}/accessories", ['accessories' => []])
+            ->assertForbidden();
+    }
+
+    public function test_the_sidebar_blocks_are_edited_too()
+    {
+        $first = User::factory()->create();
+        $second = User::factory()->create();
+        $unit = Equipment::factory()->ofType($this->type())->issuedTo($first->id)->create();
+        $unit->assignments()->create(['holder_user_id' => $first->id, 'issued_at' => '2026-01-10']);
+        $admin = $this->admin();
+
+        // "Состояние" is filled in by hand when somebody checks a unit in place.
+        $this->actingAs($admin)
+            ->put("/equipment/{$unit->id}/state", [
+                'condition' => 'Рабочее, следы эксплуатации',
+                'checked_at' => '2026-09-01',
+                'next_inventory_at' => '2026-12-01',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $unit->refresh();
+        $this->assertSame('Рабочее, следы эксплуатации', $unit->condition);
+        $this->assertSame('2026-09-01', $unit->checked_at->toDateString());
+
+        // Correcting the handover moves neither the status nor the history row.
+        $this->actingAs($admin)
+            ->put("/equipment/{$unit->id}/handover", [
+                'holder_user_id' => $second->id,
+                'issued_at' => '2026-02-20',
+                'act_number' => '№ 300-2',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $unit->refresh();
+        $this->assertSame('issued', $unit->status);
+        $this->assertSame($second->id, $unit->holder_user_id);
+        $this->assertSame('2026-02-20', $unit->issued_at->toDateString());
+        $this->assertCount(1, $unit->assignments);
+        $this->assertSame('№ 300-2', $unit->currentAssignment->act_number);
+
+        // A unit nobody holds has no handover to correct.
+        $stock = Equipment::factory()->ofType($this->type())->create();
+        $this->actingAs($admin)
+            ->put("/equipment/{$stock->id}/handover", ['holder_user_id' => $second->id, 'issued_at' => '2026-02-20'])
+            ->assertStatus(422);
+    }
+
+    public function test_a_repair_without_an_end_date_takes_the_unit_out_of_service()
+    {
+        $employee = User::factory()->create();
+        $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
+
+        $this->actingAs($this->admin())
+            ->post("/equipment/{$unit->id}/repairs", ['kind' => 'Диагностика', 'started_at' => '2026-09-01'])
+            ->assertSessionHasNoErrors();
+
+        $unit->refresh();
+        $this->assertSame('repair', $unit->status);
+        $this->assertNull($unit->holder_user_id);
+        $this->assertCount(1, $unit->repairs);
+
+        // A finished visit is only a record: the unit stays where it is.
+        $stock = Equipment::factory()->ofType($this->type())->create();
+        $this->actingAs($this->admin())
+            ->post("/equipment/{$stock->id}/repairs", ['kind' => 'Плановое ТО', 'started_at' => '2026-09-01', 'ended_at' => '2026-09-03']);
+        $this->assertSame('stock', $stock->refresh()->status);
+    }
+
+    public function test_a_document_is_uploaded_and_removed_with_its_file()
+    {
+        Storage::fake('public');
+        $unit = Equipment::factory()->ofType($this->type())->create();
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->post("/equipment/{$unit->id}/documents", [
+                'title' => 'Акт передачи № 214-1',
+                'file' => UploadedFile::fake()->create('act.pdf', 120, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $document = $unit->documents()->sole();
+        $this->assertSame('pdf', $document->extension);
+        Storage::disk('public')->assertExists($document->path);
+
+        $this->actingAs($admin)->delete("/equipment/{$unit->id}/documents/{$document->id}")->assertSessionHasNoErrors();
+        Storage::disk('public')->assertMissing($document->path);
+        $this->assertSame(0, $unit->documents()->count());
+    }
+
+    public function test_only_managers_touch_repairs_and_documents()
+    {
+        $unit = Equipment::factory()->ofType($this->type())->create();
+
+        $this->actingAs(User::factory()->create());
+        $this->post("/equipment/{$unit->id}/repairs", ['kind' => 'Диагностика', 'started_at' => '2026-09-01'])->assertForbidden();
+        $this->post("/equipment/{$unit->id}/documents", ['title' => 'Акт', 'file' => UploadedFile::fake()->create('act.pdf')])->assertForbidden();
     }
 
     public function test_a_unit_goes_to_one_holder_not_two()

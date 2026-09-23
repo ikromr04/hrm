@@ -138,7 +138,78 @@ class UserSeeder extends Seeder
                 $factory->create();
             }
         }
+
+        $this->addEquipmentHistory();
     }
+
+    /**
+     * Where each unit has been and what has been done to it, so a card opens on
+     * a life rather than on a blank page: a spell on the shelf after it was
+     * bought, the handover that followed, and the odd visit to a repair shop.
+     *
+     * Documents are left alone: a row without the file behind it would only
+     * give the card a link that leads nowhere.
+     */
+    private function addEquipmentHistory(): void
+    {
+        Equipment::doesntHave('assignments')->with('type')->get()->each(function (Equipment $unit) {
+            $bought = $unit->purchased_at?->toDateString() ?? fake()->dateTimeBetween('-5 years', '-1 year')->format('Y-m-d');
+            $issued = $unit->issued_at?->toDateString();
+
+            // On the shelf from the day it arrived until somebody took it.
+            $unit->assignments()->create([
+                'issued_at' => $bought,
+                'returned_at' => $issued ?? ($unit->status === 'stock' ? null : $unit->written_off_at?->toDateString() ?? now()->toDateString()),
+                'condition_on_return' => $issued ? 'Новое, в упаковке' : null,
+            ]);
+
+            if ($issued !== null) {
+                $unit->assignments()->create([
+                    'holder_user_id' => $unit->holder_user_id,
+                    'holder_department_id' => $unit->holder_department_id,
+                    'issued_at' => $issued,
+                    'act_number' => '№ '.fake()->numerify('###').'-'.fake()->numberBetween(1, 9),
+                ]);
+            }
+
+            // Away at a contractor right now, or looked after some time ago.
+            if ($unit->status === 'repair') {
+                $unit->repairs()->create([
+                    'kind' => fake()->randomElement(self::REPAIRS),
+                    'started_at' => fake()->dateTimeBetween('-2 months', '-3 days'),
+                    'contractor' => fake()->randomElement(self::CONTRACTORS),
+                ]);
+
+                return;
+            }
+
+            for ($visit = fake()->numberBetween(0, 2); $visit > 0; $visit--) {
+                $started = fake()->dateTimeBetween($bought, '-1 month');
+
+                $unit->repairs()->create([
+                    'kind' => fake()->randomElement(self::REPAIRS),
+                    'started_at' => $started,
+                    'ended_at' => (clone $started)->modify('+'.fake()->numberBetween(1, 6).' days'),
+                    'contractor' => fake()->randomElement(self::CONTRACTORS),
+                    'cost' => fake()->numberBetween(2, 30) * 20,
+                    'note' => fake()->randomElement(['Плановое ТО', 'Износ детали', 'По заявке сотрудника', null]),
+                ]);
+            }
+        });
+    }
+
+    /** @var list<string> */
+    private const REPAIRS = [
+        'Чистка и замена термопасты',
+        'Замена аккумулятора',
+        'Замена клавиатуры',
+        'Замена блока питания',
+        'Диагностика',
+        'Замена картриджа и чистка',
+    ];
+
+    /** @var list<string> */
+    private const CONTRACTORS = ['Сервис «Техномир»', 'Сервис «Электрон»', 'ИП Салимов', 'Авторизованный сервис Dell'];
 
     /**
      * About two in three worked somewhere before joining: one or two jobs

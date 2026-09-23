@@ -392,7 +392,7 @@ function PersonalDialog({
 }
 
 /** The area left under the tabs, split into a main column and a sidebar. */
-const paneGrid = 'grid gap-4 md:min-h-0 md:flex-1 lg:grid-cols-[1fr_20rem]';
+const paneGrid = 'grid gap-4 md:min-h-0 md:flex-1 lg:grid-cols-[1fr_24rem]';
 
 /** One scrolling column of that area; scroll-soft keeps its bar out of sight until needed. */
 const pane = 'scroll-soft flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto';
@@ -1478,7 +1478,9 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
             {items.map((unit) => (
                 <li key={unit.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="text-sm font-medium">{unit.name}</span>
+                        <Link href={route('equipment.show', unit.id)} className="text-sm font-medium hover:underline">
+                            {unit.name}
+                        </Link>
                         <span className="text-muted-foreground text-[13px]">
                             {[unit.type, unit.maker, unit.serial_number && `S/N ${unit.serial_number}`].filter(Boolean).join(' · ')}
                         </span>

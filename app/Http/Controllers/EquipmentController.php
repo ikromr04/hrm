@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -130,20 +131,174 @@ class EquipmentController extends Controller
             'equipment_type_id' => ['required', 'integer', Rule::exists('equipment_types', 'id')],
             'name' => ['required', 'string', 'max:150'],
             'maker' => ['nullable', 'string', 'max:100'],
+            'model' => ['nullable', 'string', 'max:100'],
             'serial_number' => ['nullable', 'string', 'max:100'],
             // The number on the sticker: one unit, one number.
             'inventory_number' => ['required', 'string', 'max:50', Rule::unique('equipment', 'inventory_number')],
+
+            'processor' => ['nullable', 'string', 'max:100'],
+            'memory' => ['nullable', 'string', 'max:100'],
+            'purchased_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'price' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
+            'warranty_until' => ['nullable', 'date'],
+            'condition' => ['nullable', 'string', 'max:200'],
+            'next_inventory_at' => ['nullable', 'date'],
+            'accessories' => ['nullable', 'array'],
+            'accessories.*' => ['string', 'max:100'],
         ], attributes: [
             'equipment_type_id' => 'категория',
             'name' => 'наименование',
             'maker' => 'производитель',
+            'model' => 'модель',
             'serial_number' => 'серийный номер',
             'inventory_number' => 'инвентарный номер',
+            'processor' => 'процессор',
+            'memory' => 'память / диск',
+            'purchased_at' => 'дата покупки',
+            'price' => 'стоимость',
+            'warranty_until' => 'гарантия до',
+            'condition' => 'состояние',
+            'next_inventory_at' => 'следующая инвентаризация',
+            'accessories' => 'комплектация',
         ]);
 
-        Equipment::create([...$data, 'status' => 'stock']);
+        $equipment = Equipment::create([...$data, 'status' => 'stock']);
 
-        return back();
+        // The books start the moment it arrives: a spell in stock, waiting.
+        $equipment->assignments()->create(['issued_at' => $data['purchased_at'] ?? Carbon::today()]);
+
+        return to_route('equipment.show', $equipment);
+    }
+
+    /**
+     * One unit's card: what it is, where it has been, what has been done to it
+     * and the papers that came with it.
+     */
+    public function show(Request $request, Equipment $equipment): Response
+    {
+        $equipment->load([
+            'type:id,name',
+            'holder:id,name,surname,avatar',
+            'holderDepartment:id,name',
+            'currentAssignment',
+            'assignments.holder:id,name,surname',
+            'assignments.holderDepartment:id,name',
+            'repairs',
+            'documents',
+        ]);
+
+        $holderDepartment = $equipment->holder?->departments()->orderBy('name')->first();
+
+        return Inertia::render('equipment/show', [
+            'unit' => [
+                'id' => $equipment->id,
+                'name' => $equipment->name,
+                'equipment_type_id' => $equipment->equipment_type_id,
+                'type' => $equipment->type?->name,
+                'maker' => $equipment->maker,
+                'model' => $equipment->model,
+                'serial_number' => $equipment->serial_number,
+                'inventory_number' => $equipment->inventory_number,
+                'processor' => $equipment->processor,
+                'memory' => $equipment->memory,
+                'purchased_at' => $equipment->purchased_at?->toDateString(),
+                'price' => $equipment->price,
+                'warranty_until' => $equipment->warranty_until?->toDateString(),
+                'warranty_expired' => $equipment->warranty_expired,
+                'condition' => $equipment->condition,
+                'checked_at' => $equipment->checked_at?->toDateString(),
+                'next_inventory_at' => $equipment->next_inventory_at?->toDateString(),
+                'accessories' => $equipment->accessories ?? [],
+                'status' => $equipment->status,
+                'issued_at' => $equipment->issued_at?->toDateString(),
+                'written_off_at' => $equipment->written_off_at?->toDateString(),
+                'act_number' => $equipment->currentAssignment?->act_number,
+                'holder' => $equipment->holder ? [
+                    'id' => $equipment->holder->id,
+                    'name' => "{$equipment->holder->surname} {$equipment->holder->name}",
+                    'avatar' => $equipment->holder->avatar,
+                    'department' => $holderDepartment?->name,
+                ] : null,
+                'department' => $equipment->holderDepartment?->name,
+                'holder_department_id' => $equipment->holder_department_id,
+            ],
+            'assignments' => $equipment->assignments->map(fn ($spell) => [
+                'id' => $spell->id,
+                'holder' => $spell->holder ? [
+                    'id' => $spell->holder->id,
+                    'name' => "{$spell->holder->surname} {$spell->holder->name}",
+                ] : null,
+                'department' => $spell->holderDepartment?->name,
+                'issued_at' => $spell->issued_at->toDateString(),
+                'returned_at' => $spell->returned_at?->toDateString(),
+                'condition_on_return' => $spell->condition_on_return,
+                'act_number' => $spell->act_number,
+            ]),
+            'repairs' => $equipment->repairs->map(fn ($repair) => [
+                'id' => $repair->id,
+                'kind' => $repair->kind,
+                'started_at' => $repair->started_at->toDateString(),
+                'ended_at' => $repair->ended_at?->toDateString(),
+                'contractor' => $repair->contractor,
+                'cost' => $repair->cost,
+                'note' => $repair->note,
+            ]),
+            'documents' => $equipment->documents->map(fn ($document) => [
+                'id' => $document->id,
+                'title' => $document->title,
+                'url' => $document->url,
+                'extension' => $document->extension,
+                'note' => $document->note,
+                'uploaded_at' => $document->created_at?->toDateString(),
+            ]),
+            'holders' => User::query()
+                ->active()
+                ->orderBy('surname')
+                ->orderBy('name')
+                ->get(['id', 'name', 'surname'])
+                ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
+            // What the card's forms offer; only an editor needs any of it.
+            'types' => $request->user()->can('manage-employees')
+                ? EquipmentType::query()->orderBy('name')->get(['id', 'name'])
+                : [],
+            'departments' => $request->user()->can('manage-employees')
+                ? Department::query()->orderBy('name')->get(['id', 'name'])
+                : [],
+            'neighbours' => $this->neighbours($equipment),
+            'canEdit' => $request->user()->can('manage-employees'),
+        ]);
+    }
+
+    /**
+     * The units either side of this one, in the order the list puts them: by
+     * name, the id breaking a tie between two of a kind. Walking stays within
+     * one status, as it does between colleagues — stepping off a unit that is
+     * out and landing on one in stock compares nothing.
+     *
+     * @return array{prev: ?array<string, mixed>, next: ?array<string, mixed>}
+     */
+    private function neighbours(Equipment $equipment): array
+    {
+        $order = fn (string $direction) => Equipment::query()
+            ->where('status', $equipment->status)
+            ->whereKeyNot($equipment->id)
+            ->orderBy('name', $direction)
+            ->orderBy('id', $direction);
+
+        // "Before" means earlier in (name, id) order; a tie on the name falls back to the id.
+        $before = fn (Builder $q) => $q->where(fn (Builder $q) => $q
+            ->where('name', '<', $equipment->name)
+            ->orWhere(fn (Builder $q) => $q->where('name', $equipment->name)->where('id', '<', $equipment->id)));
+        $after = fn (Builder $q) => $q->where(fn (Builder $q) => $q
+            ->where('name', '>', $equipment->name)
+            ->orWhere(fn (Builder $q) => $q->where('name', $equipment->name)->where('id', '>', $equipment->id)));
+
+        $unit = fn (?Equipment $u) => $u ? ['id' => $u->id, 'name' => $u->name, 'inventory_number' => $u->inventory_number] : null;
+
+        return [
+            'prev' => $unit($order('desc')->tap($before)->first(['id', 'name', 'inventory_number'])),
+            'next' => $unit($order('asc')->tap($after)->first(['id', 'name', 'inventory_number'])),
+        ];
     }
 
     /** Spelled out for the status filter; the page has its own copy for badges. */

@@ -8,11 +8,13 @@ import {
     type Sort,
     type ViewState,
 } from '@/components/data-table';
+import { CategoryChip, IconChip } from '@/components/equipment-icon';
+import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
 import InputError from '@/components/input-error';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonAvatar } from '@/components/person-avatar';
 import { SearchableSelect } from '@/components/searchable-select';
-import { StatusBadge, type StatusTone } from '@/components/status-badge';
+import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -31,6 +33,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/employee';
+import { statusLabel, statusTone, type EquipmentStatus as Status } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -39,16 +42,12 @@ import {
     ChevronDown,
     Columns3,
     Ellipsis,
-    Headphones,
     Laptop,
     LoaderCircle,
-    Monitor,
     Package,
     Plus,
-    Printer,
     RotateCcw,
     Search,
-    Smartphone,
     Trash2,
     UserPlus,
     Users,
@@ -57,51 +56,6 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEventHandler } from 'react';
-
-type Status = 'issued' | 'stock' | 'repair' | 'written_off';
-
-/** The colours the design gives each status; they are the app's own tones. */
-const statusTone: Record<Status, StatusTone> = {
-    issued: 'success',
-    stock: 'neutral',
-    repair: 'warning',
-    written_off: 'danger',
-};
-
-const statusLabel: Record<Status, string> = {
-    issued: 'Выдано',
-    stock: 'На складе',
-    repair: 'В ремонте',
-    written_off: 'Списано',
-};
-
-/** An icon per category, as the design draws them; anything else gets a box. */
-const categoryIcon: Record<string, LucideIcon> = {
-    Ноутбуки: Laptop,
-    Мониторы: Monitor,
-    Телефоны: Smartphone,
-    Печать: Printer,
-    Периферия: Headphones,
-};
-
-/** The tinted square an icon sits in, in the tiles and beside every name. */
-function IconChip({ icon: Icon, tone = 'neutral', size = 36 }: { icon: LucideIcon; tone?: 'brand' | 'warning' | 'neutral'; size?: number }) {
-    const tones = {
-        brand: 'bg-[#EEF5DC] text-[#4A6410] dark:bg-[#A8CF45]/15 dark:text-[#C5E27A]',
-        warning: 'bg-[#FBEFD9] text-[#9A4A06] dark:bg-[#F5A524]/15 dark:text-[#F8C471]',
-        neutral: 'bg-[#F4F4F5] text-[#44474C] dark:bg-white/10 dark:text-neutral-300',
-    };
-
-    return (
-        <span
-            aria-hidden="true"
-            style={{ width: size, height: size }}
-            className={cn('flex shrink-0 items-center justify-center rounded-lg', tones[tone])}
-        >
-            <Icon className="size-[18px]" />
-        </span>
-    );
-}
 
 interface Unit {
     id: number;
@@ -169,25 +123,13 @@ function Tile({ label, value, icon, tone }: { label: string; value: number; icon
 }
 
 /** What a unit can be moved to next, given where it is now. */
-type Move = 'issue' | 'take' | 'repair' | 'write-off';
-
-const moveLabel: Record<Move, string> = {
-    issue: 'Выдать',
-    take: 'Принять возврат',
-    repair: 'Отправить в ремонт',
-    'write-off': 'Списать',
-};
-
-/**
- * The two moves that need something from HR: whom a unit goes to, and when it
- * was written off. Returning it and sending it for repair ask nothing.
- */
-type AskedMove = 'issue' | 'write-off';
+type Move = AskedMove | 'repair';
 
 /** The "⋯" at the end of a row; a written-off unit has nowhere left to go. */
 function RowActions({ unit, onAsk }: { unit: Unit; onAsk: (move: { unit: Unit; kind: AskedMove }) => void }) {
-    const run = (kind: Move) => router.post(route(`equipment.${kind}`, unit.id), {}, { preserveScroll: true });
-    const pick = (kind: Move) => (kind === 'issue' || kind === 'write-off' ? onAsk({ unit, kind }) : run(kind));
+    // Only sending it for repair asks nothing, so only that one posts outright.
+    const pick = (kind: Move) =>
+        kind === 'repair' ? router.post(route('equipment.repair', unit.id), {}, { preserveScroll: true }) : onAsk({ unit, kind });
 
     if (unit.status === 'written_off') return null;
 
@@ -224,7 +166,11 @@ function RowActions({ unit, onAsk }: { unit: Unit; onAsk: (move: { unit: Unit; k
 function Holder({ unit }: { unit: Unit }) {
     if (unit.holder) {
         return (
-            <Link href={route('employees.show', unit.holder.id)} className="flex items-center gap-2 hover:underline">
+            <Link
+                href={route('employees.show', unit.holder.id)}
+                title={`Открыть профиль: ${unit.holder.name}`}
+                className="text-brand-strong flex items-center gap-2 hover:underline dark:text-[#C5E27A]"
+            >
                 {unit.holder.avatar ? (
                     <img src={unit.holder.avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
                 ) : (
@@ -238,108 +184,44 @@ function Holder({ unit }: { unit: Unit }) {
     return unit.department ? <span className="truncate">{unit.department}</span> : <span className="text-muted-foreground">—</span>;
 }
 
-function MoveDialog({ unit, kind, options, onClose }: { unit: Unit; kind: AskedMove; options: Options; onClose: () => void }) {
-    const today = new Date().toISOString().slice(0, 10);
-    const form = useForm({ holder_user_id: '', issued_at: today, written_off_at: today });
-
-    const submit: FormEventHandler = (event) => {
-        event.preventDefault();
-        form.transform((data) =>
-            kind === 'issue' ? { holder_user_id: data.holder_user_id, issued_at: data.issued_at } : { written_off_at: data.written_off_at },
-        );
-        form.post(route(`equipment.${kind}`, unit.id), { preserveScroll: true, onSuccess: onClose });
-    };
-
-    return (
-        <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
-                {/* noValidate: the server's rules are the real ones. */}
-                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-                    <DialogHeader>
-                        <DialogTitle>{moveLabel[kind]}</DialogTitle>
-                        <DialogDescription>
-                            {unit.name} · инв. № {unit.inventory_number}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {kind === 'issue' && (
-                        <>
-                            <div className="grid gap-2">
-                                <Label htmlFor="move-holder">Кому</Label>
-                                <SearchableSelect
-                                    id="move-holder"
-                                    value={form.data.holder_user_id}
-                                    onChange={(value) => form.setData('holder_user_id', value)}
-                                    options={options.holders.map((holder) => ({ value: String(holder.id), label: holder.name }))}
-                                    placeholder="Выберите сотрудника"
-                                    searchPlaceholder="Поиск по фамилии или имени"
-                                    empty="Сотрудник не найден"
-                                    invalid={!!form.errors.holder_user_id}
-                                />
-                                <InputError message={form.errors.holder_user_id} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="move-issued">Дата выдачи</Label>
-                                <Input
-                                    id="move-issued"
-                                    type="date"
-                                    max={today}
-                                    value={form.data.issued_at}
-                                    onChange={(e) => form.setData('issued_at', e.target.value)}
-                                    aria-invalid={!!form.errors.issued_at}
-                                />
-                                <InputError message={form.errors.issued_at} />
-                            </div>
-                        </>
-                    )}
-
-                    {kind === 'write-off' && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="move-written-off">Дата списания</Label>
-                            <Input
-                                id="move-written-off"
-                                type="date"
-                                max={today}
-                                value={form.data.written_off_at}
-                                onChange={(e) => form.setData('written_off_at', e.target.value)}
-                                aria-invalid={!!form.errors.written_off_at}
-                            />
-                            <InputError message={form.errors.written_off_at} />
-                            <p className="text-muted-foreground text-[13px]">Списанную единицу больше нельзя выдать или отремонтировать.</p>
-                        </div>
-                    )}
-
-                    <DialogFooter className="gap-2">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" variant={kind === 'write-off' ? 'destructive' : 'default'} disabled={form.processing}>
-                            {form.processing && <LoaderCircle className="animate-spin" />}
-                            {moveLabel[kind]}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 /**
  * Putting a unit on the books. It starts in stock — handing it to somebody is
  * a move of its own, from the "⋯" beside the row.
  */
 function AddDialog({ options, onClose }: { options: Options; onClose: () => void }) {
-    const form = useForm({ equipment_type_id: '', name: '', maker: '', serial_number: '', inventory_number: '' });
+    const today = new Date().toISOString().slice(0, 10);
+    const form = useForm({
+        equipment_type_id: '',
+        name: '',
+        maker: '',
+        model: '',
+        serial_number: '',
+        inventory_number: '',
+        processor: '',
+        memory: '',
+        purchased_at: '',
+        price: '',
+        warranty_until: '',
+        condition: '',
+        accessories: '',
+    });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
+        form.transform((data) => ({
+            ...data,
+            // One box, comma by comma: "Блок питания 65 Вт, Сумка".
+            accessories: data.accessories
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean),
+        }));
         form.post(route('equipment.store'), { preserveScroll: true, onSuccess: onClose });
     };
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-lg">
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -388,6 +270,20 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                         </div>
 
                         <div className="grid gap-2">
+                            <Label htmlFor="add-model">Модель</Label>
+                            <Input
+                                id="add-model"
+                                value={form.data.model}
+                                onChange={(event) => form.setData('model', event.target.value)}
+                                placeholder="Latitude 5440"
+                                aria-invalid={!!form.errors.model}
+                            />
+                            <InputError message={form.errors.model} />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
                             <Label htmlFor="add-serial">Серийный номер</Label>
                             <Input
                                 id="add-serial"
@@ -398,19 +294,111 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                             />
                             <InputError message={form.errors.serial_number} />
                         </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="add-inventory">Инвентарный номер</Label>
+                            <Input
+                                id="add-inventory"
+                                value={form.data.inventory_number}
+                                onChange={(event) => form.setData('inventory_number', event.target.value)}
+                                placeholder="EV-0421"
+                                aria-invalid={!!form.errors.inventory_number}
+                            />
+                            <InputError message={form.errors.inventory_number} />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="add-processor">Процессор</Label>
+                            <Input
+                                id="add-processor"
+                                value={form.data.processor}
+                                onChange={(event) => form.setData('processor', event.target.value)}
+                                placeholder="Intel Core i5-1335U"
+                                aria-invalid={!!form.errors.processor}
+                            />
+                            <InputError message={form.errors.processor} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="add-memory">Память / диск</Label>
+                            <Input
+                                id="add-memory"
+                                value={form.data.memory}
+                                onChange={(event) => form.setData('memory', event.target.value)}
+                                placeholder="16 ГБ / SSD 512 ГБ"
+                                aria-invalid={!!form.errors.memory}
+                            />
+                            <InputError message={form.errors.memory} />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="grid gap-2">
+                            <Label htmlFor="add-purchased">Дата покупки</Label>
+                            <Input
+                                id="add-purchased"
+                                type="date"
+                                max={today}
+                                value={form.data.purchased_at}
+                                onChange={(event) => form.setData('purchased_at', event.target.value)}
+                                aria-invalid={!!form.errors.purchased_at}
+                            />
+                            <InputError message={form.errors.purchased_at} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="add-price">Стоимость</Label>
+                            <Input
+                                id="add-price"
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={form.data.price}
+                                onChange={(event) => form.setData('price', event.target.value)}
+                                placeholder="9800"
+                                aria-invalid={!!form.errors.price}
+                            />
+                            <InputError message={form.errors.price} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="add-warranty">Гарантия до</Label>
+                            <Input
+                                id="add-warranty"
+                                type="date"
+                                value={form.data.warranty_until}
+                                onChange={(event) => form.setData('warranty_until', event.target.value)}
+                                aria-invalid={!!form.errors.warranty_until}
+                            />
+                            <InputError message={form.errors.warranty_until} />
+                        </div>
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="add-inventory">Инвентарный номер</Label>
+                        <Label htmlFor="add-condition">Состояние</Label>
                         <Input
-                            id="add-inventory"
-                            value={form.data.inventory_number}
-                            onChange={(event) => form.setData('inventory_number', event.target.value)}
-                            placeholder="EV-0421"
-                            aria-invalid={!!form.errors.inventory_number}
+                            id="add-condition"
+                            value={form.data.condition}
+                            onChange={(event) => form.setData('condition', event.target.value)}
+                            placeholder="Новое, в упаковке"
+                            aria-invalid={!!form.errors.condition}
                         />
-                        <InputError message={form.errors.inventory_number} />
-                        <p className="text-muted-foreground text-[13px]">Номер на наклейке; у каждой единицы он свой.</p>
+                        <InputError message={form.errors.condition} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="add-accessories">Комплектация</Label>
+                        <Input
+                            id="add-accessories"
+                            value={form.data.accessories}
+                            onChange={(event) => form.setData('accessories', event.target.value)}
+                            placeholder="Блок питания 65 Вт, Сумка, Мышь Logitech M185"
+                            aria-invalid={!!form.errors.accessories}
+                        />
+                        <InputError message={form.errors.accessories} />
+                        <p className="text-muted-foreground text-[13px]">Через запятую.</p>
                     </div>
 
                     <DialogFooter className="gap-2">
@@ -543,15 +531,16 @@ export default function EquipmentIndex({
         switch (column.key) {
             case 'name':
                 return (
-                    <div className="flex items-center gap-3">
-                        <IconChip icon={(unit.type && categoryIcon[unit.type]) || Package} />
+                    <Link href={route('equipment.show', unit.id)} className="group flex items-center gap-3" title={`Открыть: ${unit.name}`}>
+                        <CategoryChip type={unit.type} />
                         <div className="flex min-w-0 flex-col gap-0.5">
-                            <span className="truncate font-medium">{unit.name}</span>
+                            {/* Brand colour and an underline on hover: the app's mark of a link. */}
+                            <span className="text-brand-strong truncate font-medium group-hover:underline dark:text-[#C5E27A]">{unit.name}</span>
                             <span className="text-muted-foreground truncate text-[13px]">
                                 {[unit.maker, unit.serial_number && `S/N ${unit.serial_number}`].filter(Boolean).join(' · ')}
                             </span>
                         </div>
-                    </div>
+                    </Link>
                 );
             case 'inventory_number':
                 return <span className="tabular-nums">{unit.inventory_number}</span>;
@@ -725,7 +714,7 @@ export default function EquipmentIndex({
                 />
             </div>
 
-            {asking && <MoveDialog unit={asking.unit} kind={asking.kind} options={options} onClose={() => setAsking(null)} />}
+            {asking && <EquipmentMoveDialog unit={asking.unit} kind={asking.kind} holders={options.holders} onClose={() => setAsking(null)} />}
             {adding && <AddDialog options={options} onClose={() => setAdding(false)} />}
         </AppLayout>
     );

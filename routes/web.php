@@ -10,6 +10,9 @@ use App\Http\Controllers\EmployeeEducationController;
 use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\EmployeeWorkExperienceController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\EquipmentDetailsController;
+use App\Http\Controllers\EquipmentDocumentController;
+use App\Http\Controllers\EquipmentRepairController;
 use App\Http\Controllers\EquipmentStatusController;
 use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
@@ -22,6 +25,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
     Route::get('search', SearchController::class)->name('search');
     Route::get('equipment', [EquipmentController::class, 'index'])->name('equipment.index');
+    Route::get('equipment/{equipment}', [EquipmentController::class, 'show'])->name('equipment.show');
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });
@@ -68,6 +72,18 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipmen
     Route::post('take', [EquipmentStatusController::class, 'take'])->name('take');
     Route::post('repair', [EquipmentStatusController::class, 'repair'])->name('repair');
     Route::post('write-off', [EquipmentStatusController::class, 'writeOff'])->name('write-off');
+
+    // The card, edited one block at a time.
+    Route::put('specs', [EquipmentDetailsController::class, 'specs'])->name('specs');
+    Route::put('accessories', [EquipmentDetailsController::class, 'accessories'])->name('accessories');
+    Route::put('state', [EquipmentDetailsController::class, 'state'])->name('state');
+    Route::put('handover', [EquipmentDetailsController::class, 'handover'])->name('handover');
+
+    // What has been done to it, and the papers that came with it.
+    Route::post('repairs', [EquipmentRepairController::class, 'store'])->name('repairs.store');
+    Route::delete('repairs/{repair}', [EquipmentRepairController::class, 'destroy'])->name('repairs.destroy');
+    Route::post('documents', [EquipmentDocumentController::class, 'store'])->name('documents.store');
+    Route::delete('documents/{document}', [EquipmentDocumentController::class, 'destroy'])->name('documents.destroy');
 });
 
 // Directories: roles ("Позиция"), positions ("Должность"), departments, languages and equipment categories.
