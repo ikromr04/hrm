@@ -7,6 +7,7 @@ use App\Http\Controllers\EmployeeAvatarController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeDetailsController;
 use App\Http\Controllers\EmployeeEducationController;
+use App\Http\Controllers\EmployeeEquipmentController;
 use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\EmployeeWorkExperienceController;
 use App\Http\Controllers\EquipmentController;
@@ -22,6 +23,10 @@ Route::redirect('/', '/dashboard')->name('home');
 Route::middleware(['auth'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
+    // Before the profile, or "create" would be read as somebody's id.
+    Route::get('employees/create', [EmployeeController::class, 'create'])
+        ->middleware('can:manage-employees')
+        ->name('employees.create');
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
     Route::get('search', SearchController::class)->name('search');
     Route::get('equipment', [EquipmentController::class, 'index'])->name('equipment.index');
@@ -29,6 +34,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });
+
+// Putting a new colleague on the books.
+Route::post('employees', [EmployeeController::class, 'store'])
+    ->middleware(['auth', 'can:manage-employees'])
+    ->name('employees.store');
 
 Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee}')->name('employees.')->group(function () {
     // One card of the profile at a time, edited from its own dialog.
@@ -47,10 +57,14 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee
     // another's; scoped bindings would not, as "education" has no plural form
     // for Laravel to find the relation by.
     Route::post('educations', [EmployeeEducationController::class, 'store'])->name('educations.store');
+    // Several records in one request: the steps of the "new colleague" wizard.
+    Route::post('educations/many', [EmployeeEducationController::class, 'storeMany'])->name('educations.many');
     Route::put('educations/{education}', [EmployeeEducationController::class, 'update'])->name('educations.update');
     Route::delete('educations/{education}', [EmployeeEducationController::class, 'destroy'])->name('educations.destroy');
 
     Route::post('experiences', [EmployeeWorkExperienceController::class, 'store'])->name('experiences.store');
+    Route::post('experiences/many', [EmployeeWorkExperienceController::class, 'storeMany'])->name('experiences.many');
+    Route::post('equipment', [EmployeeEquipmentController::class, 'store'])->name('equipment.store');
     Route::put('experiences/{experience}', [EmployeeWorkExperienceController::class, 'update'])->name('experiences.update');
     Route::delete('experiences/{experience}', [EmployeeWorkExperienceController::class, 'destroy'])->name('experiences.destroy');
 

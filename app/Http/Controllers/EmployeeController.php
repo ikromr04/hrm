@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\Language;
@@ -11,10 +12,15 @@ use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
+use App\Notifications\AccountCreated;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -162,6 +168,7 @@ class EmployeeController extends Controller
             ],
             'status' => $status,
             'statusCounts' => $canManage ? $this->statusCounts() : null,
+            'canEdit' => $canManage,
             'total' => User::count(),
         ]);
     }
@@ -174,6 +181,77 @@ class EmployeeController extends Controller
         $counts = User::query()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
         return collect(self::STATUSES)->mapWithKeys(fn (string $s) => [$s => (int) ($counts[$s] ?? 0)])->all();
+    }
+
+    /**
+     * The form for a new colleague: a page of its own rather than a dialog,
+     * because it runs over several steps and half-filled work should survive a
+     * stray key. Everything its steps offer travels with it.
+     */
+    public function create(): Response
+    {
+        return Inertia::render('employees/create', [
+            'options' => [
+                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
+                'departments' => $this->departmentOptions(),
+                'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
+                'nationalities' => $this->distinctDetail('nationality'),
+                'citizenships' => $this->distinctDetail('citizenship'),
+                // The last step hands out hardware, so what is free travels too.
+                'stock' => Equipment::query()
+                    ->where('status', 'stock')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'inventory_number']),
+            ],
+        ]);
+    }
+
+    /**
+     * A new colleague on the books. The form asks for the account they sign in
+     * with and the little that files them under a role, a position and a
+     * department; the rest of the profile is filled in step by step afterwards,
+     * which is why this lands on their page rather than back on the list.
+     */
+    public function store(StoreEmployeeRequest $request): RedirectResponse
+    {
+        $data = $request->validated();
+
+        // Nobody types a password for somebody else: one is picked here, sent
+        // to them, and never seen again — not even by whoever added them.
+        $password = Str::password(random_int(8, 12), symbols: false);
+
+        $employee = DB::transaction(function () use ($data, $password) {
+            $employee = User::create([
+                ...Arr::only($data, ['surname', 'name', 'patronymic', 'sex', 'email']),
+                'password' => Hash::make($password),
+                'status' => 'active',
+            ]);
+
+            // Everything the first step asks that is not on the user itself.
+            $employee->details()->create(Arr::only($data, [
+                'hired_at', 'birth_date', 'birth_place', 'citizenship', 'nationality', 'home_address',
+            ]));
+
+            $employee->syncRoles($data['roles']);
+            $employee->positions()->sync($data['positions']);
+            $employee->departments()->sync($data['departments']);
+
+            return $employee;
+        });
+
+        $employee->notify(new AccountCreated($password));
+
+        // The wizard goes on filling the profile in, step by step, and needs
+        // to know whom it is filling in; on its own the form is done here.
+        return $request->boolean('continue')
+            ? back()->with('employee', [
+                'id' => $employee->id,
+                'name' => "{$employee->surname} {$employee->name}",
+                // The contacts step edits the address as well, so it needs it.
+                'email' => $employee->email,
+            ])
+            : to_route('employees.show', $employee);
     }
 
     public function show(Request $request, User $employee): Response

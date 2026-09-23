@@ -21,6 +21,29 @@ class EmployeeWorkExperienceController extends Controller
         return back();
     }
 
+    /**
+     * Several at once, for the step of the "new colleague" wizard that asks
+     * where they worked before: it collects the rows and files them in one go.
+     */
+    public function storeMany(Request $request, User $employee): RedirectResponse
+    {
+        $records = (array) $request->input('records', []);
+
+        $validator = Validator::make(
+            $request->all(),
+            ['records' => ['present', 'array', 'max:20'], ...$this->rules('records.*.')],
+            attributes: $this->attributes('records.*.'),
+        );
+
+        foreach (array_keys($records) as $index) {
+            $this->checkDates($validator, (array) $records[$index], "records.{$index}.");
+        }
+
+        $employee->workExperiences()->createMany($validator->validate()['records']);
+
+        return back();
+    }
+
     public function update(Request $request, User $employee, UserWorkExperience $experience): RedirectResponse
     {
         $this->belongsTo($employee, $experience);
@@ -51,45 +74,76 @@ class EmployeeWorkExperienceController extends Controller
      */
     private function validated(Request $request): array
     {
-        $validator = Validator::make($request->all(), [
-            'organization' => ['required', 'string', 'max:200'],
-            'position' => ['required', 'string', 'max:150'],
-            'country' => ['required', 'string', 'max:100'],
-            'started_month' => ['required', 'integer', 'between:1,12'],
-            'started_year' => ['required', 'integer', 'min:1950', 'max:'.date('Y')],
+        $validator = Validator::make($request->all(), $this->rules(), attributes: $this->attributes());
+
+        $this->checkDates($validator, $request->all());
+
+        return $validator->validate();
+    }
+
+    /**
+     * One record's rules, optionally under a prefix so the same ones cover a
+     * list of records as well as a single one.
+     *
+     * @return array<string, mixed>
+     */
+    private function rules(string $prefix = ''): array
+    {
+        return [
+            "{$prefix}organization" => ['required', 'string', 'max:200'],
+            "{$prefix}position" => ['required', 'string', 'max:150'],
+            "{$prefix}country" => ['required', 'string', 'max:100'],
+            "{$prefix}started_month" => ['required', 'integer', 'between:1,12'],
+            "{$prefix}started_year" => ['required', 'integer', 'min:1950', 'max:'.date('Y')],
             // Both empty while the person still works there; one without the
             // other would be half a date.
-            'ended_month' => ['nullable', 'required_with:ended_year', 'integer', 'between:1,12'],
-            'ended_year' => ['nullable', 'required_with:ended_month', 'integer', 'min:1950', 'max:'.date('Y')],
-        ], attributes: [
-            'organization' => 'организация',
-            'position' => 'должность',
-            'country' => 'страна',
-            'started_month' => 'месяц вступления',
-            'started_year' => 'год вступления',
-            'ended_month' => 'месяц ухода',
-            'ended_year' => 'год ухода',
-        ]);
+            "{$prefix}ended_month" => ['nullable', "required_with:{$prefix}ended_year", 'integer', 'between:1,12'],
+            "{$prefix}ended_year" => ['nullable', "required_with:{$prefix}ended_month", 'integer', 'min:1950', 'max:'.date('Y')],
+        ];
+    }
 
-        $validator->after(function ($validator) use ($request) {
+    /**
+     * @return array<string, string>
+     */
+    private function attributes(string $prefix = ''): array
+    {
+        return [
+            "{$prefix}organization" => 'организация',
+            "{$prefix}position" => 'должность',
+            "{$prefix}country" => 'страна',
+            "{$prefix}started_month" => 'месяц вступления',
+            "{$prefix}started_year" => 'год вступления',
+            "{$prefix}ended_month" => 'месяц ухода',
+            "{$prefix}ended_year" => 'год ухода',
+        ];
+    }
+
+    /**
+     * Neither date in the future, and the leaving date after the joining one.
+     * Rules cannot say this on their own: the two halves of a date are
+     * separate fields, so they are compared here.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    private function checkDates(\Illuminate\Validation\Validator $validator, array $record, string $prefix = ''): void
+    {
+        $validator->after(function ($validator) use ($record, $prefix) {
             // Months counted from year 0, so the two dates compare as plain numbers.
             $month = fn ($year, $m) => is_numeric($year) && is_numeric($m) ? (int) $year * 12 + (int) $m : null;
             $now = (int) date('Y') * 12 + (int) date('n');
 
-            $start = $month($request->input('started_year'), $request->input('started_month'));
-            $end = $month($request->input('ended_year'), $request->input('ended_month'));
+            $start = $month($record['started_year'] ?? null, $record['started_month'] ?? null);
+            $end = $month($record['ended_year'] ?? null, $record['ended_month'] ?? null);
 
             if ($start !== null && $start > $now) {
-                $validator->errors()->add('started_year', 'Дата вступления не может быть в будущем.');
+                $validator->errors()->add("{$prefix}started_year", 'Дата вступления не может быть в будущем.');
             }
             if ($end !== null && $end > $now) {
-                $validator->errors()->add('ended_year', 'Дата ухода не может быть в будущем.');
+                $validator->errors()->add("{$prefix}ended_year", 'Дата ухода не может быть в будущем.');
             }
             if ($start !== null && $end !== null && $end < $start) {
-                $validator->errors()->add('ended_year', 'Дата ухода раньше даты вступления.');
+                $validator->errors()->add("{$prefix}ended_year", 'Дата ухода раньше даты вступления.');
             }
         });
-
-        return $validator->validate();
     }
 }

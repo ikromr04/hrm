@@ -123,6 +123,8 @@ interface EmployeesProps {
     status: EmploymentStatus;
     /** Per-list counts; null for viewers who only see working staff. */
     statusCounts: Record<EmploymentStatus, number> | null;
+    /** May add a colleague, transfer, fire and delete (managers). */
+    canEdit: boolean;
     total: number;
 }
 
@@ -464,6 +466,7 @@ export default function Employees({
     options,
     status,
     statusCounts,
+    canEdit,
 }: EmployeesProps) {
     const { auth } = usePage<SharedData>().props;
     const canManage = auth.can.manageEmployees;
@@ -601,10 +604,15 @@ export default function Employees({
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button className="h-8">
-                        <Plus />
-                        Добавить сотрудника
-                    </Button>
+                    {canEdit && (
+                        // A page of its own: the form runs over several steps.
+                        <Button className="h-8" asChild>
+                            <Link href={route('employees.create')}>
+                                <Plus />
+                                Добавить сотрудника
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 <DataTable
