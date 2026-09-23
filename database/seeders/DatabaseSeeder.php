@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             DepartmentSeeder::class,
             PositionSeeder::class,
             LanguageSeeder::class,
+            EquipmentTypeSeeder::class,
             UserSeeder::class,
         ]);
     }

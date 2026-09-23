@@ -44,6 +44,7 @@ class EmployeeEditTest extends TestCase
             'languages' => [],
             'children' => [],
             'educations' => [],
+            'equipment' => [],
             'work_experiences' => [],
             ...$overrides,
         ];

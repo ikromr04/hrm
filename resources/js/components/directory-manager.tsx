@@ -47,8 +47,8 @@ interface DirectoryManagerProps {
     /** Route name prefix, e.g. "directories.roles". */
     route: string;
     labels: Labels;
-    /** Link to the employee list filtered by this record. */
-    employeesUrl: (item: DirectoryItem) => string;
+    /** Link to the employee list filtered by this record; without it the count is plain text. */
+    employeesUrl?: (item: DirectoryItem) => string;
     /** Show and edit the parent/child structure (departments). */
     tree?: boolean;
     /** When given, each record has heads and members chosen from these people (departments). */
@@ -168,9 +168,13 @@ export function DirectoryManager({ items, field, route: routeName, labels, emplo
                                     )}
                                     <td className="px-4 py-2.5 tabular-nums">
                                         {(row.total_count ?? row.users_count) > 0 ? (
-                                            <Link href={employeesUrl(row)} className="text-brand-strong hover:underline dark:text-[#C5E27A]">
-                                                {row.total_count ?? row.users_count}
-                                            </Link>
+                                            employeesUrl ? (
+                                                <Link href={employeesUrl(row)} className="text-brand-strong hover:underline dark:text-[#C5E27A]">
+                                                    {row.total_count ?? row.users_count}
+                                                </Link>
+                                            ) : (
+                                                <span>{row.total_count ?? row.users_count}</span>
+                                            )
                                         ) : (
                                             <span className="text-muted-foreground">0</span>
                                         )}

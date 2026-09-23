@@ -17,6 +17,7 @@ import {
     sexLabels,
     tenure,
     type Education,
+    type Equipment,
     type PrivateDetails,
     type Sex,
     type SpokenLanguage,
@@ -32,6 +33,8 @@ interface ProfilePrivate extends PrivateDetails {
     educations: (Education & { id: number })[];
     /** The latest first. */
     work_experiences: (WorkExperience & { id: number })[];
+    /** Grouped by kind, which is resolved to its directory name here. */
+    equipment: (Equipment & { id: number; type: string | null })[];
     birth_place: string | null;
     passport: { series: string | null; number: string | null; issued_at: string | null; issued_by: string | null };
 }
@@ -152,6 +155,20 @@ function WorkExperiences({ items }: { items: ProfilePrivate['work_experiences'] 
                         {job.organization} · {job.country}
                     </span>
                     <span className="text-muted-foreground text-[13px] tabular-nums">{workPeriod(job)}</span>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
+    return (
+        <ul className="flex flex-col">
+            {items.map((unit) => (
+                <li key={unit.id} className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                    <span className="text-sm font-medium">{unit.type ?? 'Без вида'}</span>
+                    {unit.description && <span className="text-sm">{unit.description}</span>}
+                    <span className="text-muted-foreground text-[13px] tabular-nums">Инв. № {unit.inventory_number}</span>
                 </li>
             ))}
         </ul>
@@ -319,6 +336,14 @@ export default function EmployeeProfile({ employee, neighbours }: { employee: Em
                                     <p className="text-muted-foreground text-sm">Не указана</p>
                                 ) : (
                                     <WorkExperiences items={details.work_experiences} />
+                                )}
+                            </Section>
+
+                            <Section title="Оборудование">
+                                {details.equipment.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">Не выдано</p>
+                                ) : (
+                                    <EquipmentList items={details.equipment} />
                                 )}
                             </Section>
                         </div>

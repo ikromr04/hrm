@@ -56,6 +56,8 @@ type EmployeeForm = {
     languages: { id: number; level: LanguageLevel }[];
     /** Every field as text; empty end month and year mean "still works there". */
     work_experiences: Record<'organization' | 'position' | 'country' | 'started_month' | 'started_year' | 'ended_month' | 'ended_year', string>[];
+    /** Every field as text; the type id is parsed on the server. */
+    equipment: Record<'equipment_type_id' | 'description' | 'inventory_number', string>[];
 };
 
 interface Props {
@@ -69,6 +71,7 @@ interface Props {
         languages: { id: number; name: string }[];
         /** Countries already used, as suggestions. */
         countries: string[];
+        equipment_types: { id: number; name: string }[];
     };
 }
 
@@ -130,6 +133,7 @@ export default function EditEmployee({ employee, options }: Props) {
         educations: employee.educations,
         languages: employee.languages,
         work_experiences: employee.work_experiences,
+        equipment: employee.equipment,
     });
 
     const { data, setData, processing } = form;
@@ -164,6 +168,13 @@ export default function EditEmployee({ employee, options }: Props) {
         );
     const emptyJob = { organization: '', position: '', country: '', started_month: '', started_year: '', ended_month: '', ended_year: '' };
     const countrySuggestions = [...new Set(['Таджикистан', ...options.countries])];
+
+    const setUnit = (index: number, patch: Partial<EmployeeForm['equipment'][number]>) =>
+        setData(
+            'equipment',
+            data.equipment.map((unit, i) => (i === index ? { ...unit, ...patch } : unit)),
+        );
+    const emptyUnit = { equipment_type_id: '', description: '', inventory_number: '' };
 
     const setChild = (index: number, patch: Partial<EmployeeForm['children'][number]>) =>
         setData(
@@ -757,6 +768,95 @@ export default function EditEmployee({ employee, options }: Props) {
                             <Plus />
                             Добавить место работы
                         </Button>
+                    </Section>
+
+                    <Section title="Оборудование" className="lg:col-span-3">
+                        {options.equipment_types.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                Справочник оборудования пуст — сначала добавьте виды в{' '}
+                                <Link href={route('directories.equipment.index')} className="underline">
+                                    справочнике
+                                </Link>
+                                .
+                            </p>
+                        ) : (
+                            <>
+                                {data.equipment.length === 0 && <p className="text-muted-foreground text-sm">Не выдано</p>}
+                                {data.equipment.map((unit, index) => {
+                                    const error = (field: string) => errors[`equipment.${index}.${field}`];
+
+                                    return (
+                                        <div key={index} className="flex items-start gap-2 border-t pt-4 first-of-type:border-t-0 first-of-type:pt-0">
+                                            <div className="grid flex-1 gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-[1fr_2fr_1fr]">
+                                                <Field label="Оборудование" error={error('equipment_type_id')}>
+                                                    {(id) => (
+                                                        <Select
+                                                            value={unit.equipment_type_id}
+                                                            onValueChange={(value) => setUnit(index, { equipment_type_id: value })}
+                                                        >
+                                                            <SelectTrigger id={id}>
+                                                                <SelectValue placeholder="Выберите" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {options.equipment_types.map((type) => (
+                                                                    <SelectItem key={type.id} value={String(type.id)}>
+                                                                        {type.name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                </Field>
+                                                <Field label="Описание" error={error('description')}>
+                                                    {(id) => (
+                                                        <Input
+                                                            id={id}
+                                                            placeholder="Модель, конфигурация, состояние"
+                                                            value={unit.description}
+                                                            onChange={(e) => setUnit(index, { description: e.target.value })}
+                                                        />
+                                                    )}
+                                                </Field>
+                                                <Field label="Инвентарный номер" error={error('inventory_number')}>
+                                                    {(id) => (
+                                                        <Input
+                                                            id={id}
+                                                            required
+                                                            value={unit.inventory_number}
+                                                            onChange={(e) => setUnit(index, { inventory_number: e.target.value })}
+                                                        />
+                                                    )}
+                                                </Field>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="text-muted-foreground mt-6 shrink-0"
+                                                aria-label="Убрать оборудование"
+                                                onClick={() =>
+                                                    setData(
+                                                        'equipment',
+                                                        data.equipment.filter((_, i) => i !== index),
+                                                    )
+                                                }
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="self-start"
+                                    onClick={() => setData('equipment', [...data.equipment, emptyUnit])}
+                                >
+                                    <Plus />
+                                    Добавить оборудование
+                                </Button>
+                            </>
+                        )}
                     </Section>
                 </div>
             </form>

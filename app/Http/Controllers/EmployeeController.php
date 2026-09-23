@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateEmployeeRequest;
 use App\Models\Department;
+use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
+use App\Models\UserEquipment;
 use App\Models\UserWorkExperience;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -184,7 +186,7 @@ class EmployeeController extends Controller
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
 
         if ($canSeePrivate) {
-            $employee->load(['details', 'children', 'educations', 'workExperiences']);
+            $employee->load(['details', 'children', 'educations', 'workExperiences', 'equipment.type:id,name']);
         }
 
         return Inertia::render('employees/show', [
@@ -214,6 +216,7 @@ class EmployeeController extends Controller
                     ],
                     'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
                     'work_experiences' => $employee->workExperiences->map(fn (UserWorkExperience $w) => $this->workExperience($w))->all(),
+                    'equipment' => $employee->equipment->map(fn (UserEquipment $e) => [...$this->equipment($e), 'type' => $e->type?->name])->all(),
                 ] : null,
             ],
             'neighbours' => $this->neighbours($employee),
@@ -255,7 +258,7 @@ class EmployeeController extends Controller
 
     public function edit(User $employee): Response
     {
-        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children', 'educations', 'workExperiences']);
+        $employee->load(['roles:id,name', 'positions:id', 'departments:id', 'languages:id', 'details', 'children', 'educations', 'workExperiences', 'equipment']);
         $details = $employee->details;
 
         return Inertia::render('employees/edit', [
@@ -297,6 +300,9 @@ class EmployeeController extends Controller
                 'work_experiences' => $employee->workExperiences
                     ->map(fn (UserWorkExperience $w) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->workExperience($w), 'id')))
                     ->all(),
+                'equipment' => $employee->equipment
+                    ->map(fn (UserEquipment $e) => array_map(fn ($v) => $v === null ? '' : (string) $v, Arr::except($this->equipment($e), 'id')))
+                    ->all(),
             ],
             'options' => [
                 'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
@@ -306,6 +312,7 @@ class EmployeeController extends Controller
                 'nationalities' => $this->distinctDetail('nationality'),
                 'citizenships' => $this->distinctDetail('citizenship'),
                 'countries' => UserWorkExperience::query()->distinct()->orderBy('country')->pluck('country'),
+                'equipment_types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
             ],
         ]);
     }
@@ -336,6 +343,11 @@ class EmployeeController extends Controller
 
             $employee->workExperiences()->delete();
             $employee->workExperiences()->createMany($data['work_experiences']);
+
+            // Rows are replaced wholesale, so the old ones go first and free
+            // their inventory numbers for the incoming set.
+            $employee->equipment()->delete();
+            $employee->equipment()->createMany($data['equipment']);
         });
 
         return to_route('employees.show', $employee);
@@ -608,6 +620,19 @@ class EmployeeController extends Controller
             ->map(fn (Language $l) => ['id' => $l->id, 'name' => $l->name, 'level' => $l->pivot->level])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function equipment(UserEquipment $unit): array
+    {
+        return [
+            'id' => $unit->id,
+            'equipment_type_id' => $unit->equipment_type_id,
+            'description' => $unit->description,
+            'inventory_number' => $unit->inventory_number,
+        ];
     }
 
     /**

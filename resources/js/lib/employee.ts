@@ -76,6 +76,14 @@ export interface WorkExperience {
     ended_year: number | null;
 }
 
+/** One unit of company hardware, identified by its inventory number; private. */
+export interface Equipment {
+    equipment_type_id: number;
+    /** Model or anything else worth noting about this unit. */
+    description: string | null;
+    inventory_number: string;
+}
+
 export const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
 /** "3 года 4 мес." between two months, the end month not counted. */

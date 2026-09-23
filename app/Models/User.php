@@ -144,4 +144,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserWorkExperience::class)->orderByDesc('started_year')->orderByDesc('started_month')->orderByDesc('id');
     }
+
+    /**
+     * Company hardware in this person's hands; private, like details.
+     */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(UserEquipment::class)->orderBy('equipment_type_id')->orderBy('id');
+    }
 }

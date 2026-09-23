@@ -3,12 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\Department;
+use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
+use App\Models\UserEquipment;
 use App\Models\UserWorkExperience;
 use Illuminate\Database\Seeder;
 
@@ -83,6 +85,44 @@ class UserSeeder extends Seeder
         $this->addChildren();
         $this->addEducation();
         $this->addWorkExperience();
+        $this->addEquipment();
+    }
+
+    /**
+     * A workplace set for most of the working staff: a computer first, then the
+     * peripherals that go with it, plus the odd printer or headset.
+     */
+    private function addEquipment(): void
+    {
+        $types = EquipmentType::all()->keyBy('name');
+
+        if ($types->isEmpty()) {
+            return;
+        }
+
+        // The mouse and keyboard only make sense next to a desktop computer.
+        $desktopExtras = ['Монитор', 'Клавиатура', 'Мышь'];
+        $occasional = ['Гарнитура', 'ИБП', 'МФУ', 'Планшет', 'Принтер'];
+
+        User::doesntHave('equipment')->where('status', 'active')->get()->each(function (User $user) use ($types, $desktopExtras, $occasional) {
+            if (! fake()->boolean(85)) {
+                return;
+            }
+
+            $laptop = fake()->boolean(35);
+            $names = $laptop
+                ? ['Ноутбук', ...fake()->randomElements($desktopExtras, fake()->numberBetween(0, 1))]
+                : ['Персональный компьютер', ...$desktopExtras];
+            $names = [...$names, ...fake()->randomElements($occasional, fake()->numberBetween(0, 2))];
+
+            foreach (array_unique($names) as $name) {
+                if (! isset($types[$name])) {
+                    continue;
+                }
+
+                UserEquipment::factory()->for($user)->ofType($types[$name])->create();
+            }
+        });
     }
 
     /**

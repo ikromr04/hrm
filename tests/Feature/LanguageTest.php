@@ -68,6 +68,7 @@ class LanguageTest extends TestCase
             'departments' => [],
             'children' => [],
             'educations' => [],
+            'equipment' => [],
             'work_experiences' => [],
             'languages' => $languages,
         ];

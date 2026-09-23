@@ -102,6 +102,17 @@ class UpdateEmployeeRequest extends FormRequest
             // Both empty while the person still works there.
             'work_experiences.*.ended_month' => ['nullable', 'required_with:work_experiences.*.ended_year', 'integer', 'between:1,12'],
             'work_experiences.*.ended_year' => ['nullable', 'required_with:work_experiences.*.ended_month', 'integer', 'min:1950', 'max:'.date('Y')],
+
+            'equipment' => ['present', 'array', 'max:50'],
+            'equipment.*.equipment_type_id' => ['required', 'integer', Rule::exists('equipment_types', 'id')],
+            'equipment.*.description' => ['nullable', 'string', 'max:255'],
+            // One physical unit, one holder: the number must be free across the
+            // company, and the employee's own rows are replaced, so they do not
+            // count as taken.
+            'equipment.*.inventory_number' => [
+                'required', 'string', 'max:50', 'distinct:ignore_case',
+                Rule::unique('user_equipment', 'inventory_number')->where(fn ($q) => $q->where('user_id', '!=', $employee->id)),
+            ],
         ];
     }
 
@@ -205,6 +216,9 @@ class UpdateEmployeeRequest extends FormRequest
             'work_experiences.*.started_year' => 'год вступления',
             'work_experiences.*.ended_month' => 'месяц ухода',
             'work_experiences.*.ended_year' => 'год ухода',
+            'equipment.*.equipment_type_id' => 'оборудование',
+            'equipment.*.description' => 'описание',
+            'equipment.*.inventory_number' => 'инвентарный номер',
         ];
     }
 
