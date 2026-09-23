@@ -108,7 +108,9 @@ function useTab(available: readonly TabKey[]): [TabKey, (key: TabKey) => void] {
     });
 
     return [
-        tab,
+        // Moving to a colleague keeps the open tab, but they may not offer it:
+        // a viewer who sees one person's private data need not see another's.
+        available.includes(tab) ? tab : 'profile',
         (key: TabKey) => {
             setTab(key);
             window.history.replaceState(null, '', key === 'profile' ? window.location.pathname : `#${key}`);
@@ -148,6 +150,9 @@ interface EditOptions {
     /** Flattened tree; `depth` indents the children. */
     departments: { id: number; name: string; depth: number }[];
     languages: { id: number; name: string }[];
+    /** Countries already on file, as suggestions for a previous job. */
+    countries: string[];
+    equipment_types: { id: number; name: string }[];
 }
 
 /** What the employee currently holds, as the dialog addresses it. */
@@ -934,6 +939,458 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
     );
 }
 
+type EducationRecord = ProfilePrivate['educations'][number];
+
+/** One place of study, added or changed on its own. */
+function EducationDialog({ employee, education, onClose }: { employee: Employee; education: EducationRecord | 'new'; onClose: () => void }) {
+    const existing = education === 'new' ? null : education;
+    const form = useForm({
+        institution: existing?.institution ?? '',
+        faculty: existing?.faculty ?? '',
+        specialty: existing?.specialty ?? '',
+        started_year: existing ? String(existing.started_year) : '',
+        graduated_year: existing?.graduated_year ? String(existing.graduated_year) : '',
+        diploma_number: existing?.diploma_number ?? '',
+    });
+
+    const thisYear = new Date().getFullYear();
+
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
+        const options = { preserveScroll: true, onSuccess: onClose };
+
+        if (existing) form.put(route('employees.educations.update', [employee.id, existing.id]), options);
+        else form.post(route('employees.educations.store', employee.id), options);
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
+                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+                    <DialogHeader>
+                        <DialogTitle>{existing ? 'Изменить образование' : 'Новое образование'}</DialogTitle>
+                        <DialogDescription className="sr-only">Заполните поля и сохраните.</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label htmlFor="education-institution">Учебное заведение</Label>
+                            <Input
+                                id="education-institution"
+                                autoFocus
+                                value={form.data.institution}
+                                onChange={(e) => form.setData('institution', e.target.value)}
+                                aria-invalid={!!form.errors.institution}
+                            />
+                            <InputError message={form.errors.institution} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="education-faculty">Факультет</Label>
+                            <Input
+                                id="education-faculty"
+                                value={form.data.faculty}
+                                onChange={(e) => form.setData('faculty', e.target.value)}
+                                aria-invalid={!!form.errors.faculty}
+                            />
+                            <InputError message={form.errors.faculty} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="education-specialty">Специальность</Label>
+                            <Input
+                                id="education-specialty"
+                                value={form.data.specialty}
+                                onChange={(e) => form.setData('specialty', e.target.value)}
+                                aria-invalid={!!form.errors.specialty}
+                            />
+                            <InputError message={form.errors.specialty} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="education-started">Год поступления</Label>
+                            <Input
+                                id="education-started"
+                                type="number"
+                                inputMode="numeric"
+                                min={1950}
+                                max={thisYear}
+                                value={form.data.started_year}
+                                onChange={(e) => form.setData('started_year', e.target.value)}
+                                aria-invalid={!!form.errors.started_year}
+                            />
+                            <InputError message={form.errors.started_year} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="education-graduated">Год окончания</Label>
+                            <Input
+                                id="education-graduated"
+                                type="number"
+                                inputMode="numeric"
+                                min={1950}
+                                max={thisYear + 10}
+                                placeholder="Пусто — ещё учится"
+                                value={form.data.graduated_year}
+                                onChange={(e) => form.setData('graduated_year', e.target.value)}
+                                aria-invalid={!!form.errors.graduated_year}
+                            />
+                            <InputError message={form.errors.graduated_year} />
+                        </div>
+
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label htmlFor="education-diploma">Номер диплома</Label>
+                            <Input
+                                id="education-diploma"
+                                value={form.data.diploma_number}
+                                onChange={(e) => form.setData('diploma_number', e.target.value)}
+                                aria-invalid={!!form.errors.diploma_number}
+                            />
+                            <InputError message={form.errors.diploma_number} />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Отмена
+                        </Button>
+                        <Button type="submit" disabled={form.processing}>
+                            {form.processing && <LoaderCircle className="animate-spin" />}
+                            Сохранить
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+type JobRecord = ProfilePrivate['work_experiences'][number];
+
+/** One previous job, added or changed on its own. */
+function WorkExperienceDialog({
+    employee,
+    job,
+    options,
+    onClose,
+}: {
+    employee: Employee;
+    job: JobRecord | 'new';
+    options: EditOptions;
+    onClose: () => void;
+}) {
+    const existing = job === 'new' ? null : job;
+    const form = useForm({
+        organization: existing?.organization ?? '',
+        position: existing?.position ?? '',
+        country: existing?.country ?? '',
+        started_month: existing ? String(existing.started_month) : '',
+        started_year: existing ? String(existing.started_year) : '',
+        ended_month: existing?.ended_month ? String(existing.ended_month) : '',
+        ended_year: existing?.ended_year ? String(existing.ended_year) : '',
+    });
+
+    const thisYear = new Date().getFullYear();
+    const countries = [...new Set(['Таджикистан', ...options.countries])];
+
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
+        const send = { preserveScroll: true, onSuccess: onClose };
+
+        if (existing) form.put(route('employees.experiences.update', [employee.id, existing.id]), send);
+        else form.post(route('employees.experiences.store', employee.id), send);
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
+                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+                    <DialogHeader>
+                        <DialogTitle>{existing ? 'Изменить место работы' : 'Новое место работы'}</DialogTitle>
+                        <DialogDescription className="sr-only">Заполните поля и сохраните.</DialogDescription>
+                    </DialogHeader>
+
+                    <datalist id="job-countries">
+                        {countries.map((country) => (
+                            <option key={country} value={country} />
+                        ))}
+                    </datalist>
+
+                    <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label htmlFor="job-organization">Организация</Label>
+                            <Input
+                                id="job-organization"
+                                autoFocus
+                                value={form.data.organization}
+                                onChange={(e) => form.setData('organization', e.target.value)}
+                                aria-invalid={!!form.errors.organization}
+                            />
+                            <InputError message={form.errors.organization} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="job-position">Должность</Label>
+                            <Input
+                                id="job-position"
+                                value={form.data.position}
+                                onChange={(e) => form.setData('position', e.target.value)}
+                                aria-invalid={!!form.errors.position}
+                            />
+                            <InputError message={form.errors.position} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="job-country">Страна</Label>
+                            <Input
+                                id="job-country"
+                                list="job-countries"
+                                value={form.data.country}
+                                onChange={(e) => form.setData('country', e.target.value)}
+                                aria-invalid={!!form.errors.country}
+                            />
+                            <InputError message={form.errors.country} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="job-started-month">Вступление</Label>
+                            <div className="grid grid-cols-[1fr_6rem] gap-2">
+                                <Select value={form.data.started_month} onValueChange={(value) => form.setData('started_month', value)}>
+                                    <SelectTrigger id="job-started-month" aria-label="Месяц вступления">
+                                        <SelectValue placeholder="Месяц" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {monthNames.map((month, index) => (
+                                            <SelectItem key={month} value={String(index + 1)}>
+                                                {month}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    aria-label="Год вступления"
+                                    placeholder="Год"
+                                    min={1950}
+                                    max={thisYear}
+                                    value={form.data.started_year}
+                                    onChange={(e) => form.setData('started_year', e.target.value)}
+                                    aria-invalid={!!form.errors.started_year}
+                                />
+                            </div>
+                            <InputError message={form.errors.started_month ?? form.errors.started_year} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="job-ended-month">Уход</Label>
+                            <div className="grid grid-cols-[1fr_6rem] gap-2">
+                                {/* Clearing the month clears the year too: half a date means nothing. */}
+                                <Select
+                                    value={form.data.ended_month || 'none'}
+                                    onValueChange={(value) =>
+                                        form.setData((data) => ({
+                                            ...data,
+                                            ended_month: value === 'none' ? '' : value,
+                                            ended_year: value === 'none' ? '' : data.ended_year,
+                                        }))
+                                    }
+                                >
+                                    <SelectTrigger id="job-ended-month" aria-label="Месяц ухода">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Работает сейчас</SelectItem>
+                                        {monthNames.map((month, index) => (
+                                            <SelectItem key={month} value={String(index + 1)}>
+                                                {month}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    aria-label="Год ухода"
+                                    placeholder="Год"
+                                    min={1950}
+                                    max={thisYear}
+                                    disabled={!form.data.ended_month}
+                                    value={form.data.ended_year}
+                                    onChange={(e) => form.setData('ended_year', e.target.value)}
+                                    aria-invalid={!!form.errors.ended_year}
+                                />
+                            </div>
+                            <InputError message={form.errors.ended_month ?? form.errors.ended_year} />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Отмена
+                        </Button>
+                        <Button type="submit" disabled={form.processing}>
+                            {form.processing && <LoaderCircle className="animate-spin" />}
+                            Сохранить
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+type UnitRecord = ProfilePrivate['equipment'][number];
+
+/** One unit of hardware, handed out or corrected on its own. */
+function EquipmentDialog({
+    employee,
+    unit,
+    options,
+    onClose,
+}: {
+    employee: Employee;
+    unit: UnitRecord | 'new';
+    options: EditOptions;
+    onClose: () => void;
+}) {
+    const existing = unit === 'new' ? null : unit;
+    const form = useForm({
+        equipment_type_id: existing ? String(existing.equipment_type_id) : '',
+        description: existing?.description ?? '',
+        inventory_number: existing?.inventory_number ?? '',
+    });
+
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
+        const send = { preserveScroll: true, onSuccess: onClose };
+
+        if (existing) form.put(route('employees.equipment.update', [employee.id, existing.id]), send);
+        else form.post(route('employees.equipment.store', employee.id), send);
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
+                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+                    <DialogHeader>
+                        <DialogTitle>{existing ? 'Изменить оборудование' : 'Новое оборудование'}</DialogTitle>
+                        <DialogDescription className="sr-only">Заполните поля и сохраните.</DialogDescription>
+                    </DialogHeader>
+
+                    {options.equipment_types.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                            Справочник оборудования пуст — сначала добавьте виды в{' '}
+                            <Link href={route('directories.equipment.index')} className="underline">
+                                справочнике
+                            </Link>
+                            .
+                        </p>
+                    ) : (
+                        <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="unit-type">Оборудование</Label>
+                                <Select value={form.data.equipment_type_id} onValueChange={(value) => form.setData('equipment_type_id', value)}>
+                                    <SelectTrigger id="unit-type">
+                                        <SelectValue placeholder="Выберите" />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-72">
+                                        {options.equipment_types.map((type) => (
+                                            <SelectItem key={type.id} value={String(type.id)}>
+                                                {type.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <InputError message={form.errors.equipment_type_id} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="unit-inventory">Инвентарный номер</Label>
+                                <Input
+                                    id="unit-inventory"
+                                    value={form.data.inventory_number}
+                                    onChange={(e) => form.setData('inventory_number', e.target.value)}
+                                    aria-invalid={!!form.errors.inventory_number}
+                                />
+                                <InputError message={form.errors.inventory_number} />
+                            </div>
+
+                            <div className="grid gap-2 sm:col-span-2">
+                                <Label htmlFor="unit-description">Описание</Label>
+                                <Input
+                                    id="unit-description"
+                                    placeholder="Модель, конфигурация, состояние"
+                                    value={form.data.description}
+                                    onChange={(e) => form.setData('description', e.target.value)}
+                                    aria-invalid={!!form.errors.description}
+                                />
+                                <InputError message={form.errors.description} />
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2">
+                        <Button type="button" variant="outline" onClick={onClose}>
+                            Отмена
+                        </Button>
+                        <Button type="submit" disabled={form.processing || options.equipment_types.length === 0}>
+                            {form.processing && <LoaderCircle className="animate-spin" />}
+                            Сохранить
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Confirms removing one record; deleting cannot be undone. */
+function DeleteRecordDialog({
+    title,
+    description,
+    onConfirm,
+    onClose,
+}: {
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    onClose: () => void;
+}) {
+    const [processing, setProcessing] = useState(false);
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{description}</DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Отмена
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={processing}
+                        onClick={() => {
+                            setProcessing(true);
+                            onConfirm();
+                        }}
+                    >
+                        {processing && <LoaderCircle className="animate-spin" />}
+                        Удалить
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /** Stands in for a section that has no data behind it yet. */
 function Soon({ title }: { title: string }) {
     return (
@@ -948,7 +1405,7 @@ function Soon({ title }: { title: string }) {
  * A block of the profile. Given an `action`, the title turns into a header
  * strip ruled off from the body, with the action on the right.
  */
-function Section({ title, children, className, action }: { title: string; children: ReactNode; className?: string; action?: ReactNode }) {
+function Section({ title, children, className, action }: { title?: string; children: ReactNode; className?: string; action?: ReactNode }) {
     return (
         <Card className={cn('flex flex-col gap-4 rounded-xl px-6 py-5', className)}>
             {action ? (
@@ -958,7 +1415,8 @@ function Section({ title, children, className, action }: { title: string; childr
                     {action}
                 </div>
             ) : (
-                <h2 className="text-base font-semibold">{title}</h2>
+                // A card that fills a whole tab needs no heading: the tab names it.
+                title && <h2 className="text-base font-semibold">{title}</h2>
             )}
             {children}
         </Card>
@@ -1022,22 +1480,55 @@ function Languages({ items }: { items: SpokenLanguage[] }) {
 const studyYears = (education: Education) =>
     education.graduated_year ? `${education.started_year}–${education.graduated_year}` : `${education.started_year} — учится`;
 
-function Educations({ items }: { items: ProfilePrivate['educations'] }) {
+function Educations({
+    items,
+    canEdit,
+    onEdit,
+    onDelete,
+}: {
+    items: ProfilePrivate['educations'];
+    canEdit: boolean;
+    onEdit: (education: ProfilePrivate['educations'][number]) => void;
+    onDelete: (education: ProfilePrivate['educations'][number]) => void;
+}) {
     return (
         <ul className="flex flex-col">
             {items.map((education) => (
-                <li key={education.id} className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-                    <span className="text-sm font-medium">{education.institution}</span>
-                    <span className="text-sm">
-                        {education.faculty} · {education.specialty}
-                    </span>
-                    <span className="text-muted-foreground text-[13px] tabular-nums">
-                        {studyYears(education)}
-                        {education.diploma_number && ` · диплом № ${education.diploma_number}`}
-                    </span>
+                <li key={education.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-sm font-medium">{education.institution}</span>
+                        <span className="text-sm">
+                            {education.faculty} · {education.specialty}
+                        </span>
+                        <span className="text-muted-foreground text-[13px] tabular-nums">
+                            {studyYears(education)}
+                            {education.diploma_number && ` · диплом № ${education.diploma_number}`}
+                        </span>
+                    </div>
+                    {canEdit && <RowActions onEdit={() => onEdit(education)} onDelete={() => onDelete(education)} what="образование" />}
                 </li>
             ))}
         </ul>
+    );
+}
+
+/** The pencil and bin that sit at the end of one record in a list. */
+function RowActions({ onEdit, onDelete, what }: { onEdit: () => void; onDelete: () => void; what: string }) {
+    return (
+        <div className="flex shrink-0 gap-1">
+            <Button variant="ghost" size="icon" className="text-muted-foreground size-7" aria-label={`Изменить ${what}`} onClick={onEdit}>
+                <Pencil className="size-4" />
+            </Button>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
+                aria-label={`Удалить ${what}`}
+                onClick={onDelete}
+            >
+                <Trash2 className="size-4" />
+            </Button>
+        </div>
     );
 }
 
@@ -1050,30 +1541,56 @@ function workPeriod(job: WorkExperience): string {
     return `${monthNames[job.started_month - 1]} ${job.started_year} — ${end} · ${monthsSpan(job.started_year, job.started_month, endYear, endMonth)}`;
 }
 
-function WorkExperiences({ items }: { items: ProfilePrivate['work_experiences'] }) {
+function WorkExperiences({
+    items,
+    canEdit,
+    onEdit,
+    onDelete,
+}: {
+    items: ProfilePrivate['work_experiences'];
+    canEdit: boolean;
+    onEdit: (job: JobRecord) => void;
+    onDelete: (job: JobRecord) => void;
+}) {
     return (
         <ul className="flex flex-col">
             {items.map((job) => (
-                <li key={job.id} className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-                    <span className="text-sm font-medium">{job.position}</span>
-                    <span className="text-sm">
-                        {job.organization} · {job.country}
-                    </span>
-                    <span className="text-muted-foreground text-[13px] tabular-nums">{workPeriod(job)}</span>
+                <li key={job.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-sm font-medium">{job.position}</span>
+                        <span className="text-sm">
+                            {job.organization} · {job.country}
+                        </span>
+                        <span className="text-muted-foreground text-[13px] tabular-nums">{workPeriod(job)}</span>
+                    </div>
+                    {canEdit && <RowActions onEdit={() => onEdit(job)} onDelete={() => onDelete(job)} what="место работы" />}
                 </li>
             ))}
         </ul>
     );
 }
 
-function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
+function EquipmentList({
+    items,
+    canEdit,
+    onEdit,
+    onDelete,
+}: {
+    items: ProfilePrivate['equipment'];
+    canEdit: boolean;
+    onEdit: (unit: UnitRecord) => void;
+    onDelete: (unit: UnitRecord) => void;
+}) {
     return (
         <ul className="flex flex-col">
             {items.map((unit) => (
-                <li key={unit.id} className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-                    <span className="text-sm font-medium">{unit.type ?? 'Без вида'}</span>
-                    {unit.description && <span className="text-sm">{unit.description}</span>}
-                    <span className="text-muted-foreground text-[13px] tabular-nums">Инв. № {unit.inventory_number}</span>
+                <li key={unit.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-sm font-medium">{unit.type ?? 'Без вида'}</span>
+                        {unit.description && <span className="text-sm">{unit.description}</span>}
+                        <span className="text-muted-foreground text-[13px] tabular-nums">Инв. № {unit.inventory_number}</span>
+                    </div>
+                    {canEdit && <RowActions onEdit={() => onEdit(unit)} onDelete={() => onDelete(unit)} what="оборудование" />}
                 </li>
             ))}
         </ul>
@@ -1083,18 +1600,22 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
 type Neighbour = { id: number; name: string } | null;
 
 /** Links to the previous and next colleague in the list; ← and → keys do the same. */
-function Neighbours({ prev, next }: { prev: Neighbour; next: Neighbour }) {
+function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab: TabKey }) {
+    // Comparing colleagues means staying on the same section, so the open tab
+    // travels with the link.
+    const href = (to: Neighbour) => route('employees.show', to!.id) + (tab === 'profile' ? '' : `#${tab}`);
+
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
             const target = event.target as HTMLElement;
             if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
             const to = event.key === 'ArrowLeft' ? prev : event.key === 'ArrowRight' ? next : null;
-            if (to) router.visit(route('employees.show', to.id));
+            if (to) router.visit(href(to));
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [prev, next]);
+    });
 
     const arrow = (to: Neighbour, label: string, Icon: typeof ChevronLeft) => {
         // The arrow leads the label going back and trails it going forward.
@@ -1103,7 +1624,7 @@ function Neighbours({ prev, next }: { prev: Neighbour; next: Neighbour }) {
         return (
             <Button variant="outline" disabled={!to} aria-label={to ? `${label}: ${to.name}` : label} title={to?.name} asChild={!!to}>
                 {to ? (
-                    <Link href={route('employees.show', to.id)} prefetch>
+                    <Link href={href(to)} prefetch>
                         {back && <Icon />}
                         {label}
                         {!back && <Icon />}
@@ -1144,6 +1665,13 @@ export default function EmployeeProfile({
     assigned: Assigned | null;
 }) {
     const [editing, setEditing] = useState<'personal' | 'passport' | 'contacts' | 'languages' | 'employment' | 'family' | null>(null);
+    // Education is edited one record at a time, so these hold a record, not a card name.
+    const [education, setEducation] = useState<EducationRecord | 'new' | null>(null);
+    const [deletingEducation, setDeletingEducation] = useState<EducationRecord | null>(null);
+    const [job, setJob] = useState<JobRecord | 'new' | null>(null);
+    const [deletingJob, setDeletingJob] = useState<JobRecord | null>(null);
+    const [unit, setUnit] = useState<UnitRecord | 'new' | null>(null);
+    const [deletingUnit, setDeletingUnit] = useState<UnitRecord | null>(null);
     const shortName = `${employee.surname} ${employee.name}`;
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
     const details = employee.private;
@@ -1217,7 +1745,7 @@ export default function EmployeeProfile({
                     </div>
 
                     <div className="flex items-center gap-2 self-start sm:self-end">
-                        <Neighbours prev={neighbours.prev} next={neighbours.next} />
+                        <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
                     </div>
                 </div>
 
@@ -1229,33 +1757,71 @@ export default function EmployeeProfile({
                         {TABS.find((t) => t.key === tab && 'soon' in t) && <Soon title={TABS.find((t) => t.key === tab)!.title} />}
 
                         {tab === 'education' && details && (
-                            <Section title="Образование">
-                                {details.educations.length === 0 ? (
-                                    <p className="text-muted-foreground text-sm">Не указано</p>
-                                ) : (
-                                    <Educations items={details.educations} />
+                            <>
+                                <Section>
+                                    {details.educations.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm">Не указано</p>
+                                    ) : (
+                                        <Educations
+                                            items={details.educations}
+                                            canEdit={canEdit}
+                                            onEdit={setEducation}
+                                            onDelete={setDeletingEducation}
+                                        />
+                                    )}
+                                </Section>
+
+                                {/* Outside the card: the card is the list, this adds to it. */}
+                                {canEdit && (
+                                    <Button type="button" variant="outline" className="self-start" onClick={() => setEducation('new')}>
+                                        <Plus />
+                                        Добавить образование
+                                    </Button>
                                 )}
-                            </Section>
+                            </>
                         )}
 
                         {tab === 'experience' && details && (
-                            <Section title="Трудовая деятельность">
-                                {details.work_experiences.length === 0 ? (
-                                    <p className="text-muted-foreground text-sm">Не указана</p>
-                                ) : (
-                                    <WorkExperiences items={details.work_experiences} />
+                            <>
+                                <Section>
+                                    {details.work_experiences.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm">Не указана</p>
+                                    ) : (
+                                        <WorkExperiences
+                                            items={details.work_experiences}
+                                            canEdit={canEdit}
+                                            onEdit={setJob}
+                                            onDelete={setDeletingJob}
+                                        />
+                                    )}
+                                </Section>
+
+                                {canEdit && (
+                                    <Button type="button" variant="outline" className="self-start" onClick={() => setJob('new')}>
+                                        <Plus />
+                                        Добавить место работы
+                                    </Button>
                                 )}
-                            </Section>
+                            </>
                         )}
 
                         {tab === 'equipment' && details && (
-                            <Section title="Оборудование">
-                                {details.equipment.length === 0 ? (
-                                    <p className="text-muted-foreground text-sm">Не выдано</p>
-                                ) : (
-                                    <EquipmentList items={details.equipment} />
+                            <>
+                                <Section>
+                                    {details.equipment.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm">Не выдано</p>
+                                    ) : (
+                                        <EquipmentList items={details.equipment} canEdit={canEdit} onEdit={setUnit} onDelete={setDeletingUnit} />
+                                    )}
+                                </Section>
+
+                                {canEdit && (
+                                    <Button type="button" variant="outline" className="self-start" onClick={() => setUnit('new')}>
+                                        <Plus />
+                                        Добавить оборудование
+                                    </Button>
                                 )}
-                            </Section>
+                            </>
                         )}
                     </div>
                 )}
@@ -1571,6 +2137,54 @@ export default function EmployeeProfile({
             {editing === 'languages' && options && <LanguagesDialog employee={employee} options={options} onClose={() => setEditing(null)} />}
 
             {editing === 'family' && details && <FamilyDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+
+            {education && <EducationDialog employee={employee} education={education} onClose={() => setEducation(null)} />}
+
+            {job && options && <WorkExperienceDialog employee={employee} job={job} options={options} onClose={() => setJob(null)} />}
+
+            {unit && options && <EquipmentDialog employee={employee} unit={unit} options={options} onClose={() => setUnit(null)} />}
+
+            {deletingUnit && (
+                <DeleteRecordDialog
+                    title={`Удалить оборудование «${deletingUnit.type ?? deletingUnit.inventory_number}»?`}
+                    description="Запись исчезнет из профиля. Отменить удаление нельзя."
+                    onConfirm={() =>
+                        router.delete(route('employees.equipment.destroy', [employee.id, deletingUnit.id]), {
+                            preserveScroll: true,
+                            onFinish: () => setDeletingUnit(null),
+                        })
+                    }
+                    onClose={() => setDeletingUnit(null)}
+                />
+            )}
+
+            {deletingJob && (
+                <DeleteRecordDialog
+                    title={`Удалить место работы «${deletingJob.organization}»?`}
+                    description="Запись исчезнет из профиля. Отменить удаление нельзя."
+                    onConfirm={() =>
+                        router.delete(route('employees.experiences.destroy', [employee.id, deletingJob.id]), {
+                            preserveScroll: true,
+                            onFinish: () => setDeletingJob(null),
+                        })
+                    }
+                    onClose={() => setDeletingJob(null)}
+                />
+            )}
+
+            {deletingEducation && (
+                <DeleteRecordDialog
+                    title={`Удалить образование «${deletingEducation.institution}»?`}
+                    description="Запись исчезнет из профиля. Отменить удаление нельзя."
+                    onConfirm={() =>
+                        router.delete(route('employees.educations.destroy', [employee.id, deletingEducation.id]), {
+                            preserveScroll: true,
+                            onFinish: () => setDeletingEducation(null),
+                        })
+                    }
+                    onClose={() => setDeletingEducation(null)}
+                />
+            )}
         </AppLayout>
     );
 }

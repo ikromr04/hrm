@@ -5,7 +5,10 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\Directories;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\EmployeeDetailsController;
+use App\Http\Controllers\EmployeeEducationController;
+use App\Http\Controllers\EmployeeEquipmentController;
 use App\Http\Controllers\EmployeeStatusController;
+use App\Http\Controllers\EmployeeWorkExperienceController;
 use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +30,23 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('employees/{employee
     Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->name('contacts');
     Route::put('languages', [EmployeeDetailsController::class, 'languages'])->name('languages');
     Route::put('employment', [EmployeeDetailsController::class, 'employment'])->name('employment');
+
+    // Education is kept record by record. The controller checks that the record
+    // belongs to the employee in the URL, so one person's id cannot reach
+    // another's; scoped bindings would not, as "education" has no plural form
+    // for Laravel to find the relation by.
+    Route::post('educations', [EmployeeEducationController::class, 'store'])->name('educations.store');
+    Route::put('educations/{education}', [EmployeeEducationController::class, 'update'])->name('educations.update');
+    Route::delete('educations/{education}', [EmployeeEducationController::class, 'destroy'])->name('educations.destroy');
+
+    Route::post('experiences', [EmployeeWorkExperienceController::class, 'store'])->name('experiences.store');
+    Route::put('experiences/{experience}', [EmployeeWorkExperienceController::class, 'update'])->name('experiences.update');
+    Route::delete('experiences/{experience}', [EmployeeWorkExperienceController::class, 'destroy'])->name('experiences.destroy');
+
+    // "equipment" names the collection; one of them is a {unit}.
+    Route::post('equipment', [EmployeeEquipmentController::class, 'store'])->name('equipment.store');
+    Route::put('equipment/{unit}', [EmployeeEquipmentController::class, 'update'])->name('equipment.update');
+    Route::delete('equipment/{unit}', [EmployeeEquipmentController::class, 'destroy'])->name('equipment.destroy');
     Route::put('family', [EmployeeDetailsController::class, 'family'])->name('family');
     Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
     Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');

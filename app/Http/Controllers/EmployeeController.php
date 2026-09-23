@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
@@ -229,6 +230,9 @@ class EmployeeController extends Controller
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
+                // Countries already on file, as suggestions for a previous job.
+                'countries' => UserWorkExperience::query()->distinct()->orderBy('country')->pluck('country'),
+                'equipment_types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
             ] : null,
             // The dialog edits these by id or name, not by the labels shown above.
             'assigned' => $canEdit ? [
