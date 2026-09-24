@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -123,8 +124,9 @@ class EquipmentController extends Controller
     }
 
     /**
-     * A unit joins the fleet in stock: it is on the books before anyone holds
-     * it, and handing it over is a move of its own.
+     * A unit joins the fleet on the balance sheet. It can be handed to a
+     * colleague at once — hardware is usually bought for somebody — and the
+     * handover is still recorded as a move, not folded into the new row.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -143,6 +145,11 @@ class EquipmentController extends Controller
             'next_inventory_at' => ['nullable', 'date'],
             'accessories' => ['nullable', 'array'],
             'accessories.*' => ['string', 'max:100'],
+
+            // A unit often arrives for somebody in particular, so it can be
+            // handed over in the same breath as it is put on the books.
+            'holder_user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'issued_at' => ['nullable', 'required_with:holder_user_id', 'date', 'before_or_equal:today'],
         ], attributes: [
             'equipment_type_id' => 'категория',
             'name' => 'наименование',
@@ -155,12 +162,34 @@ class EquipmentController extends Controller
             'condition' => 'состояние',
             'next_inventory_at' => 'следующая инвентаризация',
             'accessories' => 'комплектация',
+            'holder_user_id' => 'сотрудник',
+            'issued_at' => 'дата выдачи',
         ]);
 
-        $equipment = Equipment::create([...$data, 'status' => 'stock']);
+        $holder = $data['holder_user_id'] ?? null;
 
-        // The books start the moment it arrives: a spell in stock, waiting.
-        $equipment->assignments()->create(['issued_at' => Carbon::today()]);
+        $equipment = Equipment::create([...Arr::except($data, ['holder_user_id', 'issued_at']), 'status' => 'stock']);
+
+        if (! $holder) {
+            // The books start the moment it arrives: a spell in stock, waiting.
+            $equipment->assignments()->create(['issued_at' => Carbon::today()]);
+
+            return to_route('equipment.show', $equipment);
+        }
+
+        // Handed over as it arrives. The move is made as a move rather than
+        // written into the new row, so the journal shows the handover and the
+        // history opens on the colleague instead of on an empty spell.
+        $equipment->update([
+            'status' => 'issued',
+            'holder_user_id' => $holder,
+            'issued_at' => $data['issued_at'],
+        ]);
+
+        $equipment->assignments()->create([
+            'holder_user_id' => $holder,
+            'issued_at' => $data['issued_at'],
+        ]);
 
         return to_route('equipment.show', $equipment);
     }

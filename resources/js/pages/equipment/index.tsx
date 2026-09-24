@@ -16,6 +16,7 @@ import { PersonAvatar } from '@/components/person-avatar';
 import { SearchableSelect } from '@/components/searchable-select';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -239,6 +240,11 @@ function Holder({ unit }: { unit: Unit }) {
  * a move of its own, from the "⋯" beside the row.
  */
 function AddDialog({ options, onClose }: { options: Options; onClose: () => void }) {
+    const today = new Date().toISOString().slice(0, 10);
+    // Hardware is usually bought for somebody, so the handover can be made here
+    // instead of adding the unit and then issuing it in a second window.
+    const [issuing, setIssuing] = useState(false);
+
     const form = useForm({
         equipment_type_id: '',
         name: '',
@@ -250,6 +256,8 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
         memory: '',
         condition: '',
         accessories: '',
+        holder_user_id: '',
+        issued_at: today,
     });
 
     const submit: FormEventHandler = (event) => {
@@ -261,6 +269,8 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                 .split(',')
                 .map((item) => item.trim())
                 .filter(Boolean),
+            holder_user_id: issuing ? data.holder_user_id : null,
+            issued_at: issuing ? data.issued_at : null,
         }));
         form.post(route('equipment.store'), { preserveScroll: true, onSuccess: onClose });
     };
@@ -272,7 +282,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
                         <DialogTitle>Добавить оборудование</DialogTitle>
-                        <DialogDescription>Единица встаёт на баланс и ждёт выдачи.</DialogDescription>
+                        <DialogDescription>Единица встаёт на баланс. Её можно сразу выдать сотруднику.</DialogDescription>
                     </DialogHeader>
 
                     <div className="grid content-start gap-2">
@@ -403,6 +413,47 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                         />
                         <InputError message={form.errors.accessories} />
                         <p className="text-muted-foreground text-[13px]">Через запятую.</p>
+                    </div>
+
+                    <div className="grid content-start gap-4 border-t pt-5">
+                        <div className="flex items-center gap-2.5">
+                            <Checkbox id="add-issue" checked={issuing} onCheckedChange={(on) => setIssuing(on === true)} />
+                            <Label htmlFor="add-issue" className="font-normal">
+                                Сразу выдать сотруднику
+                            </Label>
+                        </div>
+
+                        {issuing && (
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid content-start gap-2">
+                                    <Label htmlFor="add-holder">Кому</Label>
+                                    <SearchableSelect
+                                        id="add-holder"
+                                        value={form.data.holder_user_id}
+                                        onChange={(value) => form.setData('holder_user_id', value)}
+                                        options={options.holders.map((holder) => ({ value: String(holder.id), label: holder.name }))}
+                                        placeholder="Выберите сотрудника"
+                                        searchPlaceholder="Поиск по фамилии"
+                                        empty="Сотрудник не найден"
+                                        invalid={!!form.errors.holder_user_id}
+                                    />
+                                    <InputError message={form.errors.holder_user_id} />
+                                </div>
+
+                                <div className="grid content-start gap-2">
+                                    <Label htmlFor="add-issued-at">Дата выдачи</Label>
+                                    <Input
+                                        id="add-issued-at"
+                                        type="date"
+                                        max={today}
+                                        value={form.data.issued_at}
+                                        onChange={(event) => form.setData('issued_at', event.target.value)}
+                                        aria-invalid={!!form.errors.issued_at}
+                                    />
+                                    <InputError message={form.errors.issued_at} />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter className="gap-2">

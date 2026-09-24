@@ -167,6 +167,51 @@ class EquipmentTest extends TestCase
         $this->assertNull($unit->issued_at);
     }
 
+    public function test_a_new_unit_can_be_handed_over_as_it_is_entered()
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($this->admin())
+            ->post('/equipment', [
+                'equipment_type_id' => $this->type()->id,
+                'name' => 'Ноутбук для нового бухгалтера',
+                'inventory_number' => 'EV-0422',
+                'holder_user_id' => $employee->id,
+                'issued_at' => '2026-03-14',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $unit = Equipment::firstWhere('inventory_number', 'EV-0422');
+        $this->assertSame('issued', $unit->status);
+        $this->assertSame($employee->id, $unit->holder_user_id);
+        $this->assertSame('2026-03-14', $unit->issued_at->toDateString());
+
+        // One open spell, on the colleague — no empty stretch in stock before it.
+        $spells = $unit->assignments()->reorder('id')->get();
+        $this->assertCount(1, $spells);
+        $this->assertSame($employee->id, $spells->first()->holder_user_id);
+        $this->assertNull($spells->first()->returned_at);
+
+        // The journal reads as it happened: entered, then handed over.
+        $this->assertSame(['created', 'issued'], $unit->events()->reorder('id')->pluck('kind')->all());
+    }
+
+    public function test_a_handover_made_while_entering_a_unit_still_needs_its_date()
+    {
+        $employee = User::factory()->create();
+
+        $this->actingAs($this->admin())
+            ->post('/equipment', [
+                'equipment_type_id' => $this->type()->id,
+                'name' => 'Ноутбук без даты',
+                'inventory_number' => 'EV-0423',
+                'holder_user_id' => $employee->id,
+            ])
+            ->assertSessionHasErrors('issued_at');
+
+        $this->assertSame(0, Equipment::count());
+    }
+
     public function test_a_new_unit_needs_a_name_a_category_and_a_free_inventory_number()
     {
         Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0421']);
