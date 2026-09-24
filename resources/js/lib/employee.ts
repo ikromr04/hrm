@@ -1,5 +1,5 @@
 import { plural } from '@/lib/plural';
-import { differenceInMonths, differenceInYears, format, parseISO } from 'date-fns';
+import { differenceInMonths, differenceInYears, parseISO } from 'date-fns';
 
 export type Sex = 'male' | 'female';
 export type Marital = 'single' | 'married';
@@ -31,8 +31,20 @@ export const maritalLabels: Record<Sex, Record<Marital, string>> = {
     female: { single: 'Не замужем', married: 'Замужем' },
 };
 
-/** "2021-03-12" -> "12.03.2021" */
-export const formatDate = (value: string | null) => (value ? format(parseISO(value), 'dd.MM.yyyy') : null);
+/**
+ * Every month cut to three letters and a full stop, so that a column of dates
+ * lines up: "нояб." beside "мая" would not.
+ */
+export const shortMonths = ['янв.', 'фев.', 'мар.', 'апр.', 'мая.', 'июн.', 'июл.', 'авг.', 'сен.', 'окт.', 'ноя.', 'дек.'];
+
+/** "2026-11-05" -> "05 ноя. 2026": the day is padded so a column of dates is one width. */
+export function formatDate(value: string | null): string | null {
+    if (!value) return null;
+
+    const date = parseISO(value);
+
+    return `${String(date.getDate()).padStart(2, '0')} ${shortMonths[date.getMonth()]} ${date.getFullYear()}`;
+}
 
 export const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
 
