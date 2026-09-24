@@ -15,6 +15,8 @@ use App\Http\Controllers\EquipmentDetailsController;
 use App\Http\Controllers\EquipmentDocumentController;
 use App\Http\Controllers\EquipmentRepairController;
 use App\Http\Controllers\EquipmentStatusController;
+use App\Http\Controllers\LeaveController;
+use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\SearchController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +33,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('search', SearchController::class)->name('search');
     Route::get('equipment', [EquipmentController::class, 'index'])->name('equipment.index');
     Route::get('equipment/{equipment}', [EquipmentController::class, 'show'])->name('equipment.show');
+    // Time off: everyone sees their own, heads and HR see everybody's.
+    Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
+    Route::post('leave', [LeaveRequestController::class, 'store'])->name('leave.store');
+    Route::post('leave/{leave}/approve', [LeaveRequestController::class, 'approve'])->name('leave.approve');
+    Route::post('leave/{leave}/reject', [LeaveRequestController::class, 'reject'])->name('leave.reject');
+    Route::post('leave/{leave}/cancel', [LeaveRequestController::class, 'cancel'])->name('leave.cancel');
+
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });

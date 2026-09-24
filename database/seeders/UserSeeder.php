@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\EquipmentType;
 use App\Models\Language;
+use App\Models\LeaveType;
 use App\Models\Position;
 use App\Models\User;
 use App\Models\UserChild;
@@ -86,6 +87,7 @@ class UserSeeder extends Seeder
         $this->addEducation();
         $this->addWorkExperience();
         $this->addEquipment();
+        $this->addLeave();
     }
 
     /**
@@ -140,6 +142,69 @@ class UserSeeder extends Seeder
         }
 
         $this->addEquipmentHistory();
+    }
+
+    /**
+     * A year of time off behind the staff: a couple of spells each, most of
+     * them settled, a few still making their way through. Days are taken in
+     * the order they were asked for, so nobody ends up over their allowance.
+     */
+    private function addLeave(): void
+    {
+        $types = LeaveType::all();
+
+        if ($types->isEmpty()) {
+            return;
+        }
+
+        $year = (int) now()->year;
+
+        User::doesntHave('leaveRequests')->where('status', 'active')->with('departments')->get()
+            ->each(function (User $user) use ($types, $year) {
+                if (! fake()->boolean(75)) {
+                    return;
+                }
+
+                // What is left of each kind as the spells are handed out.
+                $left = $types->mapWithKeys(fn (LeaveType $type) => [$type->id => $type->days_per_year ?? 30])->all();
+                $taken = [];
+
+                foreach (range(1, fake()->numberBetween(1, 3)) as $ignored) {
+                    $type = $types->random();
+                    $days = fake()->numberBetween(1, min($type->max_part_days ?? 7, max(1, $left[$type->id])));
+
+                    if ($days < 1) {
+                        continue;
+                    }
+
+                    $started = fake()->dateTimeBetween("{$year}-01-01", '+2 months');
+                    $ended = (clone $started)->modify('+'.($days - 1).' days');
+
+                    // Never two spells on the same days for one person.
+                    if (collect($taken)->contains(fn (array $spell) => $started <= $spell['end'] && $ended >= $spell['start'])) {
+                        continue;
+                    }
+
+                    $status = $started > now()
+                        ? fake()->randomElement(['pending_head', 'pending_hr', 'approved'])
+                        : fake()->randomElement(['approved', 'approved', 'rejected']);
+
+                    $user->leaveRequests()->create([
+                        'leave_type_id' => $type->id,
+                        'started_on' => $started,
+                        'ended_on' => $ended,
+                        'days' => $days,
+                        'status' => $status,
+                        'note' => fake()->boolean(30) ? 'Остаюсь на связи по срочным вопросам' : null,
+                        'decision_note' => $status === 'rejected' ? 'На эти дни уже согласован отпуск коллеги' : null,
+                        'head_decided_at' => in_array($status, ['pending_hr', 'approved'], true) ? now() : null,
+                        'hr_decided_at' => $status === 'approved' ? now() : null,
+                    ]);
+
+                    $taken[] = ['start' => $started, 'end' => $ended];
+                    $left[$type->id] -= $days;
+                }
+            });
     }
 
     /**

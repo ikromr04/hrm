@@ -169,6 +169,26 @@ class User extends Authenticatable
     }
 
     /**
+     * Time off this person has asked for, the most recent spell first.
+     */
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class)->orderByDesc('started_on')->orderByDesc('id');
+    }
+
+    /**
+     * Whether this person heads the department the other one belongs to, which
+     * is who decides on their time off first.
+     */
+    public function headOf(User $employee): bool
+    {
+        return $this->departments()
+            ->wherePivot('is_head', true)
+            ->whereIn('departments.id', $employee->departments()->pluck('departments.id'))
+            ->exists();
+    }
+
+    /**
      * Company hardware this person holds right now. The units belong to the
      * company and are handed out from the equipment section; the profile only
      * shows what is currently on them.
