@@ -1,4 +1,5 @@
 import { type StatusTone } from '@/components/status-badge';
+import { formatDate, shortMonths } from '@/lib/employee';
 import { Headphones, Laptop, Monitor, Printer, Smartphone, type LucideIcon } from 'lucide-react';
 
 export type EquipmentStatus = 'issued' | 'stock' | 'repair' | 'written_off';
@@ -13,7 +14,7 @@ export const statusTone: Record<EquipmentStatus, StatusTone> = {
 
 export const statusLabel: Record<EquipmentStatus, string> = {
     issued: 'Выдано',
-    stock: 'На складе',
+    stock: 'На балансе',
     repair: 'В ремонте',
     written_off: 'Списано',
 };
@@ -27,20 +28,6 @@ export const categoryIcon: Record<string, LucideIcon> = {
     Периферия: Headphones,
 };
 
-/** "9 800 сомони"; nothing at all when the price was never written down. */
-export function formatPrice(value: string | number | null): string | null {
-    if (value === null || value === '') return null;
-
-    const amount = Number(value);
-    if (Number.isNaN(amount)) return null;
-
-    // Whole somoni read better than trailing zeroes on a card, and the
-    // non-breaking spaces ru-RU groups thousands with become plain ones.
-    const grouped = Math.round(amount).toLocaleString('ru-RU').replace(/\s/g, ' ');
-
-    return `${grouped} сомони`;
-}
-
 /** "декабрь 2026": an inventory is due in a month, not on a day. */
 export function formatMonth(date: string | null): string | null {
     if (!date) return null;
@@ -48,4 +35,111 @@ export function formatMonth(date: string | null): string | null {
     const parsed = new Date(date);
 
     return `${parsed.toLocaleDateString('ru-RU', { month: 'long' })} ${parsed.getFullYear()}`;
+}
+
+/* ------------------------------------------------------------------ journal */
+
+export type EventKind =
+    | 'created'
+    | 'issued'
+    | 'taken'
+    | 'repair'
+    | 'written_off'
+    | 'updated'
+    | 'condition'
+    | 'accessories'
+    | 'repair_added'
+    | 'repair_removed';
+
+export const eventLabel: Record<EventKind, string> = {
+    created: 'Поставлено на баланс',
+    issued: 'Выдано',
+    taken: 'Возвращено',
+    repair: 'Отправлено в ремонт',
+    written_off: 'Списано',
+    updated: 'Изменены данные',
+    condition: 'Состояние',
+    accessories: 'Комплектация',
+    repair_added: 'Обслуживание',
+    repair_removed: 'Удалено обслуживание',
+};
+
+export const eventTone: Record<EventKind, StatusTone> = {
+    created: 'info',
+    issued: 'success',
+    taken: 'neutral',
+    repair: 'warning',
+    written_off: 'danger',
+    updated: 'neutral',
+    condition: 'info',
+    accessories: 'info',
+    repair_added: 'warning',
+    repair_removed: 'neutral',
+};
+
+/** The field names as the card spells them, for reading a change out loud. */
+export const fieldLabel: Record<string, string> = {
+    name: 'Наименование',
+    equipment_type_id: 'Категория',
+    maker: 'Производитель',
+    model: 'Модель',
+    serial_number: 'Серийный номер',
+    inventory_number: 'Инвентарный номер',
+    processor: 'Процессор',
+    memory: 'Память / диск',
+    condition: 'Состояние',
+    checked_at: 'Последняя проверка',
+    next_inventory_at: 'След. инвентаризация',
+    accessories: 'Комплектация',
+    status: 'Статус',
+    holder_user_id: 'Держатель',
+    holder_department_id: 'Отдел-держатель',
+    issued_at: 'Выдано',
+    written_off_at: 'Списано',
+};
+
+export type ChangeValue = string | number | boolean | string[] | null;
+
+/** Names for the ids an entry kept: field => { id: name }. */
+export type NameLookup = Record<string, Record<string, string>>;
+
+/** What one journal entry recorded: field => [before, after]. */
+export type EventChanges = Record<string, [ChangeValue, ChangeValue]>;
+
+const dateFields = ['checked_at', 'next_inventory_at', 'issued_at', 'written_off_at'];
+
+/**
+ * What a list-valued change came to: which items appeared and which went.
+ * The accessories are the one field kept as a list, so a swap reads as one
+ * item added and another taken away rather than as two unreadable lists.
+ */
+export function listDiff(before: ChangeValue, after: ChangeValue): { added: string[]; removed: string[] } | null {
+    if (!Array.isArray(before) || !Array.isArray(after)) return null;
+
+    return {
+        added: after.filter((item) => !before.includes(item)),
+        removed: before.filter((item) => !after.includes(item)),
+    };
+}
+
+/** A stored value as a person would read it. */
+export function readValue(field: string, value: ChangeValue, names?: NameLookup): string {
+    if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '—';
+    if (value === null || value === '') return '—';
+    if (field === 'status') return statusLabel[String(value) as EquipmentStatus] ?? String(value);
+    if (dateFields.includes(field)) return formatDate(String(value)) ?? String(value);
+    // Holders and categories are kept by id; the name is looked up when the
+    // entry is read, and an id nobody answers to falls back to the number.
+    if (field.endsWith('_id')) return names?.[field]?.[String(value)] ?? `#${value}`;
+
+    return String(value);
+}
+
+/** "04 сен. 2026": a journal entry is read by the day, not by the minute. */
+export function formatMoment(iso: string | null): string {
+    if (!iso) return '—';
+
+    const at = new Date(iso);
+
+    return `${String(at.getDate()).padStart(2, '0')} ${shortMonths[at.getMonth()]} ${at.getFullYear()}`;
 }

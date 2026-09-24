@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
+use App\Observers\EquipmentObserver;
 use Database\Factories\EquipmentFactory;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,12 +16,20 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * One unit of company hardware, identified by its inventory number. It belongs
  * to the company throughout: being handed to someone only changes who holds it.
  */
+#[ObservedBy(EquipmentObserver::class)]
 class Equipment extends Model
 {
     /** @use HasFactory<EquipmentFactory> */
     use HasFactory;
 
     protected $table = 'equipment';
+
+    /**
+     * A line for the journal entry the next save writes — why a unit moved,
+     * when the move itself does not say. Not a column: it lives only as long
+     * as the request that sets it.
+     */
+    public ?string $journalNote = null;
 
     /** In the order the list's tabs show them. */
     public const STATUSES = ['issued', 'stock', 'repair', 'written_off'];
@@ -39,9 +48,6 @@ class Equipment extends Model
         'inventory_number',
         'processor',
         'memory',
-        'purchased_at',
-        'price',
-        'warranty_until',
         'condition',
         'checked_at',
         'next_inventory_at',
@@ -63,21 +69,10 @@ class Equipment extends Model
         return [
             'issued_at' => 'date',
             'written_off_at' => 'date',
-            'purchased_at' => 'date',
-            'warranty_until' => 'date',
             'checked_at' => 'date',
             'next_inventory_at' => 'date',
-            'price' => 'decimal:2',
             'accessories' => 'array',
         ];
-    }
-
-    /**
-     * Whether the cover has run out; a unit with no warranty date never had any.
-     */
-    protected function warrantyExpired(): Attribute
-    {
-        return Attribute::get(fn (): bool => $this->warranty_until !== null && $this->warranty_until->isPast());
     }
 
     /**
@@ -102,9 +97,21 @@ class Equipment extends Model
         return $this->hasMany(EquipmentRepair::class)->orderByDesc('started_at')->orderByDesc('id');
     }
 
-    public function documents(): HasMany
+    /**
+     * Every photograph ever taken of it, newest first. Each one belongs to the
+     * check it was taken for; this is the whole run of them.
+     */
+    public function photos(): HasMany
     {
-        return $this->hasMany(EquipmentDocument::class)->orderByDesc('id');
+        return $this->hasMany(EquipmentPhoto::class)->orderByDesc('id');
+    }
+
+    /**
+     * Everything that has happened to it, newest first.
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(EquipmentEvent::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function type(): BelongsTo

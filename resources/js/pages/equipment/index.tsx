@@ -8,7 +8,7 @@ import {
     type Sort,
     type ViewState,
 } from '@/components/data-table';
-import { CategoryChip, IconChip } from '@/components/equipment-icon';
+import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
 import InputError from '@/components/input-error';
 import { Pagination, type Paginated } from '@/components/pagination';
@@ -16,7 +16,6 @@ import { PersonAvatar } from '@/components/person-avatar';
 import { SearchableSelect } from '@/components/searchable-select';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -42,15 +41,14 @@ import {
     ChevronDown,
     Columns3,
     Ellipsis,
-    Laptop,
+    Eraser,
+    History,
     LoaderCircle,
-    Package,
     Plus,
     RotateCcw,
     Search,
     Trash2,
     UserPlus,
-    Users,
     Wrench,
     X,
     type LucideIcon,
@@ -101,7 +99,6 @@ interface Props {
     perPage: number;
     perPageOptions: number[];
     counts: Record<'all' | Status, number>;
-    summary: { total: number; issued: number; stock: number; repair: number; issued_share: number };
     options: Options;
     canEdit: boolean;
 }
@@ -111,29 +108,41 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Оборудование', href
 const STORAGE_KEY = 'equipment.table.view.v1';
 const DEFAULT_SORT: Sort = { key: 'name', direction: 'asc' };
 
-/** An icon, what it counts, and the number itself at the right edge. */
-function Tile({ label, value, icon, tone }: { label: string; value: number; icon: LucideIcon; tone?: 'brand' | 'warning' | 'neutral' }) {
-    return (
-        <Card className="flex items-center gap-3 rounded-[14px] px-5 py-4">
-            <IconChip icon={icon} tone={tone} size={36} />
-            <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm font-medium">{label}</span>
-            <span className="text-[30px] leading-none font-semibold tabular-nums">{value}</span>
-        </Card>
-    );
-}
+/** Red, for the one action that cannot be undone. */
+const dangerItem = 'text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!';
 
-/** What a unit can be moved to next, given where it is now. */
-type Move = AskedMove | 'repair';
+/**
+ * The "⋯" at the end of a row. A written-off unit has nowhere left to go: the
+ * only thing left to do with it is strike it off the books for good.
+ */
+function RowActions({
+    unit,
+    onAsk,
+    onDelete,
+}: {
+    unit: Unit;
+    onAsk: (move: { unit: Unit; kind: AskedMove }) => void;
+    onDelete: (unit: Unit) => void;
+}) {
+    if (unit.status === 'written_off') {
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground size-8" aria-label={`Действия: ${unit.name}`}>
+                        <Ellipsis className="size-5!" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onSelect={() => onDelete(unit)} className={dangerItem}>
+                        <Eraser />
+                        Удалить запись…
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    }
 
-/** The "⋯" at the end of a row; a written-off unit has nowhere left to go. */
-function RowActions({ unit, onAsk }: { unit: Unit; onAsk: (move: { unit: Unit; kind: AskedMove }) => void }) {
-    // Only sending it for repair asks nothing, so only that one posts outright.
-    const pick = (kind: Move) =>
-        kind === 'repair' ? router.post(route('equipment.repair', unit.id), {}, { preserveScroll: true }) : onAsk({ unit, kind });
-
-    if (unit.status === 'written_off') return null;
-
-    const moves: { kind: Move; icon: LucideIcon }[] = [
+    const moves: { kind: AskedMove; icon: LucideIcon }[] = [
         ...(unit.status === 'issued' ? [{ kind: 'take' as const, icon: ArrowDownToLine }] : [{ kind: 'issue' as const, icon: UserPlus }]),
         ...(unit.status === 'repair' ? [] : [{ kind: 'repair' as const, icon: Wrench }]),
         { kind: 'write-off' as const, icon: Trash2 },
@@ -148,17 +157,58 @@ function RowActions({ unit, onAsk }: { unit: Unit; onAsk: (move: { unit: Unit; k
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
                 {moves.map(({ kind, icon: Icon }) => (
-                    <DropdownMenuItem
-                        key={kind}
-                        onSelect={() => pick(kind)}
-                        className={cn(kind === 'write-off' && 'text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!')}
-                    >
+                    <DropdownMenuItem key={kind} onSelect={() => onAsk({ unit, kind })} className={cn(kind === 'write-off' && dangerItem)}>
                         <Icon />
                         {moveLabel[kind]}
                     </DropdownMenuItem>
                 ))}
             </DropdownMenuContent>
         </DropdownMenu>
+    );
+}
+
+/**
+ * Striking a unit off the books for good — a duplicate, or something entered
+ * by mistake. Everything filed under it goes too, so the dialog says as much
+ * before it asks.
+ */
+function DeleteDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
+    const [busy, setBusy] = useState(false);
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Удалить запись?</DialogTitle>
+                    <DialogDescription>
+                        {unit.name} · инв. № {unit.inventory_number}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <p className="text-sm">
+                    Вместе с единицей исчезнут её история передач, ремонты, документы и журнал. Отменить это нельзя. Если техника просто отслужила
+                    своё — её нужно <span className="font-medium">списать</span>, а не удалять.
+                </p>
+
+                <DialogFooter className="gap-2">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Отмена
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={busy}
+                        onClick={() => {
+                            setBusy(true);
+                            router.delete(route('equipment.destroy', unit.id), { onFinish: onClose });
+                        }}
+                    >
+                        {busy && <LoaderCircle className="animate-spin" />}
+                        Удалить
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -189,7 +239,6 @@ function Holder({ unit }: { unit: Unit }) {
  * a move of its own, from the "⋯" beside the row.
  */
 function AddDialog({ options, onClose }: { options: Options; onClose: () => void }) {
-    const today = new Date().toISOString().slice(0, 10);
     const form = useForm({
         equipment_type_id: '',
         name: '',
@@ -199,9 +248,6 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
         inventory_number: '',
         processor: '',
         memory: '',
-        purchased_at: '',
-        price: '',
-        warranty_until: '',
         condition: '',
         accessories: '',
     });
@@ -226,10 +272,10 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
                         <DialogTitle>Добавить оборудование</DialogTitle>
-                        <DialogDescription>Единица встаёт на баланс со статусом «На складе».</DialogDescription>
+                        <DialogDescription>Единица встаёт на баланс и ждёт выдачи.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="add-name">Наименование</Label>
                         <Input
                             id="add-name"
@@ -241,7 +287,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                         <InputError message={form.errors.name} />
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="add-type">Категория</Label>
                         <SearchableSelect
                             id="add-type"
@@ -257,7 +303,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="add-maker">Производитель</Label>
                             <Input
                                 id="add-maker"
@@ -269,7 +315,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                             <InputError message={form.errors.maker} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="add-model">Модель</Label>
                             <Input
                                 id="add-model"
@@ -283,7 +329,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="add-serial">Серийный номер</Label>
                             <Input
                                 id="add-serial"
@@ -295,7 +341,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                             <InputError message={form.errors.serial_number} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="add-inventory">Инвентарный номер</Label>
                             <Input
                                 id="add-inventory"
@@ -309,7 +355,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="add-processor">Процессор</Label>
                             <Input
                                 id="add-processor"
@@ -321,7 +367,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                             <InputError message={form.errors.processor} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="add-memory">Память / диск</Label>
                             <Input
                                 id="add-memory"
@@ -334,49 +380,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                         </div>
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-3">
-                        <div className="grid gap-2">
-                            <Label htmlFor="add-purchased">Дата покупки</Label>
-                            <Input
-                                id="add-purchased"
-                                type="date"
-                                max={today}
-                                value={form.data.purchased_at}
-                                onChange={(event) => form.setData('purchased_at', event.target.value)}
-                                aria-invalid={!!form.errors.purchased_at}
-                            />
-                            <InputError message={form.errors.purchased_at} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="add-price">Стоимость</Label>
-                            <Input
-                                id="add-price"
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={form.data.price}
-                                onChange={(event) => form.setData('price', event.target.value)}
-                                placeholder="9800"
-                                aria-invalid={!!form.errors.price}
-                            />
-                            <InputError message={form.errors.price} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="add-warranty">Гарантия до</Label>
-                            <Input
-                                id="add-warranty"
-                                type="date"
-                                value={form.data.warranty_until}
-                                onChange={(event) => form.setData('warranty_until', event.target.value)}
-                                aria-invalid={!!form.errors.warranty_until}
-                            />
-                            <InputError message={form.errors.warranty_until} />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="add-condition">Состояние</Label>
                         <Input
                             id="add-condition"
@@ -388,7 +392,7 @@ function AddDialog({ options, onClose }: { options: Options; onClose: () => void
                         <InputError message={form.errors.condition} />
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="add-accessories">Комплектация</Label>
                         <Input
                             id="add-accessories"
@@ -460,19 +464,7 @@ function buildColumns(options: Options): ColumnDef[] {
 
 const defaultView = (): ViewState => ({ hidden: [], pinned: { left: ['name'], right: [] } });
 
-export default function EquipmentIndex({
-    equipment,
-    filters,
-    tab,
-    sort,
-    sortable,
-    perPage,
-    perPageOptions,
-    counts,
-    summary,
-    options,
-    canEdit,
-}: Props) {
+export default function EquipmentIndex({ equipment, filters, tab, sort, sortable, perPage, perPageOptions, counts, options, canEdit }: Props) {
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(defaultView, []);
     const { view, setView, pin, toggleHidden } = useTableView(
@@ -485,6 +477,7 @@ export default function EquipmentIndex({
     const [query, setQuery] = useState(filters.q);
     const [asking, setAsking] = useState<{ unit: Unit; kind: AskedMove } | null>(null);
     const [adding, setAdding] = useState(false);
+    const [deleting, setDeleting] = useState<Unit | null>(null);
 
     /** Everything the list is looking at, as one query string. */
     const visit = (next: { filters?: Partial<Filters>; sort?: Sort; perPage?: number; tab?: Status | null }) => {
@@ -565,13 +558,6 @@ export default function EquipmentIndex({
 
             <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
                 <h1 className="text-xl font-semibold tracking-tight">Оборудование</h1>
-
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Tile label="Всего единиц" value={summary.total} icon={Package} tone="brand" />
-                    <Tile label="Выдано" value={summary.issued} icon={Users} tone="brand" />
-                    <Tile label="На складе" value={summary.stock} icon={Laptop} />
-                    <Tile label="В ремонте" value={summary.repair} icon={Wrench} tone="warning" />
-                </div>
 
                 {/* Search, the status lists, the view and the one thing you can add: one line. */}
                 <div className="-mb-2 flex flex-wrap items-center gap-2">
@@ -661,10 +647,19 @@ export default function EquipmentIndex({
                     </DropdownMenu>
 
                     {canEdit && (
-                        <Button className="h-8" onClick={() => setAdding(true)}>
-                            <Plus />
-                            Добавить оборудование
-                        </Button>
+                        <>
+                            <Button variant="outline" className="h-8" asChild>
+                                <Link href={route('equipment.journal')}>
+                                    <History />
+                                    Журнал
+                                </Link>
+                            </Button>
+
+                            <Button className="h-8" onClick={() => setAdding(true)}>
+                                <Plus />
+                                Добавить оборудование
+                            </Button>
+                        </>
                     )}
                 </div>
 
@@ -684,7 +679,7 @@ export default function EquipmentIndex({
                     onPin={pin}
                     onHide={(key) => toggleHidden(key, true)}
                     lockedKey="name"
-                    actions={canEdit ? (unit) => <RowActions unit={unit} onAsk={setAsking} /> : undefined}
+                    actions={canEdit ? (unit) => <RowActions unit={unit} onAsk={setAsking} onDelete={setDeleting} /> : undefined}
                     empty="Ничего не найдено."
                     footer={
                         <>
@@ -716,6 +711,7 @@ export default function EquipmentIndex({
 
             {asking && <EquipmentMoveDialog unit={asking.unit} kind={asking.kind} holders={options.holders} onClose={() => setAsking(null)} />}
             {adding && <AddDialog options={options} onClose={() => setAdding(false)} />}
+            {deleting && <DeleteDialog unit={deleting} onClose={() => setDeleting(null)} />}
         </AppLayout>
     );
 }

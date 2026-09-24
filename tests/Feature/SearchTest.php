@@ -29,7 +29,9 @@ class SearchTest extends TestCase
         User::factory()->create(['surname' => 'Азимова', 'name' => 'Мадина', 'status' => 'fired']);
         User::factory()->create(['surname' => 'Азимова', 'name' => 'Зарина', 'status' => 'transferred']);
 
-        $this->actingAs(User::factory()->create());
+        // Named, not left to the factory: its pool of surnames holds "Азимов"
+        // too, and a viewer who drew it would be counted among the matches.
+        $this->actingAs(User::factory()->create(['surname' => 'Холов', 'name' => 'Бахром']));
 
         // Several words narrow it down; one of them may be the position. (SQLite in tests
         // ignores case for Latin letters only, so the query keeps the stored case.)

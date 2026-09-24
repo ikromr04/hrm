@@ -169,6 +169,14 @@ class User extends Authenticatable
     }
 
     /**
+     * What this person has done to the fleet: the journal's side of it.
+     */
+    public function equipmentEvents(): HasMany
+    {
+        return $this->hasMany(EquipmentEvent::class);
+    }
+
+    /**
      * Time off this person has asked for, the most recent spell first.
      */
     public function leaveRequests(): HasMany

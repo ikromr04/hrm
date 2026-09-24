@@ -3,8 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Equipment;
+use App\Models\EquipmentEvent;
+use App\Support\Photo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -14,8 +20,11 @@ use Illuminate\Validation\Rule;
  */
 class EquipmentDetailsController extends Controller
 {
+    /** The interface never shows a photograph larger than this. */
+    private const PREVIEW = 1200;
+
     /**
-     * "Характеристики": what the unit is and what it cost.
+     * "Характеристики": what the unit is.
      */
     public function specs(Request $request, Equipment $equipment): RedirectResponse
     {
@@ -29,9 +38,6 @@ class EquipmentDetailsController extends Controller
             'inventory_number' => ['required', 'string', 'max:50', Rule::unique('equipment', 'inventory_number')->ignore($equipment)],
             'processor' => ['nullable', 'string', 'max:100'],
             'memory' => ['nullable', 'string', 'max:100'],
-            'purchased_at' => ['nullable', 'date', 'before_or_equal:today'],
-            'price' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
-            'warranty_until' => ['nullable', 'date'],
         ], attributes: [
             'equipment_type_id' => 'категория',
             'name' => 'наименование',
@@ -41,9 +47,6 @@ class EquipmentDetailsController extends Controller
             'inventory_number' => 'инвентарный номер',
             'processor' => 'процессор',
             'memory' => 'память / диск',
-            'purchased_at' => 'дата покупки',
-            'price' => 'стоимость',
-            'warranty_until' => 'гарантия до',
         ]);
 
         $equipment->update($data);
@@ -62,15 +65,59 @@ class EquipmentDetailsController extends Controller
             'condition' => ['nullable', 'string', 'max:200'],
             'checked_at' => ['nullable', 'date', 'before_or_equal:today'],
             'next_inventory_at' => ['nullable', 'date'],
+            'photos' => ['nullable', 'array', 'max:10'],
+            'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
         ], attributes: [
             'condition' => 'текущее состояние',
             'checked_at' => 'последняя проверка',
             'next_inventory_at' => 'следующая инвентаризация',
+            'photos' => 'фотографии',
         ]);
 
-        $equipment->update($data);
+        // Which entries were there before, so the one this check writes can be
+        // found afterwards and the photographs hung on it.
+        $before = (int) $equipment->events()->max('id');
+
+        $equipment->update(Arr::except($data, 'photos'));
+
+        $photos = $request->file('photos') ?? [];
+
+        if ($photos === []) {
+            return back();
+        }
+
+        // A check with nothing to correct still happened, so it gets an entry
+        // of its own rather than leaving the photographs with nowhere to hang.
+        $event = $equipment->events()->where('id', '>', $before)->latest('id')->first()
+            ?? $equipment->events()->create(['user_id' => $request->user()->id, 'kind' => 'condition']);
+
+        foreach ($photos as $photo) {
+            $this->keep($equipment, $event, $photo);
+        }
 
         return back();
+    }
+
+    /**
+     * The photograph twice over: the upload, and a copy scaled to fit a screen.
+     * A picture from a phone is several megabytes, and a journal that showed
+     * every one of them full size would be unusable.
+     */
+    private function keep(Equipment $equipment, EquipmentEvent $event, UploadedFile $photo): void
+    {
+        $folder = "equipment/{$equipment->id}/photos";
+        $name = Str::random(20);
+
+        $original = $photo->storeAs($folder, "{$name}.".$photo->extension(), 'public');
+        $preview = "{$folder}/{$name}_preview.jpg";
+
+        Storage::disk('public')->put($preview, Photo::fit(Storage::disk('public')->path($original), self::PREVIEW));
+
+        $equipment->photos()->create([
+            'equipment_event_id' => $event->id,
+            'path' => $original,
+            'preview' => $preview,
+        ]);
     }
 
     /**
@@ -86,12 +133,10 @@ class EquipmentDetailsController extends Controller
             'holder_user_id' => ['nullable', 'required_without:holder_department_id', 'prohibits:holder_department_id', 'integer', Rule::exists('users', 'id')],
             'holder_department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
             'issued_at' => ['required', 'date', 'before_or_equal:today'],
-            'act_number' => ['nullable', 'string', 'max:50'],
         ], attributes: [
             'holder_user_id' => 'сотрудник',
             'holder_department_id' => 'отдел',
             'issued_at' => 'дата выдачи',
-            'act_number' => 'акт передачи',
         ]);
 
         $holder = [
@@ -104,7 +149,7 @@ class EquipmentDetailsController extends Controller
         // No open spell means the unit predates the history; start one now.
         $equipment->assignments()->updateOrCreate(
             ['id' => $equipment->currentAssignment?->id],
-            [...$holder, 'issued_at' => $data['issued_at'], 'act_number' => $data['act_number'] ?? null],
+            [...$holder, 'issued_at' => $data['issued_at']],
         );
 
         return back();

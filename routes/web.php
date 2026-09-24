@@ -12,7 +12,7 @@ use App\Http\Controllers\EmployeeStatusController;
 use App\Http\Controllers\EmployeeWorkExperienceController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\EquipmentDetailsController;
-use App\Http\Controllers\EquipmentDocumentController;
+use App\Http\Controllers\EquipmentJournalController;
 use App\Http\Controllers\EquipmentRepairController;
 use App\Http\Controllers\EquipmentStatusController;
 use App\Http\Controllers\LeaveController;
@@ -32,6 +32,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
     Route::get('search', SearchController::class)->name('search');
     Route::get('equipment', [EquipmentController::class, 'index'])->name('equipment.index');
+    // Before the card, or "journal" would be read as a unit's id. What went on
+    // over a period is an operations question, so it keeps to whoever manages.
+    Route::get('equipment/journal', EquipmentJournalController::class)
+        ->middleware('can:manage-employees')
+        ->name('equipment.journal');
     Route::get('equipment/{equipment}', [EquipmentController::class, 'show'])->name('equipment.show');
     // Time off: everyone sees their own, heads and HR see everybody's.
     Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
@@ -93,8 +98,9 @@ Route::post('equipment', [EquipmentController::class, 'store'])
 Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
     Route::post('issue', [EquipmentStatusController::class, 'issue'])->name('issue');
     Route::post('take', [EquipmentStatusController::class, 'take'])->name('take');
-    Route::post('repair', [EquipmentStatusController::class, 'repair'])->name('repair');
     Route::post('write-off', [EquipmentStatusController::class, 'writeOff'])->name('write-off');
+    // Struck off the books: for a duplicate or a mistake, not for wear.
+    Route::delete('/', [EquipmentController::class, 'destroy'])->name('destroy');
 
     // The card, edited one block at a time.
     Route::put('specs', [EquipmentDetailsController::class, 'specs'])->name('specs');
@@ -102,11 +108,9 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipmen
     Route::put('state', [EquipmentDetailsController::class, 'state'])->name('state');
     Route::put('handover', [EquipmentDetailsController::class, 'handover'])->name('handover');
 
-    // What has been done to it, and the papers that came with it.
+    // What has been done to it.
     Route::post('repairs', [EquipmentRepairController::class, 'store'])->name('repairs.store');
     Route::delete('repairs/{repair}', [EquipmentRepairController::class, 'destroy'])->name('repairs.destroy');
-    Route::post('documents', [EquipmentDocumentController::class, 'store'])->name('documents.store');
-    Route::delete('documents/{document}', [EquipmentDocumentController::class, 'destroy'])->name('documents.destroy');
 });
 
 // Directories: roles ("Позиция"), positions ("Должность"), departments, languages and equipment categories.

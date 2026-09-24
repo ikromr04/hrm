@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\Photo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -71,7 +72,7 @@ class EmployeeAvatarController extends Controller
      */
     private function square(string $path): string
     {
-        $source = $this->upright($path);
+        $source = Photo::upright($path);
         $width = imagesx($source);
         $height = imagesy($source);
         $side = min($width, $height);
@@ -95,26 +96,5 @@ class EmployeeAvatarController extends Controller
         imagedestroy($source);
 
         return $jpeg;
-    }
-
-    /**
-     * Phones record which way they were held rather than rotating the pixels,
-     * so a portrait photo arrives on its side unless the EXIF tag is applied.
-     *
-     * @return \GdImage
-     */
-    private function upright(string $path)
-    {
-        $image = imagecreatefromstring((string) file_get_contents($path));
-        $orientation = @exif_read_data($path)['Orientation'] ?? null;
-
-        $angle = match ($orientation) {
-            3 => 180,
-            6 => -90,
-            8 => 90,
-            default => 0,
-        };
-
-        return $angle === 0 ? $image : imagerotate($image, $angle, 0);
     }
 }

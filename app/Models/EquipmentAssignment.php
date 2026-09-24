@@ -24,7 +24,6 @@ class EquipmentAssignment extends Model
         'issued_at',
         'returned_at',
         'condition_on_return',
-        'act_number',
     ];
 
     /**

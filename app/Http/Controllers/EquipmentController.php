@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use App\Models\Equipment;
+use App\Models\EquipmentEvent;
 use App\Models\EquipmentType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -104,7 +106,6 @@ class EquipmentController extends Controller
             'perPage' => $perPage,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
             'counts' => $this->counts(),
-            'summary' => $this->summary(),
             'options' => [
                 'types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
                 'statuses' => collect(Equipment::STATUSES)->map(fn (string $s) => ['value' => $s, 'label' => self::STATUS_LABELS[$s]])->all(),
@@ -138,9 +139,6 @@ class EquipmentController extends Controller
 
             'processor' => ['nullable', 'string', 'max:100'],
             'memory' => ['nullable', 'string', 'max:100'],
-            'purchased_at' => ['nullable', 'date', 'before_or_equal:today'],
-            'price' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
-            'warranty_until' => ['nullable', 'date'],
             'condition' => ['nullable', 'string', 'max:200'],
             'next_inventory_at' => ['nullable', 'date'],
             'accessories' => ['nullable', 'array'],
@@ -154,9 +152,6 @@ class EquipmentController extends Controller
             'inventory_number' => 'инвентарный номер',
             'processor' => 'процессор',
             'memory' => 'память / диск',
-            'purchased_at' => 'дата покупки',
-            'price' => 'стоимость',
-            'warranty_until' => 'гарантия до',
             'condition' => 'состояние',
             'next_inventory_at' => 'следующая инвентаризация',
             'accessories' => 'комплектация',
@@ -165,7 +160,7 @@ class EquipmentController extends Controller
         $equipment = Equipment::create([...$data, 'status' => 'stock']);
 
         // The books start the moment it arrives: a spell in stock, waiting.
-        $equipment->assignments()->create(['issued_at' => $data['purchased_at'] ?? Carbon::today()]);
+        $equipment->assignments()->create(['issued_at' => Carbon::today()]);
 
         return to_route('equipment.show', $equipment);
     }
@@ -184,7 +179,8 @@ class EquipmentController extends Controller
             'assignments.holder:id,name,surname',
             'assignments.holderDepartment:id,name',
             'repairs',
-            'documents',
+            'events.user:id,name,surname',
+            'events.photos',
         ]);
 
         $holderDepartment = $equipment->holder?->departments()->orderBy('name')->first();
@@ -201,10 +197,6 @@ class EquipmentController extends Controller
                 'inventory_number' => $equipment->inventory_number,
                 'processor' => $equipment->processor,
                 'memory' => $equipment->memory,
-                'purchased_at' => $equipment->purchased_at?->toDateString(),
-                'price' => $equipment->price,
-                'warranty_until' => $equipment->warranty_until?->toDateString(),
-                'warranty_expired' => $equipment->warranty_expired,
                 'condition' => $equipment->condition,
                 'checked_at' => $equipment->checked_at?->toDateString(),
                 'next_inventory_at' => $equipment->next_inventory_at?->toDateString(),
@@ -212,7 +204,6 @@ class EquipmentController extends Controller
                 'status' => $equipment->status,
                 'issued_at' => $equipment->issued_at?->toDateString(),
                 'written_off_at' => $equipment->written_off_at?->toDateString(),
-                'act_number' => $equipment->currentAssignment?->act_number,
                 'holder' => $equipment->holder ? [
                     'id' => $equipment->holder->id,
                     'name' => "{$equipment->holder->surname} {$equipment->holder->name}",
@@ -232,24 +223,32 @@ class EquipmentController extends Controller
                 'issued_at' => $spell->issued_at->toDateString(),
                 'returned_at' => $spell->returned_at?->toDateString(),
                 'condition_on_return' => $spell->condition_on_return,
-                'act_number' => $spell->act_number,
             ]),
             'repairs' => $equipment->repairs->map(fn ($repair) => [
                 'id' => $repair->id,
                 'kind' => $repair->kind,
                 'started_at' => $repair->started_at->toDateString(),
                 'ended_at' => $repair->ended_at?->toDateString(),
-                'contractor' => $repair->contractor,
-                'cost' => $repair->cost,
                 'note' => $repair->note,
             ]),
-            'documents' => $equipment->documents->map(fn ($document) => [
-                'id' => $document->id,
-                'title' => $document->title,
-                'url' => $document->url,
-                'extension' => $document->extension,
-                'note' => $document->note,
-                'uploaded_at' => $document->created_at?->toDateString(),
+            // The ids the journal kept, read back as the names behind them.
+            'names' => EquipmentEvent::namesFor($equipment->events),
+            // Everything that has happened to this one unit, newest first.
+            'events' => $equipment->events->map(fn ($event) => [
+                'id' => $event->id,
+                'kind' => $event->kind,
+                'changes' => $event->diff ?? [],
+                'note' => $event->note,
+                'at' => $event->created_at?->toIso8601String(),
+                'actor' => $event->user === null ? null : [
+                    'id' => $event->user->id,
+                    'name' => "{$event->user->surname} {$event->user->name}",
+                ],
+                'photos' => $event->photos->map(fn ($photo) => [
+                    'id' => $photo->id,
+                    'url' => $photo->url,
+                    'preview' => $photo->preview_url,
+                ]),
             ]),
             'holders' => User::query()
                 ->active()
@@ -267,6 +266,25 @@ class EquipmentController extends Controller
             'neighbours' => $this->neighbours($equipment),
             'canEdit' => $request->user()->can('manage-employees'),
         ]);
+    }
+
+    /**
+     * Struck off the books altogether — for a duplicate or a unit entered by
+     * mistake. Only a written-off unit may go: while it is still part of the
+     * fleet it is somebody's to account for, and a mistake is written off
+     * first. Its history, repairs and journal go with it, so nothing is
+     * left pointing at a unit that no longer exists.
+     */
+    public function destroy(Equipment $equipment): RedirectResponse
+    {
+        abort_unless($equipment->status === 'written_off', 422, 'Удалить можно только списанное оборудование.');
+
+        // The photographs are on disk; the rows go by themselves, files do not.
+        Storage::disk('public')->delete($equipment->photos->flatMap(fn ($photo) => [$photo->path, $photo->preview])->all());
+
+        $equipment->delete();
+
+        return to_route('equipment.index');
     }
 
     /**
@@ -304,7 +322,7 @@ class EquipmentController extends Controller
     /** Spelled out for the status filter; the page has its own copy for badges. */
     private const STATUS_LABELS = [
         'issued' => 'Выдано',
-        'stock' => 'На складе',
+        'stock' => 'На балансе',
         'repair' => 'В ремонте',
         'written_off' => 'Списано',
     ];
@@ -371,27 +389,6 @@ class EquipmentController extends Controller
         return [
             'all' => (int) $byStatus->sum(),
             ...collect(Equipment::STATUSES)->mapWithKeys(fn (string $s) => [$s => (int) ($byStatus[$s] ?? 0)])->all(),
-        ];
-    }
-
-    /**
-     * The four tiles above the table.
-     *
-     * @return array<string, mixed>
-     */
-    private function summary(): array
-    {
-        $counts = $this->counts();
-        // Written-off units are no longer part of the fleet, so the share of
-        // what is handed out is measured against what is left.
-        $fleet = $counts['all'] - $counts['written_off'];
-
-        return [
-            'total' => $counts['all'],
-            'issued' => $counts['issued'],
-            'stock' => $counts['stock'],
-            'repair' => $counts['repair'],
-            'issued_share' => $fleet > 0 ? (int) round($counts['issued'] / $fleet * 100) : 0,
         ];
     }
 }

@@ -21,8 +21,6 @@ class EquipmentRepair extends Model
         'kind',
         'started_at',
         'ended_at',
-        'contractor',
-        'cost',
         'note',
     ];
 
@@ -36,7 +34,6 @@ class EquipmentRepair extends Model
         return [
             'started_at' => 'date',
             'ended_at' => 'date',
-            'cost' => 'decimal:2',
         ];
     }
 

@@ -25,12 +25,10 @@ class EquipmentStatusController extends Controller
             'holder_user_id' => ['nullable', 'required_without:holder_department_id', 'prohibits:holder_department_id', 'integer', Rule::exists('users', 'id')],
             'holder_department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
             'issued_at' => ['required', 'date', 'before_or_equal:today'],
-            'act_number' => ['nullable', 'string', 'max:50'],
         ], attributes: [
             'holder_user_id' => 'сотрудник',
             'holder_department_id' => 'отдел',
             'issued_at' => 'дата выдачи',
-            'act_number' => 'акт передачи',
         ]);
 
         $this->stillInService($equipment);
@@ -47,7 +45,6 @@ class EquipmentStatusController extends Controller
             'holder_user_id' => $data['holder_user_id'] ?? null,
             'holder_department_id' => $data['holder_department_id'] ?? null,
             'issued_at' => $data['issued_at'],
-            'act_number' => $data['act_number'] ?? null,
         ]);
 
         return back();
@@ -72,33 +69,24 @@ class EquipmentStatusController extends Controller
     }
 
     /**
-     * Away at a contractor; whoever held it no longer does.
-     */
-    public function repair(Equipment $equipment): RedirectResponse
-    {
-        $this->release($equipment, 'repair');
-
-        return back();
-    }
-
-    /**
-     * Nobody holds it now, whatever the reason.
+     * Nobody holds it now, whatever the reason. Sending a unit to a repair
+     * shop is not here: that move asks what is being done and is recorded as
+     * a visit, so it lives with the repairs.
      */
     private function release(Equipment $equipment, string $status, ?string $condition = null): void
     {
         $this->stillInService($equipment);
         $this->closeSpell($equipment, Carbon::today()->toDateString(), $condition);
 
+        // One save, so the journal reads the return as one act rather than as
+        // a move followed by a correction.
         $equipment->update([
             'status' => $status,
             'holder_user_id' => null,
             'holder_department_id' => null,
             'issued_at' => null,
+            ...$condition === null ? [] : ['condition' => $condition, 'checked_at' => Carbon::today()],
         ]);
-
-        if ($condition !== null) {
-            $equipment->update(['condition' => $condition, 'checked_at' => Carbon::today()]);
-        }
     }
 
     /**

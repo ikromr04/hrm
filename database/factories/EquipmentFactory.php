@@ -60,18 +60,12 @@ class EquipmentFactory extends Factory
      */
     public function definition(): array
     {
-        $purchased = fake()->dateTimeBetween('-6 years', '-2 months');
-
         return [
             'equipment_type_id' => EquipmentType::factory(),
             'name' => fake()->words(2, true),
             'maker' => null,
             'serial_number' => strtoupper(fake()->bothify('#?#?#?#')),
             'inventory_number' => 'EV-'.fake()->unique()->numerify('####'),
-            'purchased_at' => $purchased,
-            'price' => fake()->numberBetween(4, 180) * 50,
-            // Two or three years of cover from the day it was bought.
-            'warranty_until' => (clone $purchased)->modify('+'.fake()->numberBetween(2, 3).' years'),
             'condition' => fake()->randomElement(['Рабочее, без повреждений', 'Рабочее, следы эксплуатации', 'Новое, в упаковке']),
             'checked_at' => fake()->dateTimeBetween('-8 months', 'now'),
             'next_inventory_at' => fake()->dateTimeBetween('+2 months', '+14 months'),
@@ -108,7 +102,9 @@ class EquipmentFactory extends Factory
         return $this->state(fn () => [
             'status' => 'issued',
             'holder_user_id' => $userId,
-            'issued_at' => fake()->dateTimeBetween($since ?? '-5 years', '-1 month'),
+            // Up to today: a fleet always has a handover from last week in it,
+            // and the journal is asked about recent weeks more than about old ones.
+            'issued_at' => fake()->dateTimeBetween($since ?? '-5 years', 'now'),
         ]);
     }
 

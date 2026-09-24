@@ -8,9 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * A scan kept with the unit: the handover act, the invoice, the warranty card.
+ * One photograph of a unit, kept twice: the upload, and a scaled copy for the
+ * interface. It hangs off the journal entry it was taken for, so a later check
+ * never overwrites what an earlier one saw.
  */
-class EquipmentDocument extends Model
+class EquipmentPhoto extends Model
 {
     /**
      * The attributes that are mass assignable.
@@ -19,27 +21,39 @@ class EquipmentDocument extends Model
      */
     protected $fillable = [
         'equipment_id',
-        'title',
+        'equipment_event_id',
         'path',
-        'extension',
-        'note',
+        'preview',
     ];
 
     /** @var list<string> */
-    protected $appends = ['url'];
+    protected $appends = ['url', 'preview_url'];
 
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);
     }
 
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(EquipmentEvent::class, 'equipment_event_id');
+    }
+
     /**
-     * Where the browser downloads it from.
+     * The upload, opened when a thumbnail is clicked.
      *
      * @return Attribute<string, never>
      */
     protected function url(): Attribute
     {
         return Attribute::get(fn (): string => Storage::disk('public')->url($this->path));
+    }
+
+    /**
+     * @return Attribute<string, never>
+     */
+    protected function previewUrl(): Attribute
+    {
+        return Attribute::get(fn (): string => Storage::disk('public')->url($this->preview));
     }
 }

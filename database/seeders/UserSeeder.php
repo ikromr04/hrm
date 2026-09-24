@@ -218,7 +218,8 @@ class UserSeeder extends Seeder
     private function addEquipmentHistory(): void
     {
         Equipment::doesntHave('assignments')->with('type')->get()->each(function (Equipment $unit) {
-            $bought = $unit->purchased_at?->toDateString() ?? fake()->dateTimeBetween('-5 years', '-1 year')->format('Y-m-d');
+            // When it arrived: the shelf spell that opens its history starts here.
+            $bought = fake()->dateTimeBetween('-5 years', '-1 year')->format('Y-m-d');
             $issued = $unit->issued_at?->toDateString();
 
             // On the shelf from the day it arrived until somebody took it.
@@ -233,7 +234,6 @@ class UserSeeder extends Seeder
                     'holder_user_id' => $unit->holder_user_id,
                     'holder_department_id' => $unit->holder_department_id,
                     'issued_at' => $issued,
-                    'act_number' => '№ '.fake()->numerify('###').'-'.fake()->numberBetween(1, 9),
                 ]);
             }
 
@@ -242,7 +242,6 @@ class UserSeeder extends Seeder
                 $unit->repairs()->create([
                     'kind' => fake()->randomElement(self::REPAIRS),
                     'started_at' => fake()->dateTimeBetween('-2 months', '-3 days'),
-                    'contractor' => fake()->randomElement(self::CONTRACTORS),
                 ]);
 
                 return;
@@ -255,12 +254,72 @@ class UserSeeder extends Seeder
                     'kind' => fake()->randomElement(self::REPAIRS),
                     'started_at' => $started,
                     'ended_at' => (clone $started)->modify('+'.fake()->numberBetween(1, 6).' days'),
-                    'contractor' => fake()->randomElement(self::CONTRACTORS),
-                    'cost' => fake()->numberBetween(2, 30) * 20,
                     'note' => fake()->randomElement(['Плановое ТО', 'Износ детали', 'По заявке сотрудника', null]),
                 ]);
             }
         });
+
+        $this->addEquipmentJournal();
+    }
+
+    /**
+     * The journal behind the history just built. The observer writes an entry
+     * for every move a controller makes, but the seeder puts units straight
+     * into their final state, so the entries that would have accompanied those
+     * moves are written here — dated when they happened rather than now, which
+     * is the whole point of a journal you can ask about a period.
+     */
+    private function addEquipmentJournal(): void
+    {
+        $actors = User::active()->inRandomOrder()->limit(5)->pluck('id');
+
+        if ($actors->isEmpty()) {
+            return;
+        }
+
+        Equipment::with(['assignments', 'repairs'])->get()->each(function (Equipment $unit) use ($actors) {
+            // Its own creation entry belongs to the day it was bought.
+            $unit->events()->where('kind', 'created')->get()->each(function ($event) use ($unit, $actors) {
+                $event->user_id = $actors->random();
+                $event->created_at = $unit->assignments->min('issued_at') ?? $event->created_at;
+                $event->updated_at = $event->created_at;
+                $event->save();
+            });
+
+            foreach ($unit->assignments as $spell) {
+                // A spell with a holder began with a handover; one without began
+                // with the unit coming back to the shelf.
+                $this->journal($unit, $actors->random(), $spell->holder_user_id ? 'issued' : 'taken', $spell->issued_at, [
+                    'status' => [$spell->holder_user_id ? 'stock' : 'issued', $spell->holder_user_id ? 'issued' : 'stock'],
+                    'holder_user_id' => [null, $spell->holder_user_id],
+                ]);
+            }
+
+            foreach ($unit->repairs as $repair) {
+                $this->journal($unit, $actors->random(), 'repair_added', $repair->started_at, null, $repair->kind);
+            }
+
+            if ($unit->written_off_at !== null) {
+                $this->journal($unit, $actors->random(), 'written_off', $unit->written_off_at, [
+                    'status' => ['stock', 'written_off'],
+                    'written_off_at' => [null, $unit->written_off_at->toDateString()],
+                ]);
+            }
+        });
+    }
+
+    /**
+     * One journal entry, dated when the thing it records actually happened.
+     *
+     * @param  array<string, array<int, mixed>>|null  $changes
+     */
+    private function journal(Equipment $unit, int $actor, string $kind, mixed $on, ?array $changes = null, ?string $note = null): void
+    {
+        $event = $unit->events()->create(['user_id' => $actor, 'kind' => $kind, 'diff' => $changes, 'note' => $note]);
+
+        $event->created_at = $on;
+        $event->updated_at = $on;
+        $event->save();
     }
 
     /** @var list<string> */
@@ -272,9 +331,6 @@ class UserSeeder extends Seeder
         'Диагностика',
         'Замена картриджа и чистка',
     ];
-
-    /** @var list<string> */
-    private const CONTRACTORS = ['Сервис «Техномир»', 'Сервис «Электрон»', 'ИП Салимов', 'Авторизованный сервис Dell'];
 
     /**
      * About two in three worked somewhere before joining: one or two jobs

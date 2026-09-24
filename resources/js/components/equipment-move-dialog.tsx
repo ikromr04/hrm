@@ -8,10 +8,10 @@ import { useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 import { type FormEventHandler } from 'react';
 
-/** The moves that need something from whoever makes them. */
-export type AskedMove = 'issue' | 'take' | 'write-off';
+/** The moves that need something from whoever makes them — all of them. */
+export type AskedMove = 'issue' | 'take' | 'repair' | 'write-off';
 
-export const moveLabel: Record<AskedMove | 'repair', string> = {
+export const moveLabel: Record<AskedMove, string> = {
     issue: 'Выдать',
     take: 'Принять возврат',
     repair: 'Отправить в ремонт',
@@ -43,22 +43,28 @@ export function EquipmentMoveDialog({
     const form = useForm({
         holder_user_id: '',
         issued_at: today,
-        act_number: '',
         condition_on_return: '',
         written_off_at: today,
+        // What the repair shop is being asked to do.
+        kind: '',
+        started_at: today,
     });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
         form.transform((data) => {
-            if (kind === 'issue') return { holder_user_id: data.holder_user_id, issued_at: data.issued_at, act_number: data.act_number };
+            if (kind === 'issue') return { holder_user_id: data.holder_user_id, issued_at: data.issued_at };
             if (kind === 'take') return { condition_on_return: data.condition_on_return };
+            if (kind === 'repair') return { kind: data.kind, started_at: data.started_at };
 
             return { written_off_at: data.written_off_at };
         });
 
-        form.post(route(`equipment.${kind}`, unit.id), { preserveScroll: true, onSuccess: onClose });
+        // A repair is recorded as a visit, which is also what moves the unit.
+        const url = kind === 'repair' ? route('equipment.repairs.store', unit.id) : route(`equipment.${kind}`, unit.id);
+
+        form.post(url, { preserveScroll: true, onSuccess: onClose });
     };
 
     return (
@@ -75,7 +81,7 @@ export function EquipmentMoveDialog({
 
                     {kind === 'issue' && (
                         <>
-                            <div className="grid gap-2">
+                            <div className="grid content-start gap-2">
                                 <Label htmlFor="move-holder">Кому</Label>
                                 <SearchableSelect
                                     id="move-holder"
@@ -90,7 +96,7 @@ export function EquipmentMoveDialog({
                                 <InputError message={form.errors.holder_user_id} />
                             </div>
 
-                            <div className="grid gap-2">
+                            <div className="grid content-start gap-2">
                                 <Label htmlFor="move-issued">Дата выдачи</Label>
                                 <Input
                                     id="move-issued"
@@ -102,23 +108,11 @@ export function EquipmentMoveDialog({
                                 />
                                 <InputError message={form.errors.issued_at} />
                             </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="move-act">Акт передачи</Label>
-                                <Input
-                                    id="move-act"
-                                    value={form.data.act_number}
-                                    onChange={(event) => form.setData('act_number', event.target.value)}
-                                    placeholder="№ 214-1"
-                                    aria-invalid={!!form.errors.act_number}
-                                />
-                                <InputError message={form.errors.act_number} />
-                            </div>
                         </>
                     )}
 
                     {kind === 'take' && (
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="move-condition">Состояние при возврате</Label>
                             <Input
                                 id="move-condition"
@@ -132,8 +126,38 @@ export function EquipmentMoveDialog({
                         </div>
                     )}
 
+                    {kind === 'repair' && (
+                        <>
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="move-kind">Что делаем</Label>
+                                <Input
+                                    id="move-kind"
+                                    value={form.data.kind}
+                                    onChange={(event) => form.setData('kind', event.target.value)}
+                                    placeholder="Замена картриджа"
+                                    aria-invalid={!!form.errors.kind}
+                                />
+                                <InputError message={form.errors.kind} />
+                                <p className="text-muted-foreground text-[13px]">Попадёт в журнал и во вкладку «Обслуживание».</p>
+                            </div>
+
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="move-started">Дата отправки</Label>
+                                <Input
+                                    id="move-started"
+                                    type="date"
+                                    max={today}
+                                    value={form.data.started_at}
+                                    onChange={(event) => form.setData('started_at', event.target.value)}
+                                    aria-invalid={!!form.errors.started_at}
+                                />
+                                <InputError message={form.errors.started_at} />
+                            </div>
+                        </>
+                    )}
+
                     {kind === 'write-off' && (
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="move-written-off">Дата списания</Label>
                             <Input
                                 id="move-written-off"
