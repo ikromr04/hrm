@@ -50,7 +50,7 @@ const at = (errors: Record<string, string | undefined>, key: string) =>
 
 function Field({ label, error, children, className }: { label: string; error?: string; children: ReactNode; className?: string }) {
     return (
-        <div className={cn('grid gap-2', className)}>
+        <div className={cn('grid content-start gap-2', className)}>
             <Label>{label}</Label>
             {children}
             <InputError message={error} />
@@ -988,7 +988,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                             placeholder="Ничего не выбрано"
                                             searchPlaceholder="Поиск по названию или номеру"
                                         />
-                                        <p className="text-muted-foreground text-[13px]">Только то, что лежит на складе.</p>
+                                        <p className="text-muted-foreground text-[13px]">Только то, что свободно и никому не выдано.</p>
                                     </Field>
 
                                     <Field label="Дата выдачи" error={equipment.errors.issued_at}>

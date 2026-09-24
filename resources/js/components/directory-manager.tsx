@@ -318,7 +318,7 @@ function EditorDialog({
                         <DialogDescription className="sr-only">Заполните поля и сохраните.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="directory-label">Название</Label>
                         <Input
                             id="directory-label"
@@ -330,7 +330,7 @@ function EditorDialog({
                     </div>
 
                     {tree && (
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="directory-parent">Входит в</Label>
                             <Select
                                 value={form.data.parent_id === null ? 'root' : String(form.data.parent_id)}
@@ -353,7 +353,7 @@ function EditorDialog({
                     )}
 
                     {people && (
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="directory-head">Руководители</Label>
                             <PeoplePicker
                                 id="directory-head"
@@ -367,7 +367,7 @@ function EditorDialog({
                     )}
 
                     {people && (
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="directory-members">
                                 Сотрудники
                                 {form.data.member_ids.length > 0 && (

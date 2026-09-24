@@ -43,7 +43,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             {status && <div className="bg-brand-soft text-brand-strong rounded-md px-3 py-2 text-center text-sm font-medium">{status}</div>}
 
             <form className="flex flex-col gap-6" onSubmit={submit}>
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                     <Label htmlFor="email">Электронная почта</Label>
                     <Input
                         id="email"
@@ -59,7 +59,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     <InputError message={errors.email} />
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid content-start gap-2">
                     <div className="flex items-center">
                         <Label htmlFor="password">Пароль</Label>
                         {canResetPassword && (

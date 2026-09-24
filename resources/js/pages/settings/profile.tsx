@@ -41,7 +41,7 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                     <HeadingSmall title="Учётная запись" description="Имя и адрес, с которым вы входите в систему" />
 
                     <form onSubmit={submit} className="space-y-6">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="name">Имя</Label>
 
                             <Input
@@ -57,7 +57,7 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
                             <InputError className="mt-2" message={errors.name} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="email">Электронная почта</Label>
 
                             <Input

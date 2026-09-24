@@ -120,7 +120,7 @@ function LeaveDialog({ kind, employee, name, onClose }: { kind: 'transfer' | 'fi
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="leave-date">{transfer ? 'Дата перевода' : 'Дата увольнения'}</Label>
                         <Input
                             id="leave-date"
@@ -132,7 +132,7 @@ function LeaveDialog({ kind, employee, name, onClose }: { kind: 'transfer' | 'fi
                         <InputError message={form.errors.date} />
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="leave-note">{transfer ? 'Куда переведён' : 'Причина (необязательно)'}</Label>
                         <Input
                             id="leave-note"

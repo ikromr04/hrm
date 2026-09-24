@@ -230,7 +230,7 @@ function PersonalDialog({
                     </datalist>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-surname">Фамилия</Label>
                             <Input
                                 id="personal-surname"
@@ -242,7 +242,7 @@ function PersonalDialog({
                             <InputError message={form.errors.surname} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-name">Имя</Label>
                             <Input
                                 id="personal-name"
@@ -254,7 +254,7 @@ function PersonalDialog({
                             <InputError message={form.errors.name} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-patronymic">Отчество</Label>
                             <Input
                                 id="personal-patronymic"
@@ -265,7 +265,7 @@ function PersonalDialog({
                             <InputError message={form.errors.patronymic} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-birth-date">Дата рождения</Label>
                             <Input
                                 id="personal-birth-date"
@@ -278,7 +278,7 @@ function PersonalDialog({
                             <InputError message={form.errors.birth_date} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-sex">Пол</Label>
                             <Select value={form.data.sex} onValueChange={(value) => form.setData('sex', value as Sex)}>
                                 <SelectTrigger id="personal-sex">
@@ -292,7 +292,7 @@ function PersonalDialog({
                             <InputError message={form.errors.sex} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="personal-birth-place">Место рождения</Label>
                             <Input
                                 id="personal-birth-place"
@@ -303,7 +303,7 @@ function PersonalDialog({
                             <InputError message={form.errors.birth_place} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-nationality">Национальность</Label>
                             <Input
                                 id="personal-nationality"
@@ -315,7 +315,7 @@ function PersonalDialog({
                             <InputError message={form.errors.nationality} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="personal-citizenship">Гражданство</Label>
                             <Input
                                 id="personal-citizenship"
@@ -327,7 +327,7 @@ function PersonalDialog({
                             <InputError message={form.errors.citizenship} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="personal-home-address">Домашний адрес</Label>
                             <Input
                                 id="personal-home-address"
@@ -338,7 +338,7 @@ function PersonalDialog({
                             <InputError message={form.errors.home_address} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="personal-roles">Позиция</Label>
                             <MultiSelect
                                 id="personal-roles"
@@ -349,7 +349,7 @@ function PersonalDialog({
                             <InputError message={listError('roles')} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="personal-positions">Должность</Label>
                             <MultiSelect
                                 id="personal-positions"
@@ -360,7 +360,7 @@ function PersonalDialog({
                             <InputError message={listError('positions')} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="personal-departments">Отдел</Label>
                             <MultiSelect
                                 id="personal-departments"
@@ -431,7 +431,7 @@ function PassportDialog({ employee, details, onClose }: { employee: Employee; de
                     </DialogHeader>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="passport-series">Серия</Label>
                             <Input
                                 id="passport-series"
@@ -442,7 +442,7 @@ function PassportDialog({ employee, details, onClose }: { employee: Employee; de
                             <InputError message={form.errors.passport_series} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="passport-number">Номер</Label>
                             <Input
                                 id="passport-number"
@@ -453,7 +453,7 @@ function PassportDialog({ employee, details, onClose }: { employee: Employee; de
                             <InputError message={form.errors.passport_number} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="passport-issued-at">Дата выдачи</Label>
                             <Input
                                 id="passport-issued-at"
@@ -466,7 +466,7 @@ function PassportDialog({ employee, details, onClose }: { employee: Employee; de
                             <InputError message={form.errors.passport_issued_at} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="passport-issued-by">Кем выдан</Label>
                             <Input
                                 id="passport-issued-by"
@@ -518,7 +518,7 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
                     </DialogHeader>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="contacts-email">Электронная почта</Label>
                             <Input
                                 id="contacts-email"
@@ -533,7 +533,7 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
                             <p className="text-muted-foreground text-[13px]">С этим адресом сотрудник входит в систему.</p>
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="contacts-phone">Телефон</Label>
                             <Input
                                 id="contacts-phone"
@@ -547,7 +547,7 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
                             <InputError message={form.errors.phone} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="contacts-sos-phone">Телефон SOS</Label>
                             <Input
                                 id="contacts-sos-phone"
@@ -561,7 +561,7 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
                             <InputError message={form.errors.sos_phone} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="contacts-sos-contact">Чей это номер</Label>
                             <Input
                                 id="contacts-sos-contact"
@@ -608,7 +608,7 @@ function EmploymentDialog({ employee, details, onClose }: { employee: Employee; 
                         <DialogDescription className="sr-only">Измените дату и сохраните.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="employment-hired-at">Дата приёма</Label>
                         <Input
                             id="employment-hired-at"
@@ -797,7 +797,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                     </DialogHeader>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="family-marital">Семейное положение</Label>
                             <Select
                                 value={form.data.marital_status || 'none'}
@@ -815,7 +815,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                             <InputError message={form.errors.marital_status} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="family-spouse-name">{spouseLabel(employee.sex)}</Label>
                             <Input
                                 id="family-spouse-name"
@@ -827,7 +827,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                             <InputError message={form.errors.spouse_name} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="family-spouse-birth-date">Дата рождения</Label>
                             <Input
                                 id="family-spouse-birth-date"
@@ -869,7 +869,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                             form.data.children.map((child, index) => (
                                 <div key={index} className="flex items-start gap-2">
                                     <div className="grid flex-1 gap-x-4 gap-y-2 sm:grid-cols-[1fr_10rem]">
-                                        <div className="grid gap-2">
+                                        <div className="grid content-start gap-2">
                                             <Label htmlFor={`family-child-${index}`} className="sr-only">
                                                 ФИО ребёнка
                                             </Label>
@@ -882,7 +882,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                                             />
                                             <InputError message={errors[`children.${index}.full_name`]} />
                                         </div>
-                                        <div className="grid gap-2">
+                                        <div className="grid content-start gap-2">
                                             <Label htmlFor={`family-child-${index}-birth`} className="sr-only">
                                                 Дата рождения ребёнка
                                             </Label>
@@ -978,7 +978,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
                     </DialogHeader>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="education-institution">Учебное заведение</Label>
                             <Input
                                 id="education-institution"
@@ -990,7 +990,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
                             <InputError message={form.errors.institution} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="education-faculty">Факультет</Label>
                             <Input
                                 id="education-faculty"
@@ -1001,7 +1001,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
                             <InputError message={form.errors.faculty} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="education-specialty">Специальность</Label>
                             <Input
                                 id="education-specialty"
@@ -1012,7 +1012,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
                             <InputError message={form.errors.specialty} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="education-started">Год поступления</Label>
                             <Input
                                 id="education-started"
@@ -1027,7 +1027,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
                             <InputError message={form.errors.started_year} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="education-graduated">Год окончания</Label>
                             <Input
                                 id="education-graduated"
@@ -1043,7 +1043,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
                             <InputError message={form.errors.graduated_year} />
                         </div>
 
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="education-diploma">Номер диплома</Label>
                             <Input
                                 id="education-diploma"
@@ -1123,7 +1123,7 @@ function WorkExperienceDialog({
                     </datalist>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid gap-2 sm:col-span-2">
+                        <div className="grid content-start gap-2 sm:col-span-2">
                             <Label htmlFor="job-organization">Организация</Label>
                             <Input
                                 id="job-organization"
@@ -1135,7 +1135,7 @@ function WorkExperienceDialog({
                             <InputError message={form.errors.organization} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="job-position">Должность</Label>
                             <Input
                                 id="job-position"
@@ -1146,7 +1146,7 @@ function WorkExperienceDialog({
                             <InputError message={form.errors.position} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="job-country">Страна</Label>
                             <Input
                                 id="job-country"
@@ -1158,7 +1158,7 @@ function WorkExperienceDialog({
                             <InputError message={form.errors.country} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="job-started-month">Вступление</Label>
                             <div className="grid grid-cols-[1fr_6rem] gap-2">
                                 <Select value={form.data.started_month} onValueChange={(value) => form.setData('started_month', value)}>
@@ -1188,7 +1188,7 @@ function WorkExperienceDialog({
                             <InputError message={form.errors.started_month ?? form.errors.started_year} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="job-ended-month">Уход</Label>
                             <div className="grid grid-cols-[1fr_6rem] gap-2">
                                 {/* Clearing the month clears the year too: half a date means nothing. */}

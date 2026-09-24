@@ -57,7 +57,7 @@ export default function Password() {
                     <HeadingSmall title="Смена пароля" description="Выберите длинный пароль, который больше нигде не используется" />
 
                     <form onSubmit={updatePassword} className="space-y-6">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="current_password">Текущий пароль</Label>
 
                             <Input
@@ -74,7 +74,7 @@ export default function Password() {
                             <InputError message={errors.current_password} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="password">Новый пароль</Label>
 
                             <Input
@@ -91,7 +91,7 @@ export default function Password() {
                             <InputError message={errors.password} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="password_confirmation">Повторите пароль</Label>
 
                             <Input

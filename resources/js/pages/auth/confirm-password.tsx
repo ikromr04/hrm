@@ -31,7 +31,7 @@ export default function ConfirmPassword() {
 
             <form onSubmit={submit}>
                 <div className="space-y-6">
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="password">Password</Label>
                         <Input
                             id="password"

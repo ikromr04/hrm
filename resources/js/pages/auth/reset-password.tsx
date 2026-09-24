@@ -41,7 +41,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
 
             <form onSubmit={submit}>
                 <div className="grid gap-6">
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="email">Email</Label>
                         <Input
                             id="email"
@@ -56,7 +56,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                         <InputError message={errors.email} className="mt-2" />
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="password">Password</Label>
                         <Input
                             id="password"
@@ -72,7 +72,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                         <InputError message={errors.password} />
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="password_confirmation">Confirm password</Label>
                         <Input
                             id="password_confirmation"

@@ -181,7 +181,7 @@ function RequestDialog({ types, balances, onClose }: { types: LeaveType[]; balan
                         <DialogDescription>Заявка уйдёт руководителю, после согласования — в HR-отдел.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="leave-type">Вид отсутствия</Label>
                         <SearchableSelect
                             id="leave-type"
@@ -201,7 +201,7 @@ function RequestDialog({ types, balances, onClose }: { types: LeaveType[]; balan
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="leave-from">Первый день</Label>
                             <Input
                                 id="leave-from"
@@ -213,7 +213,7 @@ function RequestDialog({ types, balances, onClose }: { types: LeaveType[]; balan
                             <InputError message={form.errors.started_on} />
                         </div>
 
-                        <div className="grid gap-2">
+                        <div className="grid content-start gap-2">
                             <Label htmlFor="leave-to">Последний день</Label>
                             <Input
                                 id="leave-to"
@@ -247,7 +247,7 @@ function RequestDialog({ types, balances, onClose }: { types: LeaveType[]; balan
                         </div>
                     )}
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="leave-note">Комментарий</Label>
                         <Input
                             id="leave-note"
@@ -294,7 +294,7 @@ function RejectDialog({ leave, onClose }: { leave: LeaveRow; onClose: () => void
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-2">
+                    <div className="grid content-start gap-2">
                         <Label htmlFor="reject-note">Причина</Label>
                         <Input
                             id="reject-note"
