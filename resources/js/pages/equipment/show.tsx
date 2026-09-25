@@ -1,9 +1,9 @@
-import { CameraDialog, useCameraMode } from '@/components/camera-capture';
 import { ChangeLines } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
 import InputError from '@/components/input-error';
 import { PersonAvatar } from '@/components/person-avatar';
+import { PhotoInput } from '@/components/photo-input';
 import { Photos, type Photo } from '@/components/photo-viewer';
 import { SearchableSelect } from '@/components/searchable-select';
 import { StatusBadge } from '@/components/status-badge';
@@ -31,7 +31,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
     ArrowDownToLine,
-    Camera,
+    Check,
     ChevronLeft,
     ChevronRight,
     Eraser,
@@ -39,13 +39,10 @@ import {
     Pencil,
     Plus,
     Trash2,
-    Upload,
     UserPlus,
-    Wrench,
-    X,
     type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
+import { useEffect, useState, type FormEventHandler, type ReactNode } from 'react';
 
 interface Holder {
     id: number;
@@ -93,6 +90,8 @@ interface Repair {
     started_at: string;
     ended_at: string | null;
     note: string | null;
+    /** What was photographed when the work was written down. */
+    photos: Photo[];
 }
 
 interface JournalEvent {
@@ -257,15 +256,9 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
 /**
  * Where a unit can go next, as one segmented control at the foot of the
  * sidebar — the same shape the employee's profile gives Перевести, Уволить
- * and Удалить. Sending it for repair asks nothing, so it goes straight away.
+ * and Удалить.
  */
-function MoveGroup({
-    moves,
-    onPick,
-}: {
-    moves: { kind: AskedMove | 'repair'; icon: LucideIcon; danger?: boolean }[];
-    onPick: (kind: AskedMove | 'repair') => void;
-}) {
+function MoveGroup({ moves, onPick }: { moves: { kind: AskedMove; icon: LucideIcon; danger?: boolean }[]; onPick: (kind: AskedMove) => void }) {
     return (
         <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border">
             {moves.map(({ kind, icon: Icon, danger }, index) => (
@@ -408,13 +401,7 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
     const inAYear = new Date();
     inAYear.setFullYear(inAYear.getFullYear() + 1);
 
-    const picker = useRef<HTMLInputElement>(null);
-    const camera = useRef<HTMLInputElement>(null);
     const [photos, setPhotos] = useState<File[]>([]);
-    // A phone hands over to its camera app, a laptop opens ours, and a machine
-    // without a camera is not offered the button at all.
-    const mode = useCameraMode();
-    const [shooting, setShooting] = useState(false);
 
     const form = useForm<{ condition: string; checked_at: string; next_inventory_at: string; photos: File[] }>({
         condition: unit.condition ?? '',
@@ -422,8 +409,6 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
         next_inventory_at: inAYear.toISOString().slice(0, 10),
         photos: [],
     });
-
-    const add = (files: FileList | null) => files && setPhotos([...photos, ...Array.from(files)]);
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
@@ -482,77 +467,12 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
                         </div>
                     </div>
 
-                    <div className="grid content-start gap-2">
-                        <Label>Фотографии</Label>
-
-                        {photos.length > 0 && (
-                            <ul className="flex flex-wrap gap-2">
-                                {photos.map((photo, index) => (
-                                    <li key={index} className="relative">
-                                        <img src={URL.createObjectURL(photo)} alt="" className="size-16 rounded-lg border object-cover" />
-                                        <button
-                                            type="button"
-                                            aria-label={`Убрать снимок ${index + 1}`}
-                                            onClick={() => setPhotos(photos.filter((_, at) => at !== index))}
-                                            className="bg-background absolute -top-1.5 -right-1.5 rounded-full border p-0.5 shadow-sm"
-                                        >
-                                            <X className="size-3.5" />
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-
-                        <div className="flex flex-wrap gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => picker.current?.click()}>
-                                <Upload />
-                                Выбрать файлы
-                            </Button>
-
-                            {mode !== 'none' && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => (mode === 'native' ? camera.current?.click() : setShooting(true))}
-                                >
-                                    <Camera />
-                                    Сфотографировать
-                                </Button>
-                            )}
-                        </div>
-
-                        {shooting && <CameraDialog onShot={(photo) => setPhotos((taken) => [...taken, photo])} onClose={() => setShooting(false)} />}
-
-                        <input
-                            ref={picker}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            hidden
-                            onChange={(event) => {
-                                add(event.target.files);
-                                event.target.value = '';
-                            }}
-                        />
-                        {/* `capture` is honoured by phones only; elsewhere the dialog above does the work. */}
-                        {mode === 'native' && (
-                            <input
-                                ref={camera}
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                hidden
-                                onChange={(event) => {
-                                    add(event.target.files);
-                                    event.target.value = '';
-                                }}
-                            />
-                        )}
-
-                        <InputError message={at(form.errors, 'photos')} />
-                        <p className="text-muted-foreground text-[13px]">Снимки прошлых проверок остаются в журнале — новые их не заменяют.</p>
-                    </div>
+                    <PhotoInput
+                        photos={photos}
+                        onChange={setPhotos}
+                        error={at(form.errors, 'photos')}
+                        hint="Снимки прошлых проверок остаются в журнале — новые их не заменяют."
+                    />
 
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose}>
@@ -734,87 +654,137 @@ function AccessoriesDialog({ unit, onClose }: { unit: Unit; onClose: () => void 
     );
 }
 
-/** A visit to a repair shop. Leaving the end date empty sends the unit away now. */
-function RepairDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
+/**
+ * A piece of work done on a unit: a cleaning, a part replaced, a trip to a
+ * shop. It is a note in the history and moves nothing — an empty end date
+ * only means the work is not finished yet.
+ */
+function RepairDialog({ unit, repair, finishing, onClose }: { unit: Unit; repair?: Repair; finishing?: boolean; onClose: () => void }) {
     const today = new Date().toISOString().slice(0, 10);
-    const form = useForm({ kind: '', started_at: today, ended_at: '', note: '' });
+
+    const [photos, setPhotos] = useState<File[]>([]);
+
+    const form = useForm({
+        kind: repair?.kind ?? '',
+        started_at: repair?.started_at ?? today,
+        // Only "Завершить" fills the date in, because that is what it is for.
+        // A correction opens on what the record says, empty included.
+        ended_at: finishing ? today : (repair?.ended_at ?? ''),
+        note: repair?.note ?? '',
+    });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        form.post(route('equipment.repairs.store', unit.id), { preserveScroll: true, onSuccess: onClose });
+
+        // Multipart, so a correction is a POST that says it is a PUT.
+        form.transform((data) => ({ ...data, photos, ...(repair ? { _method: 'put' } : {}) }));
+
+        const url = repair ? route('equipment.repairs.update', [unit.id, repair.id]) : route('equipment.repairs.store', unit.id);
+
+        form.post(url, { preserveScroll: true, forceFormData: true, onSuccess: onClose });
     };
+
+    const title = finishing ? 'Завершить обслуживание' : repair ? 'Изменить запись' : 'Обслуживание';
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className={finishing ? 'sm:max-w-md' : 'sm:max-w-lg'}>
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
-                        <DialogTitle>Обслуживание и ремонт</DialogTitle>
+                        <DialogTitle>{title}</DialogTitle>
                         <DialogDescription>
-                            {unit.name} · инв. № {unit.inventory_number}
+                            {finishing && repair
+                                ? `${repair.kind} · с ${formatDate(repair.started_at)}`
+                                : `${unit.name} · инв. № ${unit.inventory_number}`}
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="repair-kind">Тип работ</Label>
-                        <Input
-                            id="repair-kind"
-                            value={form.data.kind}
-                            onChange={(event) => form.setData('kind', event.target.value)}
-                            placeholder="Чистка и замена термопасты"
-                            aria-invalid={!!form.errors.kind}
-                        />
-                        <InputError message={form.errors.kind} />
-                    </div>
-
-                    {/*
-                     * Side by side and level with each other. A cell of a grid
-                     * stretches to its row, and a grid inside it would spread
-                     * its own rows over that height — which is what pushed the
-                     * left field down beside the taller right one. `content-start`
-                     * keeps each field packed at the top instead.
-                     */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="repair-started">Дата начала</Label>
-                            <Input
-                                id="repair-started"
-                                type="date"
-                                max={today}
-                                value={form.data.started_at}
-                                onChange={(event) => form.setData('started_at', event.target.value)}
-                                aria-invalid={!!form.errors.started_at}
-                            />
-                            <InputError message={form.errors.started_at} />
-                        </div>
-
+                    {/* Finishing asks one thing, so it shows one field. */}
+                    {finishing ? (
                         <div className="grid content-start gap-2">
                             <Label htmlFor="repair-ended">Дата окончания</Label>
                             <Input
                                 id="repair-ended"
                                 type="date"
                                 min={form.data.started_at || undefined}
+                                max={today}
                                 value={form.data.ended_at}
                                 onChange={(event) => form.setData('ended_at', event.target.value)}
                                 aria-invalid={!!form.errors.ended_at}
                             />
                             <InputError message={form.errors.ended_at} />
-                            <p className="text-muted-foreground text-[13px]">Пусто — техника уедет в ремонт.</p>
+                            <p className="text-muted-foreground text-[13px]">Единица уйдёт с вкладки «На обслуживании».</p>
                         </div>
-                    </div>
+                    ) : (
+                        <>
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="repair-kind">Тип работ</Label>
+                                <Input
+                                    id="repair-kind"
+                                    value={form.data.kind}
+                                    onChange={(event) => form.setData('kind', event.target.value)}
+                                    placeholder="Чистка и замена термопасты"
+                                    aria-invalid={!!form.errors.kind}
+                                />
+                                <InputError message={form.errors.kind} />
+                            </div>
 
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="repair-note">Комментарий</Label>
-                        <Input
-                            id="repair-note"
-                            value={form.data.note}
-                            onChange={(event) => form.setData('note', event.target.value)}
-                            placeholder="Плановое ТО"
-                            aria-invalid={!!form.errors.note}
-                        />
-                        <InputError message={form.errors.note} />
-                    </div>
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="repair-note">Комментарий</Label>
+                                <Input
+                                    id="repair-note"
+                                    value={form.data.note}
+                                    onChange={(event) => form.setData('note', event.target.value)}
+                                    placeholder="Плановое ТО"
+                                    aria-invalid={!!form.errors.note}
+                                />
+                                <InputError message={form.errors.note} />
+                            </div>
+                            {/*
+                             * Side by side and level with each other. A cell of a grid
+                             * stretches to its row, and a grid inside it would spread
+                             * its own rows over that height — which is what pushed the
+                             * left field down beside the taller right one. `content-start`
+                             * keeps each field packed at the top instead.
+                             */}
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid content-start gap-2">
+                                    <Label htmlFor="repair-started">Дата начала</Label>
+                                    <Input
+                                        id="repair-started"
+                                        type="date"
+                                        max={today}
+                                        value={form.data.started_at}
+                                        onChange={(event) => form.setData('started_at', event.target.value)}
+                                        aria-invalid={!!form.errors.started_at}
+                                    />
+                                    <InputError message={form.errors.started_at} />
+                                </div>
+
+                                <div className="grid content-start gap-2">
+                                    <Label htmlFor="repair-ended">Дата окончания</Label>
+                                    <Input
+                                        id="repair-ended"
+                                        type="date"
+                                        min={form.data.started_at || undefined}
+                                        value={form.data.ended_at}
+                                        onChange={(event) => form.setData('ended_at', event.target.value)}
+                                        aria-invalid={!!form.errors.ended_at}
+                                    />
+                                    <InputError message={form.errors.ended_at} />
+                                    <p className="text-muted-foreground text-[13px]">Пусто — работы ещё идут, и единица числится на обслуживании.</p>
+                                </div>
+                            </div>
+
+                            <PhotoInput
+                                photos={photos}
+                                onChange={setPhotos}
+                                error={at(form.errors, 'photos')}
+                                hint="Останутся на записи и в журнале. Прошлые снимки не заменяются."
+                            />
+                        </>
+                    )}
 
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose}>
@@ -849,8 +819,8 @@ function DeleteDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
                 </DialogHeader>
 
                 <p className="text-sm">
-                    Вместе с единицей исчезнут её история передач, ремонты, документы и журнал. Отменить это нельзя. Если техника просто отслужила
-                    своё — её нужно <span className="font-medium">списать</span>, а не удалять.
+                    Вместе с единицей исчезнут её история передач, обслуживание и журнал. Отменить это нельзя. Если техника просто отслужила своё — её
+                    нужно <span className="font-medium">списать</span>, а не удалять.
                 </p>
 
                 <DialogFooter className="gap-2">
@@ -875,12 +845,60 @@ function DeleteDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
     );
 }
 
+/**
+ * A line of the unit's service history is not struck out by a stray click on
+ * the bin, so it is asked about first.
+ */
+function RepairDeleteDialog({ unit, repair, onClose }: { unit: Unit; repair: Repair; onClose: () => void }) {
+    const [busy, setBusy] = useState(false);
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Удалить запись об обслуживании?</DialogTitle>
+                    <DialogDescription>
+                        {repair.kind} ·{' '}
+                        {repair.ended_at ? `${formatDate(repair.started_at)} – ${formatDate(repair.ended_at)}` : `с ${formatDate(repair.started_at)}`}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <p className="text-sm">Запись исчезнет из вкладки «Обслуживание». В журнале останется отметка о том, что её удалили.</p>
+
+                <DialogFooter className="gap-2">
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Отмена
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={busy}
+                        onClick={() => {
+                            setBusy(true);
+                            router.delete(route('equipment.repairs.destroy', [unit.id, repair.id]), {
+                                preserveScroll: true,
+                                onFinish: onClose,
+                            });
+                        }}
+                    >
+                        {busy && <LoaderCircle className="animate-spin" />}
+                        Удалить
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 /* ------------------------------------------------------------------------ page */
 
 export default function EquipmentShow({ unit, assignments, repairs, events, names, holders, types, departments, neighbours, canEdit }: Props) {
     const [tab, setTab] = useTab();
     const [asking, setAsking] = useState<AskedMove | null>(null);
     const [repairing, setRepairing] = useState(false);
+    const [removing, setRemoving] = useState<Repair | null>(null);
+    const [correcting, setCorrecting] = useState<Repair | null>(null);
+    const [closing, setClosing] = useState<Repair | null>(null);
     const [deleting, setDeleting] = useState(false);
     /** Which block of the card is open in a form. */
     const [editing, setEditing] = useState<'specs' | 'accessories' | 'state' | 'handover' | null>(null);
@@ -894,12 +912,11 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
     ];
 
     /** What a unit can be moved to next, given where it is now. */
-    const moves: { kind: AskedMove; icon: typeof Wrench; danger?: boolean }[] =
+    const moves: { kind: AskedMove; icon: LucideIcon; danger?: boolean }[] =
         unit.status === 'written_off'
             ? []
             : [
                   ...(unit.status === 'issued' ? [{ kind: 'take' as const, icon: ArrowDownToLine }] : [{ kind: 'issue' as const, icon: UserPlus }]),
-                  ...(unit.status === 'repair' ? [] : [{ kind: 'repair' as const, icon: Wrench }]),
                   { kind: 'write-off' as const, icon: Trash2, danger: true },
               ];
 
@@ -1123,7 +1140,7 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
 
                 {tab === 'service' && (
                     <Section
-                        title="Обслуживание и ремонт"
+                        title="Обслуживание"
                         action={
                             canEdit &&
                             unit.status !== 'written_off' && (
@@ -1135,9 +1152,9 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                         }
                     >
                         {repairs.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Ремонтов и обслуживания не было</p>
+                            <p className="text-muted-foreground text-sm">Записей об обслуживании нет</p>
                         ) : (
-                            <Table head={['Тип', 'Период', 'Комментарий', '']}>
+                            <Table head={['Тип', 'Период', 'Комментарий', 'Фото', '']}>
                                 {repairs.map((repair) => (
                                     <tr key={repair.id} className="border-t">
                                         <td className="px-6 py-2.5 font-medium">{repair.kind}</td>
@@ -1147,21 +1164,38 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                                                 : `с ${formatDate(repair.started_at)}`}
                                         </td>
                                         <td className="px-6 py-2.5">{repair.note ?? dash}</td>
+                                        <td className="px-6 py-2.5">{repair.photos.length > 0 ? <Photos photos={repair.photos} /> : dash}</td>
                                         <td className="py-2.5 pr-6 text-right">
                                             {canEdit && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground size-8"
-                                                    aria-label={`Удалить запись: ${repair.kind}`}
-                                                    onClick={() =>
-                                                        router.delete(route('equipment.repairs.destroy', [unit.id, repair.id]), {
-                                                            preserveScroll: true,
-                                                        })
-                                                    }
-                                                >
-                                                    <Trash2 />
-                                                </Button>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {/* Until the work has an end date the unit counts as being looked after. */}
+                                                    {repair.ended_at === null && (
+                                                        <Button variant="outline" size="sm" className="h-8" onClick={() => setClosing(repair)}>
+                                                            <Check />
+                                                            Завершить
+                                                        </Button>
+                                                    )}
+
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-muted-foreground size-8"
+                                                        aria-label={`Изменить запись: ${repair.kind}`}
+                                                        onClick={() => setCorrecting(repair)}
+                                                    >
+                                                        <Pencil className="size-4" />
+                                                    </Button>
+
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="text-muted-foreground size-8"
+                                                        aria-label={`Удалить запись: ${repair.kind}`}
+                                                        onClick={() => setRemoving(repair)}
+                                                    >
+                                                        <Trash2 />
+                                                    </Button>
+                                                </div>
                                             )}
                                         </td>
                                     </tr>
@@ -1201,6 +1235,9 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
 
             {asking && <EquipmentMoveDialog unit={unit} kind={asking} holders={holders} onClose={() => setAsking(null)} />}
             {repairing && <RepairDialog unit={unit} onClose={() => setRepairing(false)} />}
+            {correcting && <RepairDialog unit={unit} repair={correcting} onClose={() => setCorrecting(null)} />}
+            {closing && <RepairDialog unit={unit} repair={closing} finishing onClose={() => setClosing(null)} />}
+            {removing && <RepairDeleteDialog unit={unit} repair={removing} onClose={() => setRemoving(null)} />}
             {deleting && <DeleteDialog unit={unit} onClose={() => setDeleting(false)} />}
             {editing === 'specs' && <SpecsDialog unit={unit} types={types} onClose={() => setEditing(null)} />}
             {editing === 'accessories' && <AccessoriesDialog unit={unit} onClose={() => setEditing(null)} />}

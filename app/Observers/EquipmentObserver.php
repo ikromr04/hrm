@@ -54,7 +54,6 @@ class EquipmentObserver
             array_key_exists('status', $changes) => match ($equipment->status) {
                 'issued' => 'issued',
                 'stock' => 'taken',
-                'repair' => 'repair',
                 default => 'written_off',
             },
             array_diff($fields, self::STATE) === [] => 'condition',

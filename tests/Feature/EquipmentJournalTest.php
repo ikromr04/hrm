@@ -130,39 +130,89 @@ class EquipmentJournalTest extends TestCase
         $this->assertSame([['Блок питания 65 Вт', 'Сумка', 'Мышь Logitech M185'], []], $cleared->diff['accessories']);
     }
 
-    public function test_sending_a_unit_away_says_what_for_in_one_entry()
+    public function test_service_says_what_was_done_and_leaves_the_unit_where_it_is()
     {
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
+        $admin = $this->admin();
 
-        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/repairs", [
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/repairs", [
             'kind' => 'Замена картриджа',
             'started_at' => now()->toDateString(),
         ])->assertSessionHasNoErrors();
 
-        $unit->refresh();
-        $this->assertSame('repair', $unit->status);
+        // An entry of its own, carrying what was done; the unit does not move.
+        $this->assertSame('Замена картриджа', $unit->events()->where('kind', 'repair_added')->sole()->note);
+        $this->assertSame('issued', $unit->refresh()->status);
 
-        // One act, one entry: the move, with the reason it was made.
-        $event = $unit->events()->where('kind', 'repair')->sole();
-        $this->assertSame('Замена картриджа', $event->note);
-        $this->assertSame(['issued', 'repair'], $event->diff['status']);
-        $this->assertSame(0, $unit->events()->where('kind', 'repair_added')->count());
+        // Removing the record says so too, rather than leaving a hole.
+        $this->actingAs($admin)
+            ->delete("/equipment/{$unit->id}/repairs/{$unit->repairs()->sole()->id}")
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Замена картриджа', $unit->events()->where('kind', 'repair_removed')->sole()->note);
+        $this->assertSame(0, $unit->repairs()->count());
     }
 
-    public function test_a_finished_repair_is_recorded_although_it_is_not_on_the_unit()
+    public function test_service_can_be_photographed_and_the_pictures_stay_with_the_record()
     {
+        Storage::fake('public');
+        $unit = Equipment::factory()->ofType($this->type())->create();
+
+        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/repairs", [
+            'kind' => 'Замена клавиатуры',
+            'started_at' => '2026-09-01',
+            'photos' => [UploadedFile::fake()->image('before.jpg', 1600, 1200)],
+        ])->assertSessionHasNoErrors();
+
+        $repair = $unit->repairs()->sole();
+        $photo = $repair->photos()->sole();
+        Storage::disk('public')->assertExists($photo->path);
+        Storage::disk('public')->assertExists($photo->preview);
+
+        // Readable from either side: the record it came with, and the journal.
+        $this->assertSame($photo->id, $unit->events()->where('kind', 'repair_added')->sole()->photos()->sole()->id);
+    }
+
+    public function test_a_return_can_be_photographed_and_the_pictures_go_to_its_entry()
+    {
+        Storage::fake('public');
+        $employee = User::factory()->create();
+        $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
+
+        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/take", [
+            'condition_on_return' => 'Царапина на крышке',
+            'photos' => [UploadedFile::fake()->image('lid.jpg', 1600, 1200)],
+        ])->assertSessionHasNoErrors();
+
+        // On the entry that records the return, not on some entry of its own.
+        $photo = $unit->events()->where('kind', 'taken')->sole()->photos()->sole();
+        Storage::disk('public')->assertExists($photo->path);
+        Storage::disk('public')->assertExists($photo->preview);
+    }
+
+    public function test_a_handover_and_a_write_off_keep_their_pictures_too()
+    {
+        Storage::fake('public');
+        $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->create();
         $admin = $this->admin();
 
-        // A visit that is already over moves nothing, so it is an entry of its own.
-        $this->actingAs($admin)->post("/equipment/{$unit->id}/repairs", [
-            'kind' => 'Замена аккумулятора',
-            'started_at' => '2026-09-01',
-            'ended_at' => '2026-09-03',
-        ]);
-        $this->assertSame('Замена аккумулятора', $unit->events()->where('kind', 'repair_added')->sole()->note);
-        $this->assertSame('stock', $unit->refresh()->status);
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", [
+            'holder_user_id' => $employee->id,
+            'issued_at' => now()->toDateString(),
+            'photos' => [UploadedFile::fake()->image('handover.jpg', 1200, 900)],
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/write-off", [
+            'written_off_at' => now()->toDateString(),
+            'photos' => [UploadedFile::fake()->image('broken.jpg', 1200, 900)],
+        ])->assertSessionHasNoErrors();
+
+        // Each picture on the entry for its own occasion, one apiece.
+        $this->assertSame(1, $unit->events()->where('kind', 'issued')->sole()->photos()->count());
+        $this->assertSame(1, $unit->events()->where('kind', 'written_off')->sole()->photos()->count());
+        $this->assertSame(2, $unit->photos()->count());
     }
 
     public function test_a_check_keeps_its_photographs_and_a_later_one_does_not_replace_them()

@@ -49,9 +49,13 @@ class HandleInertiaRequests extends Middleware
                     'manageEmployees' => (bool) $request->user()?->can('manage-employees'),
                 ],
             ],
-            // What a step of a multi-step form hands to the next one, such as
-            // the colleague the "new employee" wizard has just created.
-            'flash' => ['employee' => $request->session()->get('employee')],
+            // What a form hands back to itself: the colleague the "new
+            // employee" wizard has just created, or the unit of equipment the
+            // add form filed while staying open for the next one.
+            'flash' => [
+                'employee' => $request->session()->get('employee'),
+                'equipment' => $request->session()->get('equipment'),
+            ],
         ]);
     }
 }

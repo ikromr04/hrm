@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\EquipmentEvent;
+use App\Models\EquipmentPhoto;
 use App\Models\EquipmentType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,8 +52,11 @@ class EquipmentController extends Controller
             'issued_from' => ['nullable', 'date'],
             'issued_to' => ['nullable', 'date'],
 
-            // The tab above the table; it is not a column filter.
-            'tab' => ['nullable', Rule::in(Equipment::STATUSES)],
+            // The tab above the table; it is not a column filter. Besides the
+            // statuses it takes "service", which is not one: a unit is being
+            // looked after when it has a record that has not ended, whoever
+            // holds it meanwhile.
+            'tab' => ['nullable', Rule::in([...Equipment::STATUSES, 'service'])],
         ]);
 
         $filters = [
@@ -72,7 +76,9 @@ class EquipmentController extends Controller
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
         $query = Equipment::query()->with(['type:id,name', 'holder:id,name,surname,avatar', 'holderDepartment:id,name']);
-        $query->when($tab, fn (Builder $q, string $status) => $q->where('status', $status));
+        $query->withExists(['repairs as repairs_exists' => fn (Builder $q) => $q->whereNull('ended_at')]);
+        $query->when($tab === 'service', fn (Builder $q) => $q->underService())
+            ->when($tab !== null && $tab !== 'service', fn (Builder $q) => $q->where('status', $tab));
         $this->applyFilters($query, $filters);
         $this->applySort($query, $sort, $direction);
 
@@ -94,6 +100,8 @@ class EquipmentController extends Controller
                     'avatar' => $unit->holder->avatar,
                 ] : null,
                 'department' => $unit->holderDepartment?->name,
+                // Marked in the list, because it cuts across the statuses.
+                'in_service' => (bool) $unit->repairs_exists,
                 'issued_at' => $unit->issued_at?->toDateString(),
                 'written_off_at' => $unit->written_off_at?->toDateString(),
             ]);
@@ -123,6 +131,22 @@ class EquipmentController extends Controller
         ]);
     }
 
+    /** The form for a new unit: a page of its own, because it takes photographs. */
+    public function create(): Response
+    {
+        return Inertia::render('equipment/create', [
+            'options' => [
+                'types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
+                'holders' => User::query()
+                    ->active()
+                    ->orderBy('surname')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'surname'])
+                    ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
+            ],
+        ]);
+    }
+
     /**
      * A unit joins the fleet on the balance sheet. It can be handed to a
      * colleague at once — hardware is usually bought for somebody — and the
@@ -142,13 +166,20 @@ class EquipmentController extends Controller
             'processor' => ['nullable', 'string', 'max:100'],
             'memory' => ['nullable', 'string', 'max:100'],
             'condition' => ['nullable', 'string', 'max:200'],
+            'checked_at' => ['nullable', 'date', 'before_or_equal:today'],
             'next_inventory_at' => ['nullable', 'date'],
             'accessories' => ['nullable', 'array'],
             'accessories.*' => ['string', 'max:100'],
 
+            // How it looked on arrival, kept with the entry that records it.
+            'photos' => ['nullable', 'array', 'max:10'],
+            'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
+
             // A unit often arrives for somebody in particular, so it can be
             // handed over in the same breath as it is put on the books.
             'holder_user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            // The form's second button: stay here and enter the next unit.
+            'another' => ['nullable', 'boolean'],
             'issued_at' => ['nullable', 'required_with:holder_user_id', 'date', 'before_or_equal:today'],
         ], attributes: [
             'equipment_type_id' => 'категория',
@@ -160,21 +191,38 @@ class EquipmentController extends Controller
             'processor' => 'процессор',
             'memory' => 'память / диск',
             'condition' => 'состояние',
+            'checked_at' => 'последняя проверка',
             'next_inventory_at' => 'следующая инвентаризация',
             'accessories' => 'комплектация',
+            'photos' => 'фотографии',
             'holder_user_id' => 'сотрудник',
             'issued_at' => 'дата выдачи',
         ]);
 
         $holder = $data['holder_user_id'] ?? null;
 
-        $equipment = Equipment::create([...Arr::except($data, ['holder_user_id', 'issued_at']), 'status' => 'stock']);
+        $equipment = Equipment::create([
+            ...Arr::except($data, ['holder_user_id', 'issued_at', 'photos', 'another']),
+            'status' => 'stock',
+        ]);
+
+        $photos = $request->file('photos') ?? [];
+
+        if ($photos !== []) {
+            // They belong to the entry that records the arrival, so the journal
+            // shows the shape the unit came in.
+            $arrival = $equipment->events()->latest('id')->firstOrFail();
+
+            foreach ($photos as $photo) {
+                EquipmentPhoto::keep($equipment, $arrival, $photo);
+            }
+        }
 
         if (! $holder) {
             // The books start the moment it arrives: a spell in stock, waiting.
             $equipment->assignments()->create(['issued_at' => Carbon::today()]);
 
-            return to_route('equipment.show', $equipment);
+            return $this->afterCreating($equipment, $data);
         }
 
         // Handed over as it arrives. The move is made as a move rather than
@@ -191,7 +239,27 @@ class EquipmentController extends Controller
             'issued_at' => $data['issued_at'],
         ]);
 
-        return to_route('equipment.show', $equipment);
+        return $this->afterCreating($equipment, $data);
+    }
+
+    /**
+     * Whoever entered a unit either wants to see its card or has a box of ten
+     * more beside them. In the second case the form stays where it is, and the
+     * unit that was just filed rides back so the page can name it.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function afterCreating(Equipment $equipment, array $data): RedirectResponse
+    {
+        if (! ($data['another'] ?? false)) {
+            return to_route('equipment.show', $equipment);
+        }
+
+        return back()->with('equipment', [
+            'id' => $equipment->id,
+            'name' => $equipment->name,
+            'inventory_number' => $equipment->inventory_number,
+        ]);
     }
 
     /**
@@ -207,7 +275,7 @@ class EquipmentController extends Controller
             'currentAssignment',
             'assignments.holder:id,name,surname',
             'assignments.holderDepartment:id,name',
-            'repairs',
+            'repairs.photos',
             'events.user:id,name,surname',
             'events.photos',
         ]);
@@ -259,6 +327,11 @@ class EquipmentController extends Controller
                 'started_at' => $repair->started_at->toDateString(),
                 'ended_at' => $repair->ended_at?->toDateString(),
                 'note' => $repair->note,
+                'photos' => $repair->photos->map(fn ($photo) => [
+                    'id' => $photo->id,
+                    'url' => $photo->url,
+                    'preview' => $photo->preview_url,
+                ]),
             ]),
             // The ids the journal kept, read back as the names behind them.
             'names' => EquipmentEvent::namesFor($equipment->events),
@@ -352,7 +425,6 @@ class EquipmentController extends Controller
     private const STATUS_LABELS = [
         'issued' => 'Выдано',
         'stock' => 'На балансе',
-        'repair' => 'В ремонте',
         'written_off' => 'Списано',
     ];
 
@@ -395,9 +467,9 @@ class EquipmentController extends Controller
             // Sorting by a related name, not by the foreign key behind it.
             'type' => $query->orderBy(EquipmentType::select('name')->whereColumn('equipment_types.id', 'equipment.equipment_type_id'), $direction),
             'holder' => $query->orderBy(User::select('surname')->whereColumn('users.id', 'equipment.holder_user_id'), $direction),
-            // Down the tabs: issued, in stock, in repair, written off.
+            // Down the tabs: issued, on the balance sheet, written off.
             'status' => $query->orderByRaw(
-                "case status when 'issued' then 0 when 'stock' then 1 when 'repair' then 2 else 3 end ".($direction === 'desc' ? 'desc' : 'asc')
+                "case status when 'issued' then 0 when 'stock' then 1 else 2 end ".($direction === 'desc' ? 'desc' : 'asc')
             ),
             default => $query->orderBy($sort, $direction),
         };
@@ -418,6 +490,7 @@ class EquipmentController extends Controller
         return [
             'all' => (int) $byStatus->sum(),
             ...collect(Equipment::STATUSES)->mapWithKeys(fn (string $s) => [$s => (int) ($byStatus[$s] ?? 0)])->all(),
+            'service' => Equipment::query()->underService()->count(),
         ];
     }
 }

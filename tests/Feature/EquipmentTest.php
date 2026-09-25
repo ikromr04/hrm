@@ -11,7 +11,9 @@ use Database\Seeders\EquipmentTypeSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -50,16 +52,60 @@ class EquipmentTest extends TestCase
     {
         $holder = User::factory()->create();
         Equipment::factory(2)->ofType($this->type())->issuedTo($holder->id)->create();
-        Equipment::factory(1)->ofType($this->type())->inRepair()->create();
+        Equipment::factory(1)->ofType($this->type())->writtenOff()->create();
 
         $this->actingAs($this->admin())
             ->get('/equipment')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('counts.all', 3)
                 ->where('counts.issued', 2)
-                ->where('counts.repair', 1)
-                ->where('counts.written_off', 0)
+                ->where('counts.stock', 0)
+                ->where('counts.written_off', 1)
             );
+    }
+
+    public function test_the_tab_for_service_finds_whatever_is_being_looked_after()
+    {
+        $holder = User::factory()->create();
+        $onDesk = Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Ноутбук в работе']);
+        $onDesk->repairs()->create(['kind' => 'Замена клавиатуры', 'started_at' => '2026-09-01']);
+
+        // Finished work is history, not a unit that is away right now.
+        $done = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук после ТО']);
+        $done->repairs()->create(['kind' => 'Плановое ТО', 'started_at' => '2026-08-01', 'ended_at' => '2026-08-03']);
+
+        $this->actingAs($this->admin())
+            ->get('/equipment?tab=service')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('counts.service', 1)
+                ->has('equipment.data', 1)
+                ->where('equipment.data.0.name', $onDesk->name)
+                // Service is not a status: it is still issued to the colleague.
+                ->where('equipment.data.0.status', 'issued')
+                ->where('equipment.data.0.in_service', true)
+            );
+    }
+
+    public function test_an_end_date_takes_a_unit_off_the_service_list()
+    {
+        $unit = Equipment::factory()->ofType($this->type())->create();
+        $repair = $unit->repairs()->create(['kind' => 'Замена клавиатуры', 'started_at' => '2026-09-01']);
+
+        $this->assertSame(1, Equipment::query()->underService()->count());
+
+        $this->actingAs($this->admin())
+            ->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
+                'kind' => 'Замена клавиатуры',
+                'started_at' => '2026-09-01',
+                'ended_at' => '2026-09-05',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('2026-09-05', $repair->refresh()->ended_at->toDateString());
+        $this->assertSame(0, Equipment::query()->underService()->count());
+
+        // Finishing the work is named in the journal, not filed as a correction.
+        $this->assertSame('Замена клавиатуры', $unit->events()->where('kind', 'repair_ended')->sole()->note);
     }
 
     public function test_the_tab_above_the_table_picks_one_status()
@@ -194,6 +240,65 @@ class EquipmentTest extends TestCase
 
         // The journal reads as it happened: entered, then handed over.
         $this->assertSame(['created', 'issued'], $unit->events()->reorder('id')->pluck('kind')->all());
+    }
+
+    public function test_saving_and_adding_another_keeps_the_form_open()
+    {
+        $response = $this->actingAs($this->admin())
+            ->from('/equipment/create')
+            ->post('/equipment', [
+                'equipment_type_id' => $this->type()->id,
+                'name' => 'Ноутбук из партии',
+                'inventory_number' => 'EV-0500',
+                'another' => true,
+            ]);
+
+        // Back to the form rather than off to the card, and the unit that was
+        // filed rides along so the page can name it.
+        $response->assertSessionHasNoErrors()->assertRedirect('/equipment/create');
+        $response->assertSessionHas('equipment.inventory_number', 'EV-0500');
+        $this->assertSame(1, Equipment::count());
+    }
+
+    public function test_the_form_for_a_new_unit_is_a_page_of_its_own()
+    {
+        $this->actingAs($this->admin())
+            ->get('/equipment/create')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('equipment/create')
+                ->has('options.types')
+                ->has('options.holders')
+            );
+
+        // A colleague who does not manage the fleet has no business there.
+        $this->actingAs(User::factory()->create())->get('/equipment/create')->assertForbidden();
+    }
+
+    public function test_a_unit_can_be_photographed_as_it_is_entered()
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->admin())
+            ->post('/equipment', [
+                'equipment_type_id' => $this->type()->id,
+                'name' => 'Ноутбук в заводской плёнке',
+                'inventory_number' => 'EV-0424',
+                'condition' => 'Новое, в упаковке',
+                'checked_at' => now()->toDateString(),
+                'next_inventory_at' => now()->addYear()->toDateString(),
+                'photos' => [UploadedFile::fake()->image('box.jpg', 1600, 1200)],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $unit = Equipment::firstWhere('inventory_number', 'EV-0424');
+        $this->assertSame(now()->toDateString(), $unit->checked_at->toDateString());
+
+        // The picture hangs on the entry that records the arrival.
+        $arrival = $unit->events()->sole();
+        $this->assertSame('created', $arrival->kind);
+        $photo = $arrival->photos()->sole();
+        Storage::disk('public')->assertExists($photo->path);
+        Storage::disk('public')->assertExists($photo->preview);
     }
 
     public function test_a_handover_made_while_entering_a_unit_still_needs_its_date()
@@ -370,11 +475,11 @@ class EquipmentTest extends TestCase
     public function test_walking_the_fleet_stays_within_one_status()
     {
         $holder = User::factory()->create();
-        // In stock either side of the one that is out, and one more in repair.
+        // On the balance sheet either side of the one that is out, and one struck off.
         Equipment::factory()->ofType($this->type())->create(['name' => 'А, свободен']);
         $issued = Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Б, выдан']);
         Equipment::factory()->ofType($this->type())->create(['name' => 'В, свободен']);
-        Equipment::factory()->ofType($this->type())->inRepair()->create(['name' => 'Г, в ремонте']);
+        Equipment::factory()->ofType($this->type())->writtenOff()->create(['name' => 'Г, списан']);
 
         $later = Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Я, тоже выдан']);
 
@@ -472,21 +577,23 @@ class EquipmentTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_a_repair_without_an_end_date_takes_the_unit_out_of_service()
+    public function test_service_is_recorded_without_moving_the_unit()
     {
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
+        $unit->assignments()->create(['holder_user_id' => $employee->id, 'issued_at' => '2026-08-01']);
 
         $this->actingAs($this->admin())
             ->post("/equipment/{$unit->id}/repairs", ['kind' => 'Диагностика', 'started_at' => '2026-09-01'])
             ->assertSessionHasNoErrors();
 
+        // A record and nothing more: it stays issued to the colleague holding it.
         $unit->refresh();
-        $this->assertSame('repair', $unit->status);
-        $this->assertNull($unit->holder_user_id);
+        $this->assertSame('issued', $unit->status);
+        $this->assertSame($employee->id, $unit->holder_user_id);
+        $this->assertNull($unit->currentAssignment->returned_at);
         $this->assertCount(1, $unit->repairs);
 
-        // A finished visit is only a record: the unit stays where it is.
         $stock = Equipment::factory()->ofType($this->type())->create();
         $this->actingAs($this->admin())
             ->post("/equipment/{$stock->id}/repairs", ['kind' => 'Плановое ТО', 'started_at' => '2026-09-01', 'ended_at' => '2026-09-03']);

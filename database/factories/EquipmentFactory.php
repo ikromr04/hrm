@@ -108,11 +108,6 @@ class EquipmentFactory extends Factory
         ]);
     }
 
-    public function inRepair(): static
-    {
-        return $this->state(fn () => ['status' => 'repair']);
-    }
-
     public function writtenOff(): static
     {
         return $this->state(fn () => [

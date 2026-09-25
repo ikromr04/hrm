@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { PhotoInput } from '@/components/photo-input';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -6,15 +7,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
-import { type FormEventHandler } from 'react';
+import { useState, type FormEventHandler } from 'react';
 
 /** The moves that need something from whoever makes them — all of them. */
-export type AskedMove = 'issue' | 'take' | 'repair' | 'write-off';
+export type AskedMove = 'issue' | 'take' | 'write-off';
+
+/** Errors come back as "photos.0"; a field shows its own, whichever it is. */
+const at = (errors: Record<string, string | undefined>, key: string) =>
+    errors[key] ?? Object.entries(errors).find(([name]) => name.startsWith(`${key}.`))?.[1];
+
+/** What the pictures of each move are for, said in the form itself. */
+const photoHint: Record<AskedMove, string> = {
+    issue: 'В каком виде вещь ушла сотруднику. Снимки останутся в журнале.',
+    take: 'Как вещь вернулась. Снимки останутся в журнале.',
+    'write-off': 'Чем подтверждается списание. Снимки останутся в журнале.',
+};
 
 export const moveLabel: Record<AskedMove, string> = {
     issue: 'Выдать',
     take: 'Принять возврат',
-    repair: 'Отправить в ремонт',
     'write-off': 'Списать',
 };
 
@@ -40,31 +51,27 @@ export function EquipmentMoveDialog({
     onClose: () => void;
 }) {
     const today = new Date().toISOString().slice(0, 10);
+    const [photos, setPhotos] = useState<File[]>([]);
+
     const form = useForm({
         holder_user_id: '',
         issued_at: today,
         condition_on_return: '',
         written_off_at: today,
-        // What the repair shop is being asked to do.
-        kind: '',
-        started_at: today,
     });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
         form.transform((data) => {
-            if (kind === 'issue') return { holder_user_id: data.holder_user_id, issued_at: data.issued_at };
-            if (kind === 'take') return { condition_on_return: data.condition_on_return };
-            if (kind === 'repair') return { kind: data.kind, started_at: data.started_at };
+            if (kind === 'issue') return { holder_user_id: data.holder_user_id, issued_at: data.issued_at, photos };
+            if (kind === 'take') return { condition_on_return: data.condition_on_return, photos };
 
-            return { written_off_at: data.written_off_at };
+            return { written_off_at: data.written_off_at, photos };
         });
 
-        // A repair is recorded as a visit, which is also what moves the unit.
-        const url = kind === 'repair' ? route('equipment.repairs.store', unit.id) : route(`equipment.${kind}`, unit.id);
-
-        form.post(url, { preserveScroll: true, onSuccess: onClose });
+        // Any move may carry pictures, so every one of them goes as multipart.
+        form.post(route(`equipment.${kind}`, unit.id), { preserveScroll: true, forceFormData: true, onSuccess: onClose });
     };
 
     return (
@@ -126,36 +133,6 @@ export function EquipmentMoveDialog({
                         </div>
                     )}
 
-                    {kind === 'repair' && (
-                        <>
-                            <div className="grid content-start gap-2">
-                                <Label htmlFor="move-kind">Что делаем</Label>
-                                <Input
-                                    id="move-kind"
-                                    value={form.data.kind}
-                                    onChange={(event) => form.setData('kind', event.target.value)}
-                                    placeholder="Замена картриджа"
-                                    aria-invalid={!!form.errors.kind}
-                                />
-                                <InputError message={form.errors.kind} />
-                                <p className="text-muted-foreground text-[13px]">Попадёт в журнал и во вкладку «Обслуживание».</p>
-                            </div>
-
-                            <div className="grid content-start gap-2">
-                                <Label htmlFor="move-started">Дата отправки</Label>
-                                <Input
-                                    id="move-started"
-                                    type="date"
-                                    max={today}
-                                    value={form.data.started_at}
-                                    onChange={(event) => form.setData('started_at', event.target.value)}
-                                    aria-invalid={!!form.errors.started_at}
-                                />
-                                <InputError message={form.errors.started_at} />
-                            </div>
-                        </>
-                    )}
-
                     {kind === 'write-off' && (
                         <div className="grid content-start gap-2">
                             <Label htmlFor="move-written-off">Дата списания</Label>
@@ -168,9 +145,11 @@ export function EquipmentMoveDialog({
                                 aria-invalid={!!form.errors.written_off_at}
                             />
                             <InputError message={form.errors.written_off_at} />
-                            <p className="text-muted-foreground text-[13px]">Списанную единицу больше нельзя выдать или отремонтировать.</p>
+                            <p className="text-muted-foreground text-[13px]">Списанную единицу больше нельзя выдать.</p>
                         </div>
                     )}
+
+                    <PhotoInput photos={photos} onChange={setPhotos} error={at(form.errors, 'photos')} hint={photoHint[kind]} />
 
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose}>

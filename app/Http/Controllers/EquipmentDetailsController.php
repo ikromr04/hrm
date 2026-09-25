@@ -3,14 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Equipment;
-use App\Models\EquipmentEvent;
-use App\Support\Photo;
+use App\Models\EquipmentPhoto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -20,9 +16,6 @@ use Illuminate\Validation\Rule;
  */
 class EquipmentDetailsController extends Controller
 {
-    /** The interface never shows a photograph larger than this. */
-    private const PREVIEW = 1200;
-
     /**
      * "Характеристики": what the unit is.
      */
@@ -92,32 +85,10 @@ class EquipmentDetailsController extends Controller
             ?? $equipment->events()->create(['user_id' => $request->user()->id, 'kind' => 'condition']);
 
         foreach ($photos as $photo) {
-            $this->keep($equipment, $event, $photo);
+            EquipmentPhoto::keep($equipment, $event, $photo);
         }
 
         return back();
-    }
-
-    /**
-     * The photograph twice over: the upload, and a copy scaled to fit a screen.
-     * A picture from a phone is several megabytes, and a journal that showed
-     * every one of them full size would be unusable.
-     */
-    private function keep(Equipment $equipment, EquipmentEvent $event, UploadedFile $photo): void
-    {
-        $folder = "equipment/{$equipment->id}/photos";
-        $name = Str::random(20);
-
-        $original = $photo->storeAs($folder, "{$name}.".$photo->extension(), 'public');
-        $preview = "{$folder}/{$name}_preview.jpg";
-
-        Storage::disk('public')->put($preview, Photo::fit(Storage::disk('public')->path($original), self::PREVIEW));
-
-        $equipment->photos()->create([
-            'equipment_event_id' => $event->id,
-            'path' => $original,
-            'preview' => $preview,
-        ]);
     }
 
     /**

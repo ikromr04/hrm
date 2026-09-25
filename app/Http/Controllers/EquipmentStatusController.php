@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Equipment;
+use App\Models\EquipmentPhoto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
- * A unit's life: handed out, taken back, sent for repair, written off. Each
+ * A unit's life: handed out, taken back, written off. Each
  * move sets the status and the holder together, so the two never disagree, and
  * writes the spell it ends into the unit's history.
  */
@@ -25,14 +26,18 @@ class EquipmentStatusController extends Controller
             'holder_user_id' => ['nullable', 'required_without:holder_department_id', 'prohibits:holder_department_id', 'integer', Rule::exists('users', 'id')],
             'holder_department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
             'issued_at' => ['required', 'date', 'before_or_equal:today'],
+            ...self::PHOTO_RULES,
         ], attributes: [
             'holder_user_id' => 'сотрудник',
             'holder_department_id' => 'отдел',
             'issued_at' => 'дата выдачи',
+            'photos' => 'фотографии',
         ]);
 
         $this->stillInService($equipment);
         $this->closeSpell($equipment, $data['issued_at']);
+
+        $before = (int) $equipment->events()->max('id');
 
         $equipment->update([
             'status' => 'issued',
@@ -47,6 +52,8 @@ class EquipmentStatusController extends Controller
             'issued_at' => $data['issued_at'],
         ]);
 
+        $this->keepPhotos($request, $equipment, $before, 'issued');
+
         return back();
     }
 
@@ -58,20 +65,26 @@ class EquipmentStatusController extends Controller
     {
         $data = $request->validate([
             'condition_on_return' => ['nullable', 'string', 'max:200'],
-        ], attributes: ['condition_on_return' => 'состояние при возврате']);
+            ...self::PHOTO_RULES,
+        ], attributes: [
+            'condition_on_return' => 'состояние при возврате',
+            'photos' => 'фотографии',
+        ]);
+
+        $before = (int) $equipment->events()->max('id');
 
         $this->release($equipment, 'stock', $data['condition_on_return'] ?? null);
 
         // Sitting in stock is a spell of its own, so the history reads in full.
         $equipment->assignments()->create(['issued_at' => Carbon::today()]);
 
+        $this->keepPhotos($request, $equipment, $before, 'taken');
+
         return back();
     }
 
     /**
-     * Nobody holds it now, whatever the reason. Sending a unit to a repair
-     * shop is not here: that move asks what is being done and is recorded as
-     * a visit, so it lives with the repairs.
+     * Nobody holds it now, whatever the reason.
      */
     private function release(Equipment $equipment, string $status, ?string $condition = null): void
     {
@@ -96,10 +109,16 @@ class EquipmentStatusController extends Controller
     {
         $data = $request->validate([
             'written_off_at' => ['required', 'date', 'before_or_equal:today'],
-        ], attributes: ['written_off_at' => 'дата списания']);
+            ...self::PHOTO_RULES,
+        ], attributes: [
+            'written_off_at' => 'дата списания',
+            'photos' => 'фотографии',
+        ]);
 
         $this->stillInService($equipment);
         $this->closeSpell($equipment, $data['written_off_at']);
+
+        $before = (int) $equipment->events()->max('id');
 
         $equipment->update([
             'status' => 'written_off',
@@ -109,7 +128,42 @@ class EquipmentStatusController extends Controller
             'written_off_at' => $data['written_off_at'],
         ]);
 
+        $this->keepPhotos($request, $equipment, $before, 'written_off');
+
         return back();
+    }
+
+    /**
+     * Every move may carry pictures: what went out, what came back, what is
+     * being struck off. The same limits everywhere, so a phone's photograph is
+     * never refused in one window and taken in another.
+     */
+    private const PHOTO_RULES = [
+        'photos' => ['nullable', 'array', 'max:10'],
+        'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
+    ];
+
+    /**
+     * Hangs whatever was photographed on the entry this move has just written,
+     * so the pictures belong to the occasion rather than floating beside the
+     * unit. `$before` is the newest entry from before the move; `$kind` names
+     * the entry to write if the move changed nothing and the observer stayed
+     * silent.
+     */
+    private function keepPhotos(Request $request, Equipment $equipment, int $before, string $kind): void
+    {
+        $photos = $request->file('photos') ?? [];
+
+        if ($photos === []) {
+            return;
+        }
+
+        $event = $equipment->events()->where('id', '>', $before)->latest('id')->first()
+            ?? $equipment->events()->create(['user_id' => $request->user()->id, 'kind' => $kind]);
+
+        foreach ($photos as $photo) {
+            EquipmentPhoto::keep($equipment, $event, $photo);
+        }
     }
 
     /**
@@ -127,7 +181,7 @@ class EquipmentStatusController extends Controller
     }
 
     /**
-     * A written-off unit is gone: it is not handed out, returned or repaired.
+     * A written-off unit is gone: it is not handed out and not taken back.
      */
     private function stillInService(Equipment $equipment): void
     {

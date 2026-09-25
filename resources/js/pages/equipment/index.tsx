@@ -10,13 +10,10 @@ import {
 } from '@/components/data-table';
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
-import InputError from '@/components/input-error';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonAvatar } from '@/components/person-avatar';
-import { SearchableSelect } from '@/components/searchable-select';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -29,14 +26,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/employee';
 import { statusLabel, statusTone, type EquipmentStatus as Status } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowDownToLine,
     ChevronDown,
@@ -54,7 +49,7 @@ import {
     X,
     type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEventHandler } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface Unit {
     id: number;
@@ -69,7 +64,12 @@ interface Unit {
     department: string | null;
     issued_at: string | null;
     written_off_at: string | null;
+    /** A piece of service work on it has not ended yet. */
+    in_service: boolean;
 }
+
+/** The tab above the table: a status, the units being serviced, or everything. */
+type Tab = Status | 'service' | null;
 
 interface Filters {
     q: string;
@@ -93,13 +93,13 @@ interface Options {
 interface Props {
     equipment: Paginated<Unit>;
     filters: Filters;
-    /** The status tab above the table; null is "Все". */
-    tab: Status | null;
+    /** The tab above the table; null is "Все", "service" is not a status. */
+    tab: Tab;
     sort: Sort;
     sortable: string[];
     perPage: number;
     perPageOptions: number[];
-    counts: Record<'all' | Status, number>;
+    counts: Record<'all' | 'service' | Status, number>;
     options: Options;
     canEdit: boolean;
 }
@@ -145,7 +145,6 @@ function RowActions({
 
     const moves: { kind: AskedMove; icon: LucideIcon }[] = [
         ...(unit.status === 'issued' ? [{ kind: 'take' as const, icon: ArrowDownToLine }] : [{ kind: 'issue' as const, icon: UserPlus }]),
-        ...(unit.status === 'repair' ? [] : [{ kind: 'repair' as const, icon: Wrench }]),
         { kind: 'write-off' as const, icon: Trash2 },
     ];
 
@@ -235,242 +234,6 @@ function Holder({ unit }: { unit: Unit }) {
     return unit.department ? <span className="truncate">{unit.department}</span> : <span className="text-muted-foreground">—</span>;
 }
 
-/**
- * Putting a unit on the books. It starts in stock — handing it to somebody is
- * a move of its own, from the "⋯" beside the row.
- */
-function AddDialog({ options, onClose }: { options: Options; onClose: () => void }) {
-    const today = new Date().toISOString().slice(0, 10);
-    // Hardware is usually bought for somebody, so the handover can be made here
-    // instead of adding the unit and then issuing it in a second window.
-    const [issuing, setIssuing] = useState(false);
-
-    const form = useForm({
-        equipment_type_id: '',
-        name: '',
-        maker: '',
-        model: '',
-        serial_number: '',
-        inventory_number: '',
-        processor: '',
-        memory: '',
-        condition: '',
-        accessories: '',
-        holder_user_id: '',
-        issued_at: today,
-    });
-
-    const submit: FormEventHandler = (event) => {
-        event.preventDefault();
-        form.transform((data) => ({
-            ...data,
-            // One box, comma by comma: "Блок питания 65 Вт, Сумка".
-            accessories: data.accessories
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean),
-            holder_user_id: issuing ? data.holder_user_id : null,
-            issued_at: issuing ? data.issued_at : null,
-        }));
-        form.post(route('equipment.store'), { preserveScroll: true, onSuccess: onClose });
-    };
-
-    return (
-        <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-lg">
-                {/* noValidate: the server's rules are the real ones. */}
-                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-                    <DialogHeader>
-                        <DialogTitle>Добавить оборудование</DialogTitle>
-                        <DialogDescription>Единица встаёт на баланс. Её можно сразу выдать сотруднику.</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="add-name">Наименование</Label>
-                        <Input
-                            id="add-name"
-                            value={form.data.name}
-                            onChange={(event) => form.setData('name', event.target.value)}
-                            placeholder="Ноутбук Dell Latitude 5440"
-                            aria-invalid={!!form.errors.name}
-                        />
-                        <InputError message={form.errors.name} />
-                    </div>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="add-type">Категория</Label>
-                        <SearchableSelect
-                            id="add-type"
-                            value={form.data.equipment_type_id}
-                            onChange={(value) => form.setData('equipment_type_id', value)}
-                            options={options.types.map((type) => ({ value: String(type.id), label: type.name }))}
-                            placeholder="Выберите категорию"
-                            searchPlaceholder="Поиск категории"
-                            empty="Категория не найдена"
-                            invalid={!!form.errors.equipment_type_id}
-                        />
-                        <InputError message={form.errors.equipment_type_id} />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="add-maker">Производитель</Label>
-                            <Input
-                                id="add-maker"
-                                value={form.data.maker}
-                                onChange={(event) => form.setData('maker', event.target.value)}
-                                placeholder="Dell"
-                                aria-invalid={!!form.errors.maker}
-                            />
-                            <InputError message={form.errors.maker} />
-                        </div>
-
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="add-model">Модель</Label>
-                            <Input
-                                id="add-model"
-                                value={form.data.model}
-                                onChange={(event) => form.setData('model', event.target.value)}
-                                placeholder="Latitude 5440"
-                                aria-invalid={!!form.errors.model}
-                            />
-                            <InputError message={form.errors.model} />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="add-serial">Серийный номер</Label>
-                            <Input
-                                id="add-serial"
-                                value={form.data.serial_number}
-                                onChange={(event) => form.setData('serial_number', event.target.value)}
-                                placeholder="7K2L9P3"
-                                aria-invalid={!!form.errors.serial_number}
-                            />
-                            <InputError message={form.errors.serial_number} />
-                        </div>
-
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="add-inventory">Инвентарный номер</Label>
-                            <Input
-                                id="add-inventory"
-                                value={form.data.inventory_number}
-                                onChange={(event) => form.setData('inventory_number', event.target.value)}
-                                placeholder="EV-0421"
-                                aria-invalid={!!form.errors.inventory_number}
-                            />
-                            <InputError message={form.errors.inventory_number} />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="add-processor">Процессор</Label>
-                            <Input
-                                id="add-processor"
-                                value={form.data.processor}
-                                onChange={(event) => form.setData('processor', event.target.value)}
-                                placeholder="Intel Core i5-1335U"
-                                aria-invalid={!!form.errors.processor}
-                            />
-                            <InputError message={form.errors.processor} />
-                        </div>
-
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="add-memory">Память / диск</Label>
-                            <Input
-                                id="add-memory"
-                                value={form.data.memory}
-                                onChange={(event) => form.setData('memory', event.target.value)}
-                                placeholder="16 ГБ / SSD 512 ГБ"
-                                aria-invalid={!!form.errors.memory}
-                            />
-                            <InputError message={form.errors.memory} />
-                        </div>
-                    </div>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="add-condition">Состояние</Label>
-                        <Input
-                            id="add-condition"
-                            value={form.data.condition}
-                            onChange={(event) => form.setData('condition', event.target.value)}
-                            placeholder="Новое, в упаковке"
-                            aria-invalid={!!form.errors.condition}
-                        />
-                        <InputError message={form.errors.condition} />
-                    </div>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="add-accessories">Комплектация</Label>
-                        <Input
-                            id="add-accessories"
-                            value={form.data.accessories}
-                            onChange={(event) => form.setData('accessories', event.target.value)}
-                            placeholder="Блок питания 65 Вт, Сумка, Мышь Logitech M185"
-                            aria-invalid={!!form.errors.accessories}
-                        />
-                        <InputError message={form.errors.accessories} />
-                        <p className="text-muted-foreground text-[13px]">Через запятую.</p>
-                    </div>
-
-                    <div className="grid content-start gap-4 border-t pt-5">
-                        <div className="flex items-center gap-2.5">
-                            <Checkbox id="add-issue" checked={issuing} onCheckedChange={(on) => setIssuing(on === true)} />
-                            <Label htmlFor="add-issue" className="font-normal">
-                                Сразу выдать сотруднику
-                            </Label>
-                        </div>
-
-                        {issuing && (
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <div className="grid content-start gap-2">
-                                    <Label htmlFor="add-holder">Кому</Label>
-                                    <SearchableSelect
-                                        id="add-holder"
-                                        value={form.data.holder_user_id}
-                                        onChange={(value) => form.setData('holder_user_id', value)}
-                                        options={options.holders.map((holder) => ({ value: String(holder.id), label: holder.name }))}
-                                        placeholder="Выберите сотрудника"
-                                        searchPlaceholder="Поиск по фамилии"
-                                        empty="Сотрудник не найден"
-                                        invalid={!!form.errors.holder_user_id}
-                                    />
-                                    <InputError message={form.errors.holder_user_id} />
-                                </div>
-
-                                <div className="grid content-start gap-2">
-                                    <Label htmlFor="add-issued-at">Дата выдачи</Label>
-                                    <Input
-                                        id="add-issued-at"
-                                        type="date"
-                                        max={today}
-                                        value={form.data.issued_at}
-                                        onChange={(event) => form.setData('issued_at', event.target.value)}
-                                        aria-invalid={!!form.errors.issued_at}
-                                    />
-                                    <InputError message={form.errors.issued_at} />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <DialogFooter className="gap-2">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" disabled={form.processing}>
-                            {form.processing && <LoaderCircle className="animate-spin" />}
-                            Добавить
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 /** The columns, each with the filter that narrows it. */
 function buildColumns(options: Options): ColumnDef[] {
     return [
@@ -527,11 +290,10 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
 
     const [query, setQuery] = useState(filters.q);
     const [asking, setAsking] = useState<{ unit: Unit; kind: AskedMove } | null>(null);
-    const [adding, setAdding] = useState(false);
     const [deleting, setDeleting] = useState<Unit | null>(null);
 
     /** Everything the list is looking at, as one query string. */
-    const visit = (next: { filters?: Partial<Filters>; sort?: Sort; perPage?: number; tab?: Status | null }) => {
+    const visit = (next: { filters?: Partial<Filters>; sort?: Sort; perPage?: number; tab?: Tab }) => {
         const merged = { ...filters, ...next.filters };
         const nextSort = next.sort ?? sort;
         const nextPer = next.perPage ?? perPage;
@@ -564,9 +326,12 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [query]);
 
-    const tabs: { key: Status | null; label: string; count: number }[] = [
+    const tabs: { key: Tab; label: string; count: number }[] = [
         { key: null, label: 'Все', count: counts.all },
-        ...(['issued', 'stock', 'repair', 'written_off'] as Status[]).map((key) => ({ key, label: statusLabel[key], count: counts[key] })),
+        ...(['issued', 'stock'] as Status[]).map((key) => ({ key, label: statusLabel[key], count: counts[key] })),
+        // Not a status: a unit can be with its owner and on service at once.
+        { key: 'service', label: 'На обслуживании', count: counts.service },
+        { key: 'written_off', label: statusLabel.written_off, count: counts.written_off },
     ];
 
     const activeFilters = countActiveFilters(columns, filters as unknown as Record<string, unknown>, () => true);
@@ -591,7 +356,12 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
             case 'type':
                 return <span className="text-muted-foreground">{unit.type ?? '—'}</span>;
             case 'status':
-                return <StatusBadge tone={statusTone[unit.status]}>{statusLabel[unit.status]}</StatusBadge>;
+                return (
+                    <span className="flex items-center gap-1.5">
+                        <StatusBadge tone={statusTone[unit.status]}>{statusLabel[unit.status]}</StatusBadge>
+                        {unit.in_service && <Wrench className="text-muted-foreground size-4 shrink-0" aria-label="На обслуживании" />}
+                    </span>
+                );
             case 'holder':
                 return <Holder unit={unit} />;
             default:
@@ -706,9 +476,11 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                                 </Link>
                             </Button>
 
-                            <Button className="h-8" onClick={() => setAdding(true)}>
-                                <Plus />
-                                Добавить оборудование
+                            <Button className="h-8" asChild>
+                                <Link href={route('equipment.create')}>
+                                    <Plus />
+                                    Добавить оборудование
+                                </Link>
                             </Button>
                         </>
                     )}
@@ -761,7 +533,6 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
             </div>
 
             {asking && <EquipmentMoveDialog unit={asking.unit} kind={asking.kind} holders={options.holders} onClose={() => setAsking(null)} />}
-            {adding && <AddDialog options={options} onClose={() => setAdding(false)} />}
             {deleting && <DeleteDialog unit={deleting} onClose={() => setDeleting(null)} />}
         </AppLayout>
     );

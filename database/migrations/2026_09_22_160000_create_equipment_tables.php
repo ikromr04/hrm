@@ -42,10 +42,10 @@ return new class extends Migration
             // What comes with it: "Блок питания 65 Вт", "Сумка", a bag of labels.
             $table->json('accessories')->nullable();
 
-            $table->enum('status', ['issued', 'stock', 'repair', 'written_off'])->default('stock')->index();
+            $table->enum('status', ['issued', 'stock', 'written_off'])->default('stock')->index();
 
             // Who holds it now: a person or a whole department, or nobody at
-            // all while it sits in stock or at a repair shop.
+            // all while it sits on the balance sheet.
             $table->foreignId('holder_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('holder_department_id')->nullable()->constrained('departments')->nullOnDelete();
 
@@ -73,7 +73,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Every visit to a repair shop, planned maintenance included.
+        // Every piece of work done on a unit: maintenance as well as a repair.
         Schema::create('equipment_repairs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('equipment_id')->constrained()->cascadeOnDelete();

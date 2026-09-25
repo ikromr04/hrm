@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Support\Photo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * One photograph of a unit, kept twice: the upload, and a scaled copy for the
@@ -22,12 +25,39 @@ class EquipmentPhoto extends Model
     protected $fillable = [
         'equipment_id',
         'equipment_event_id',
+        'equipment_repair_id',
         'path',
         'preview',
     ];
 
     /** @var list<string> */
     protected $appends = ['url', 'preview_url'];
+
+    /** How wide the copy shown in the interface may be. */
+    private const PREVIEW = 1200;
+
+    /**
+     * Keeps an upload twice over: the file as it came, and a copy scaled to
+     * fit a screen. A picture from a phone is several megabytes, and a journal
+     * that showed every one of them full size would be unusable.
+     */
+    public static function keep(Equipment $equipment, EquipmentEvent $event, UploadedFile $photo, ?EquipmentRepair $repair = null): self
+    {
+        $folder = "equipment/{$equipment->id}/photos";
+        $name = Str::random(20);
+
+        $original = $photo->storeAs($folder, "{$name}.".$photo->extension(), 'public');
+        $preview = "{$folder}/{$name}_preview.jpg";
+
+        Storage::disk('public')->put($preview, Photo::fit(Storage::disk('public')->path($original), self::PREVIEW));
+
+        return $equipment->photos()->create([
+            'equipment_event_id' => $event->id,
+            'equipment_repair_id' => $repair?->id,
+            'path' => $original,
+            'preview' => $preview,
+        ]);
+    }
 
     public function equipment(): BelongsTo
     {
@@ -37,6 +67,12 @@ class EquipmentPhoto extends Model
     public function event(): BelongsTo
     {
         return $this->belongsTo(EquipmentEvent::class, 'equipment_event_id');
+    }
+
+    /** Set when the picture came with a piece of service work. */
+    public function repair(): BelongsTo
+    {
+        return $this->belongsTo(EquipmentRepair::class, 'equipment_repair_id');
     }
 
     /**

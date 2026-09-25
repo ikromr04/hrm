@@ -43,7 +43,10 @@ export interface SharedData {
     quote: { message: string; author: string };
     auth: Auth;
     /** What one step of a multi-step form hands to the next. */
-    flash: { employee: { id: number; name: string } | null };
+    flash: {
+        employee: { id: number; name: string } | null;
+        equipment: { id: number; name: string; inventory_number: string } | null;
+    };
     [key: string]: unknown;
 }
 

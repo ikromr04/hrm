@@ -37,6 +37,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('equipment/journal', EquipmentJournalController::class)
         ->middleware('can:manage-employees')
         ->name('equipment.journal');
+    // Before the card too, for the same reason as the journal.
+    Route::get('equipment/create', [EquipmentController::class, 'create'])
+        ->middleware('can:manage-employees')
+        ->name('equipment.create');
     Route::get('equipment/{equipment}', [EquipmentController::class, 'show'])->name('equipment.show');
     // Time off: everyone sees their own, heads and HR see everybody's.
     Route::get('leave', [LeaveController::class, 'index'])->name('leave.index');
@@ -94,7 +98,7 @@ Route::post('equipment', [EquipmentController::class, 'store'])
     ->middleware(['auth', 'can:manage-employees'])
     ->name('equipment.store');
 
-// A unit's life: handed out, taken back, repaired, written off.
+// A unit's life: handed out, taken back, written off.
 Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
     Route::post('issue', [EquipmentStatusController::class, 'issue'])->name('issue');
     Route::post('take', [EquipmentStatusController::class, 'take'])->name('take');
@@ -110,6 +114,7 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipmen
 
     // What has been done to it.
     Route::post('repairs', [EquipmentRepairController::class, 'store'])->name('repairs.store');
+    Route::put('repairs/{repair}', [EquipmentRepairController::class, 'update'])->name('repairs.update');
     Route::delete('repairs/{repair}', [EquipmentRepairController::class, 'destroy'])->name('repairs.destroy');
 });
 

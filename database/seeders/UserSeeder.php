@@ -123,16 +123,15 @@ class UserSeeder extends Seeder
                 }
             });
 
-        // Not everything is in someone's hands: spares on the shelf, a few units
-        // away at the service, and some already out of the fleet.
-        $spread = [['stock', 26], ['repair', 8], ['written_off', 12]];
+        // Not everything is in someone's hands: spares on the balance sheet and
+        // some already out of the fleet.
+        $spread = [['stock', 34], ['written_off', 12]];
 
         foreach ($spread as [$status, $count]) {
             foreach (range(1, $count) as $ignored) {
                 $factory = Equipment::factory()->ofType($types->random());
 
                 $factory = match ($status) {
-                    'repair' => $factory->inRepair(),
                     'written_off' => $factory->writtenOff(),
                     default => $factory,
                 };
@@ -210,7 +209,7 @@ class UserSeeder extends Seeder
     /**
      * Where each unit has been and what has been done to it, so a card opens on
      * a life rather than on a blank page: a spell on the shelf after it was
-     * bought, the handover that followed, and the odd visit to a repair shop.
+     * bought, the handover that followed, and the odd piece of service work.
      *
      * Documents are left alone: a row without the file behind it would only
      * give the card a link that leads nowhere.
@@ -237,16 +236,7 @@ class UserSeeder extends Seeder
                 ]);
             }
 
-            // Away at a contractor right now, or looked after some time ago.
-            if ($unit->status === 'repair') {
-                $unit->repairs()->create([
-                    'kind' => fake()->randomElement(self::REPAIRS),
-                    'started_at' => fake()->dateTimeBetween('-2 months', '-3 days'),
-                ]);
-
-                return;
-            }
-
+            // Looked after now and then, the way any fleet is.
             for ($visit = fake()->numberBetween(0, 2); $visit > 0; $visit--) {
                 $started = fake()->dateTimeBetween($bought, '-1 month');
 

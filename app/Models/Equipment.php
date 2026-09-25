@@ -32,7 +32,7 @@ class Equipment extends Model
     public ?string $journalNote = null;
 
     /** In the order the list's tabs show them. */
-    public const STATUSES = ['issued', 'stock', 'repair', 'written_off'];
+    public const STATUSES = ['issued', 'stock', 'written_off'];
 
     /**
      * The attributes that are mass assignable.
@@ -135,5 +135,15 @@ class Equipment extends Model
     public function scopeInService(Builder $query): void
     {
         $query->where('status', '!=', 'written_off');
+    }
+
+    /**
+     * Being looked after right now: a piece of work with no end date on it.
+     * This is not a status — a laptop can sit on its owner's desk while its
+     * keyboard is on order — so it is asked of the records, not of the row.
+     */
+    public function scopeUnderService(Builder $query): void
+    {
+        $query->whereHas('repairs', fn (Builder $repairs) => $repairs->whereNull('ended_at'));
     }
 }

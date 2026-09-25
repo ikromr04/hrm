@@ -2,20 +2,18 @@ import { type StatusTone } from '@/components/status-badge';
 import { formatDate, shortMonths } from '@/lib/employee';
 import { Headphones, Laptop, Monitor, Printer, Smartphone, type LucideIcon } from 'lucide-react';
 
-export type EquipmentStatus = 'issued' | 'stock' | 'repair' | 'written_off';
+export type EquipmentStatus = 'issued' | 'stock' | 'written_off';
 
 /** The colours the design gives each status; they are the app's own tones. */
 export const statusTone: Record<EquipmentStatus, StatusTone> = {
     issued: 'success',
     stock: 'neutral',
-    repair: 'warning',
     written_off: 'danger',
 };
 
 export const statusLabel: Record<EquipmentStatus, string> = {
     issued: 'Выдано',
     stock: 'На балансе',
-    repair: 'В ремонте',
     written_off: 'Списано',
 };
 
@@ -43,37 +41,40 @@ export type EventKind =
     | 'created'
     | 'issued'
     | 'taken'
-    | 'repair'
     | 'written_off'
     | 'updated'
     | 'condition'
     | 'accessories'
     | 'repair_added'
+    | 'repair_ended'
+    | 'repair_updated'
     | 'repair_removed';
 
 export const eventLabel: Record<EventKind, string> = {
     created: 'Поставлено на баланс',
     issued: 'Выдано',
     taken: 'Возвращено',
-    repair: 'Отправлено в ремонт',
     written_off: 'Списано',
     updated: 'Изменены данные',
     condition: 'Состояние',
     accessories: 'Комплектация',
     repair_added: 'Обслуживание',
-    repair_removed: 'Удалено обслуживание',
+    repair_ended: 'Обслуживание завершено',
+    repair_updated: 'Обслуживание изменено',
+    repair_removed: 'Обслуживание удалено',
 };
 
 export const eventTone: Record<EventKind, StatusTone> = {
     created: 'info',
     issued: 'success',
     taken: 'neutral',
-    repair: 'warning',
     written_off: 'danger',
     updated: 'neutral',
     condition: 'info',
     accessories: 'info',
     repair_added: 'warning',
+    repair_ended: 'success',
+    repair_updated: 'neutral',
     repair_removed: 'neutral',
 };
 

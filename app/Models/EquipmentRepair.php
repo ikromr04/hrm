@@ -4,10 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * A visit to a repair shop: planned maintenance as well as a breakdown. It
- * stays open until the unit comes back, which is what ends the spell.
+ * A piece of work done on a unit: planned maintenance as well as a breakdown.
+ * It is a note in the unit's history and nothing more — it does not move the
+ * unit or take it from whoever holds it. An open end date means the work is
+ * still going on.
  */
 class EquipmentRepair extends Model
 {
@@ -40,5 +43,11 @@ class EquipmentRepair extends Model
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);
+    }
+
+    /** How it looked when the work was written down, oldest first. */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(EquipmentPhoto::class, 'equipment_repair_id')->orderBy('id');
     }
 }
