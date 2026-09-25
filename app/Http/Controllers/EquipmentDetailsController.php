@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
 use App\Models\Equipment;
-use App\Models\EquipmentPhoto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -16,6 +16,8 @@ use Illuminate\Validation\Rule;
  */
 class EquipmentDetailsController extends Controller
 {
+    use KeepsEquipmentPhotos;
+
     /**
      * "Характеристики": what the unit is.
      */
@@ -58,8 +60,7 @@ class EquipmentDetailsController extends Controller
             'condition' => ['nullable', 'string', 'max:200'],
             'checked_at' => ['nullable', 'date', 'before_or_equal:today'],
             'next_inventory_at' => ['nullable', 'date'],
-            'photos' => ['nullable', 'array', 'max:10'],
-            'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
+            ...self::PHOTO_RULES,
         ], attributes: [
             'condition' => 'текущее состояние',
             'checked_at' => 'последняя проверка',
@@ -73,20 +74,9 @@ class EquipmentDetailsController extends Controller
 
         $equipment->update(Arr::except($data, 'photos'));
 
-        $photos = $request->file('photos') ?? [];
-
-        if ($photos === []) {
-            return back();
-        }
-
         // A check with nothing to correct still happened, so it gets an entry
         // of its own rather than leaving the photographs with nowhere to hang.
-        $event = $equipment->events()->where('id', '>', $before)->latest('id')->first()
-            ?? $equipment->events()->create(['user_id' => $request->user()->id, 'kind' => 'condition']);
-
-        foreach ($photos as $photo) {
-            EquipmentPhoto::keep($equipment, $event, $photo);
-        }
+        $this->keepPhotos($request, $equipment, $before, 'condition');
 
         return back();
     }
@@ -101,19 +91,18 @@ class EquipmentDetailsController extends Controller
         abort_unless($equipment->status === 'issued', 422, 'Поправить выдачу можно только у выданного оборудования.');
 
         $data = $request->validate([
-            'holder_user_id' => ['nullable', 'required_without:holder_department_id', 'prohibits:holder_department_id', 'integer', Rule::exists('users', 'id')],
-            'holder_department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
+            'holder_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
             'issued_at' => ['required', 'date', 'before_or_equal:today'],
+            ...self::PHOTO_RULES,
         ], attributes: [
             'holder_user_id' => 'сотрудник',
-            'holder_department_id' => 'отдел',
             'issued_at' => 'дата выдачи',
+            'photos' => 'фотографии',
         ]);
 
-        $holder = [
-            'holder_user_id' => $data['holder_user_id'] ?? null,
-            'holder_department_id' => $data['holder_department_id'] ?? null,
-        ];
+        $holder = ['holder_user_id' => $data['holder_user_id']];
+
+        $before = (int) $equipment->events()->max('id');
 
         $equipment->update([...$holder, 'issued_at' => $data['issued_at']]);
 
@@ -122,6 +111,10 @@ class EquipmentDetailsController extends Controller
             ['id' => $equipment->currentAssignment?->id],
             [...$holder, 'issued_at' => $data['issued_at']],
         );
+
+        // Whoever fixes who holds a unit is often looking at the thing, so the
+        // form takes pictures as well; they go on the entry for the correction.
+        $this->keepPhotos($request, $equipment, $before, 'updated');
 
         return back();
     }

@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class EquipmentEvent extends Model
 {
     /** Every operation the section records, in the order a life runs. */
-    public const KINDS = ['created', 'issued', 'taken', 'written_off', 'updated', 'condition', 'accessories', 'repair_added', 'repair_ended', 'repair_updated', 'repair_removed'];
+    public const KINDS = ['created', 'issued', 'taken', 'written_off', 'updated', 'reassigned', 'condition', 'accessories', 'repair_added', 'repair_ended', 'repair_updated', 'repair_removed'];
 
     /**
      * The attributes that are mass assignable.
@@ -47,7 +47,6 @@ class EquipmentEvent extends Model
      */
     private const NAMED = [
         'holder_user_id' => User::class,
-        'holder_department_id' => Department::class,
         'equipment_type_id' => EquipmentType::class,
     ];
 

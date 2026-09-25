@@ -59,9 +59,8 @@ interface Unit {
     inventory_number: string;
     type: string | null;
     status: Status;
-    /** Set when the unit is with one person rather than a department. */
+    /** Null while nobody holds it. */
     holder: { id: number; name: string; avatar: string | null } | null;
-    department: string | null;
     issued_at: string | null;
     written_off_at: string | null;
     /** A piece of service work on it has not ended yet. */
@@ -77,7 +76,7 @@ interface Filters {
     inventory_number: string;
     type: number[];
     status: Status[];
-    /** A name typed in, not a pick from a list: colleague or department. */
+    /** A name typed in, not a pick from a list. */
     holder: string;
     issued_from: string | null;
     issued_to: string | null;
@@ -87,7 +86,6 @@ interface Options {
     types: { id: number; name: string }[];
     statuses: { value: Status; label: string }[];
     holders: { id: number; name: string }[];
-    departments: { id: number; name: string }[];
 }
 
 interface Props {
@@ -212,7 +210,7 @@ function DeleteDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
     );
 }
 
-/** Who has it: a colleague or a whole department; in stock, nobody. */
+/** Who has it; on the balance sheet, nobody. */
 function Holder({ unit }: { unit: Unit }) {
     if (unit.holder) {
         return (
@@ -231,7 +229,7 @@ function Holder({ unit }: { unit: Unit }) {
         );
     }
 
-    return unit.department ? <span className="truncate">{unit.department}</span> : <span className="text-muted-foreground">—</span>;
+    return <span className="text-muted-foreground">—</span>;
 }
 
 /** The columns, each with the filter that narrows it. */
@@ -265,7 +263,7 @@ function buildColumns(options: Options): ColumnDef[] {
             key: 'holder',
             label: 'У кого',
             width: 250,
-            filter: { type: 'text', param: 'holder', placeholder: 'Фамилия или отдел' },
+            filter: { type: 'text', param: 'holder', placeholder: 'Фамилия сотрудника' },
         },
         {
             key: 'issued_at',

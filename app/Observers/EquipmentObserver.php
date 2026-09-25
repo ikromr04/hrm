@@ -18,6 +18,13 @@ class EquipmentObserver
     /** The "Состояние" block of the card, edited together and named together. */
     private const STATE = ['condition', 'checked_at', 'next_inventory_at'];
 
+    /**
+     * The "Сейчас у сотрудника" block. Changed on its own it is a
+     * reassignment — the unit stays out, it is somebody else who answers for
+     * it now — and not the plain correction the journal would otherwise call it.
+     */
+    private const HANDOVER = ['holder_user_id', 'issued_at'];
+
     public function created(Equipment $equipment): void
     {
         $equipment->events()->create([
@@ -57,6 +64,7 @@ class EquipmentObserver
                 default => 'written_off',
             },
             array_diff($fields, self::STATE) === [] => 'condition',
+            array_diff($fields, self::HANDOVER) === [] => 'reassigned',
             $fields === ['accessories'] => 'accessories',
             default => 'updated',
         };

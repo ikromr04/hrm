@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
 use App\Models\Equipment;
-use App\Models\EquipmentPhoto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -16,20 +16,21 @@ use Illuminate\Validation\Rule;
  */
 class EquipmentStatusController extends Controller
 {
+    use KeepsEquipmentPhotos;
+
     /**
-     * Handed to one employee or to a whole department — the design shows both,
-     * "Фарход Рахимов" and "Отдел бухгалтерии" — but never to the two at once.
+     * Handed to one colleague, who answers for it by name. A unit is never
+     * signed out to a department: a printer in the accounts office is still on
+     * somebody in particular.
      */
     public function issue(Request $request, Equipment $equipment): RedirectResponse
     {
         $data = $request->validate([
-            'holder_user_id' => ['nullable', 'required_without:holder_department_id', 'prohibits:holder_department_id', 'integer', Rule::exists('users', 'id')],
-            'holder_department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')],
+            'holder_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
             'issued_at' => ['required', 'date', 'before_or_equal:today'],
             ...self::PHOTO_RULES,
         ], attributes: [
             'holder_user_id' => 'сотрудник',
-            'holder_department_id' => 'отдел',
             'issued_at' => 'дата выдачи',
             'photos' => 'фотографии',
         ]);
@@ -41,14 +42,12 @@ class EquipmentStatusController extends Controller
 
         $equipment->update([
             'status' => 'issued',
-            'holder_user_id' => $data['holder_user_id'] ?? null,
-            'holder_department_id' => $data['holder_department_id'] ?? null,
+            'holder_user_id' => $data['holder_user_id'],
             'issued_at' => $data['issued_at'],
         ]);
 
         $equipment->assignments()->create([
-            'holder_user_id' => $data['holder_user_id'] ?? null,
-            'holder_department_id' => $data['holder_department_id'] ?? null,
+            'holder_user_id' => $data['holder_user_id'],
             'issued_at' => $data['issued_at'],
         ]);
 
@@ -96,7 +95,6 @@ class EquipmentStatusController extends Controller
         $equipment->update([
             'status' => $status,
             'holder_user_id' => null,
-            'holder_department_id' => null,
             'issued_at' => null,
             ...$condition === null ? [] : ['condition' => $condition, 'checked_at' => Carbon::today()],
         ]);
@@ -123,7 +121,6 @@ class EquipmentStatusController extends Controller
         $equipment->update([
             'status' => 'written_off',
             'holder_user_id' => null,
-            'holder_department_id' => null,
             'issued_at' => null,
             'written_off_at' => $data['written_off_at'],
         ]);
@@ -131,39 +128,6 @@ class EquipmentStatusController extends Controller
         $this->keepPhotos($request, $equipment, $before, 'written_off');
 
         return back();
-    }
-
-    /**
-     * Every move may carry pictures: what went out, what came back, what is
-     * being struck off. The same limits everywhere, so a phone's photograph is
-     * never refused in one window and taken in another.
-     */
-    private const PHOTO_RULES = [
-        'photos' => ['nullable', 'array', 'max:10'],
-        'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
-    ];
-
-    /**
-     * Hangs whatever was photographed on the entry this move has just written,
-     * so the pictures belong to the occasion rather than floating beside the
-     * unit. `$before` is the newest entry from before the move; `$kind` names
-     * the entry to write if the move changed nothing and the observer stayed
-     * silent.
-     */
-    private function keepPhotos(Request $request, Equipment $equipment, int $before, string $kind): void
-    {
-        $photos = $request->file('photos') ?? [];
-
-        if ($photos === []) {
-            return;
-        }
-
-        $event = $equipment->events()->where('id', '>', $before)->latest('id')->first()
-            ?? $equipment->events()->create(['user_id' => $request->user()->id, 'kind' => $kind]);
-
-        foreach ($photos as $photo) {
-            EquipmentPhoto::keep($equipment, $event, $photo);
-        }
     }
 
     /**

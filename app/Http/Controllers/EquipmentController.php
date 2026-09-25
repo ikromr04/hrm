@@ -75,7 +75,7 @@ class EquipmentController extends Controller
         $direction = $input['direction'] ?? 'asc';
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
-        $query = Equipment::query()->with(['type:id,name', 'holder:id,name,surname,avatar', 'holderDepartment:id,name']);
+        $query = Equipment::query()->with(['type:id,name', 'holder:id,name,surname,avatar']);
         $query->withExists(['repairs as repairs_exists' => fn (Builder $q) => $q->whereNull('ended_at')]);
         $query->when($tab === 'service', fn (Builder $q) => $q->underService())
             ->when($tab !== null && $tab !== 'service', fn (Builder $q) => $q->where('status', $tab));
@@ -99,7 +99,6 @@ class EquipmentController extends Controller
                     'name' => "{$unit->holder->surname} {$unit->holder->name}",
                     'avatar' => $unit->holder->avatar,
                 ] : null,
-                'department' => $unit->holderDepartment?->name,
                 // Marked in the list, because it cuts across the statuses.
                 'in_service' => (bool) $unit->repairs_exists,
                 'issued_at' => $unit->issued_at?->toDateString(),
@@ -125,7 +124,6 @@ class EquipmentController extends Controller
                     ->orderBy('name')
                     ->get(['id', 'name', 'surname'])
                     ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
-                'departments' => Department::query()->orderBy('name')->get(['id', 'name']),
             ],
             'canEdit' => $request->user()->can('manage-employees'),
         ]);
@@ -271,10 +269,8 @@ class EquipmentController extends Controller
         $equipment->load([
             'type:id,name',
             'holder:id,name,surname,avatar',
-            'holderDepartment:id,name',
             'currentAssignment',
             'assignments.holder:id,name,surname',
-            'assignments.holderDepartment:id,name',
             'repairs.photos',
             'events.user:id,name,surname',
             'events.photos',
@@ -307,8 +303,6 @@ class EquipmentController extends Controller
                     'avatar' => $equipment->holder->avatar,
                     'department' => $holderDepartment?->name,
                 ] : null,
-                'department' => $equipment->holderDepartment?->name,
-                'holder_department_id' => $equipment->holder_department_id,
             ],
             'assignments' => $equipment->assignments->map(fn ($spell) => [
                 'id' => $spell->id,
@@ -316,7 +310,6 @@ class EquipmentController extends Controller
                     'id' => $spell->holder->id,
                     'name' => "{$spell->holder->surname} {$spell->holder->name}",
                 ] : null,
-                'department' => $spell->holderDepartment?->name,
                 'issued_at' => $spell->issued_at->toDateString(),
                 'returned_at' => $spell->returned_at?->toDateString(),
                 'condition_on_return' => $spell->condition_on_return,
@@ -361,9 +354,6 @@ class EquipmentController extends Controller
             // What the card's forms offer; only an editor needs any of it.
             'types' => $request->user()->can('manage-employees')
                 ? EquipmentType::query()->orderBy('name')->get(['id', 'name'])
-                : [],
-            'departments' => $request->user()->can('manage-employees')
-                ? Department::query()->orderBy('name')->get(['id', 'name'])
                 : [],
             'neighbours' => $this->neighbours($equipment),
             'canEdit' => $request->user()->can('manage-employees'),
@@ -448,8 +438,7 @@ class EquipmentController extends Controller
                     foreach ($words as $word) {
                         $q->where(fn (Builder $q) => $q->where('surname', 'like', "%{$word}%")->orWhere('name', 'like', "%{$word}%"));
                     }
-                })
-                ->orWhereHas('holderDepartment', fn (Builder $q) => $q->where('name', 'like', "%{$term}%")));
+                }));
         });
         $query->when($filters['issued_from'], fn (Builder $q, string $date) => $q->whereDate('issued_at', '>=', $date));
         $query->when($filters['issued_to'], fn (Builder $q, string $date) => $q->whereDate('issued_at', '<=', $date));

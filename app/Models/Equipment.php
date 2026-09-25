@@ -54,7 +54,6 @@ class Equipment extends Model
         'accessories',
         'status',
         'holder_user_id',
-        'holder_department_id',
         'issued_at',
         'written_off_at',
     ];
@@ -122,11 +121,6 @@ class Equipment extends Model
     public function holder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'holder_user_id');
-    }
-
-    public function holderDepartment(): BelongsTo
-    {
-        return $this->belongsTo(Department::class, 'holder_department_id');
     }
 
     /**

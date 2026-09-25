@@ -70,15 +70,11 @@ interface Unit {
     issued_at: string | null;
     written_off_at: string | null;
     holder: Holder | null;
-    department: string | null;
-    /** Set when a whole department holds it rather than one person. */
-    holder_department_id: number | null;
 }
 
 interface Spell {
     id: number;
     holder: { id: number; name: string } | null;
-    department: string | null;
     issued_at: string;
     returned_at: string | null;
     condition_on_return: string | null;
@@ -115,7 +111,6 @@ interface Props {
     holders: { id: number; name: string }[];
     /** The categories the «Характеристики» form offers; empty for a viewer. */
     types: { id: number; name: string }[];
-    departments: { id: number; name: string }[];
     neighbours: { prev: Neighbour; next: Neighbour };
     canEdit: boolean;
 }
@@ -494,27 +489,20 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
  * wrong colleague. It is not a move: the unit stays issued, and the open spell
  * in its history is corrected along with the card.
  */
-function HandoverDialog({
-    unit,
-    holders,
-    departments,
-    onClose,
-}: {
-    unit: Unit;
-    holders: { id: number; name: string }[];
-    departments: { id: number; name: string }[];
-    onClose: () => void;
-}) {
+function HandoverDialog({ unit, holders, onClose }: { unit: Unit; holders: { id: number; name: string }[]; onClose: () => void }) {
     const today = new Date().toISOString().slice(0, 10);
+    const [photos, setPhotos] = useState<File[]>([]);
+
     const form = useForm({
         holder_user_id: unit.holder ? String(unit.holder.id) : '',
-        holder_department_id: unit.holder_department_id ? String(unit.holder_department_id) : '',
         issued_at: unit.issued_at ?? today,
     });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
-        form.put(route('equipment.handover', unit.id), { preserveScroll: true, onSuccess: onClose });
+        // Multipart, so the correction is a POST that says it is a PUT.
+        form.transform((data) => ({ ...data, photos, _method: 'put' }));
+        form.post(route('equipment.handover', unit.id), { preserveScroll: true, forceFormData: true, onSuccess: onClose });
     };
 
     return (
@@ -523,8 +511,8 @@ function HandoverDialog({
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
-                        <DialogTitle>Выдача</DialogTitle>
-                        <DialogDescription>Единица остаётся выданной — правится только запись о ней.</DialogDescription>
+                        <DialogTitle>Переназначение</DialogTitle>
+                        <DialogDescription>Единица остаётся выданной — меняется только то, за кем она числится.</DialogDescription>
                     </DialogHeader>
 
                     <div className="grid content-start gap-2">
@@ -532,8 +520,7 @@ function HandoverDialog({
                         <SearchableSelect
                             id="handover-holder"
                             value={form.data.holder_user_id}
-                            // One holder at a time: picking a person lets the department go.
-                            onChange={(value) => form.setData({ ...form.data, holder_user_id: value, holder_department_id: '' })}
+                            onChange={(value) => form.setData('holder_user_id', value)}
                             options={holders.map((holder) => ({ value: String(holder.id), label: holder.name }))}
                             placeholder="Не выбран"
                             searchPlaceholder="Поиск по фамилии или имени"
@@ -541,22 +528,6 @@ function HandoverDialog({
                             invalid={!!form.errors.holder_user_id}
                         />
                         <InputError message={form.errors.holder_user_id} />
-                    </div>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="handover-department">Либо отдел</Label>
-                        <SearchableSelect
-                            id="handover-department"
-                            value={form.data.holder_department_id}
-                            onChange={(value) => form.setData({ ...form.data, holder_department_id: value, holder_user_id: '' })}
-                            options={departments.map((department) => ({ value: String(department.id), label: department.name }))}
-                            placeholder="Не выбран"
-                            searchPlaceholder="Поиск отдела"
-                            empty="Отдел не найден"
-                            invalid={!!form.errors.holder_department_id}
-                        />
-                        <InputError message={form.errors.holder_department_id} />
-                        <p className="text-muted-foreground text-[13px]">Техника числится либо за человеком, либо за отделом.</p>
                     </div>
 
                     <div className="grid content-start gap-2">
@@ -571,6 +542,13 @@ function HandoverDialog({
                         />
                         <InputError message={form.errors.issued_at} />
                     </div>
+
+                    <PhotoInput
+                        photos={photos}
+                        onChange={setPhotos}
+                        error={at(form.errors, 'photos')}
+                        hint="В каком виде техника у сотрудника. Снимки останутся в журнале."
+                    />
 
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose}>
@@ -892,7 +870,7 @@ function RepairDeleteDialog({ unit, repair, onClose }: { unit: Unit; repair: Rep
 
 /* ------------------------------------------------------------------------ page */
 
-export default function EquipmentShow({ unit, assignments, repairs, events, names, holders, types, departments, neighbours, canEdit }: Props) {
+export default function EquipmentShow({ unit, assignments, repairs, events, names, holders, types, neighbours, canEdit }: Props) {
     const [tab, setTab] = useTab();
     const [asking, setAsking] = useState<AskedMove | null>(null);
     const [repairing, setRepairing] = useState(false);
@@ -1060,7 +1038,6 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                                 ) : (
                                     <Fields columns={1}>
                                         <Field label="Статус">{statusLabel[unit.status]}</Field>
-                                        {unit.department && <Field label="Отдел">{unit.department}</Field>}
                                         {unit.status === 'written_off' && <Field label="Списано">{formatDate(unit.written_off_at)}</Field>}
                                     </Fields>
                                 )}
@@ -1119,7 +1096,7 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                                                     {spell.holder.name}
                                                 </Link>
                                             ) : (
-                                                <span className="font-medium">{spell.department ?? 'Склад'}</span>
+                                                <span className="font-medium">На балансе</span>
                                             )}
                                         </td>
                                         <td className="px-6 py-2.5 tabular-nums">{formatDate(spell.issued_at)}</td>
@@ -1242,7 +1219,7 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
             {editing === 'specs' && <SpecsDialog unit={unit} types={types} onClose={() => setEditing(null)} />}
             {editing === 'accessories' && <AccessoriesDialog unit={unit} onClose={() => setEditing(null)} />}
             {editing === 'state' && <StateDialog unit={unit} onClose={() => setEditing(null)} />}
-            {editing === 'handover' && <HandoverDialog unit={unit} holders={holders} departments={departments} onClose={() => setEditing(null)} />}
+            {editing === 'handover' && <HandoverDialog unit={unit} holders={holders} onClose={() => setEditing(null)} />}
         </AppLayout>
     );
 }

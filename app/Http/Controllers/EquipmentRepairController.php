@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
 use App\Models\Equipment;
-use App\Models\EquipmentEvent;
-use App\Models\EquipmentPhoto;
 use App\Models\EquipmentRepair;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +18,8 @@ use Illuminate\Support\Arr;
  */
 class EquipmentRepairController extends Controller
 {
+    use KeepsEquipmentPhotos;
+
     public function store(Request $request, Equipment $equipment): RedirectResponse
     {
         abort_if($equipment->status === 'written_off', 422, 'Списанное оборудование нельзя обслуживать.');
@@ -33,7 +34,7 @@ class EquipmentRepairController extends Controller
             'note' => $repair->kind,
         ]);
 
-        $this->keepPhotos($request, $equipment, $event, $repair);
+        $this->attachPhotos($request, $equipment, $event, $repair);
 
         return back();
     }
@@ -59,7 +60,7 @@ class EquipmentRepairController extends Controller
         ]);
 
         // Later pictures join the record; they never replace the earlier ones.
-        $this->keepPhotos($request, $equipment, $event, $repair);
+        $this->attachPhotos($request, $equipment, $event, $repair);
 
         return back();
     }
@@ -74,8 +75,7 @@ class EquipmentRepairController extends Controller
             'started_at' => ['required', 'date', 'before_or_equal:today'],
             'ended_at' => ['nullable', 'date', 'after_or_equal:started_at'],
             'note' => ['nullable', 'string', 'max:200'],
-            'photos' => ['nullable', 'array', 'max:10'],
-            'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
+            ...self::PHOTO_RULES,
         ], attributes: [
             'kind' => 'тип работ',
             'started_at' => 'дата начала',
@@ -83,17 +83,6 @@ class EquipmentRepairController extends Controller
             'note' => 'комментарий',
             'photos' => 'фотографии',
         ]);
-    }
-
-    /**
-     * What was photographed belongs both to the entry in the journal and to the
-     * record it came with, so it can be read from either side.
-     */
-    private function keepPhotos(Request $request, Equipment $equipment, EquipmentEvent $event, EquipmentRepair $repair): void
-    {
-        foreach ($request->file('photos') ?? [] as $photo) {
-            EquipmentPhoto::keep($equipment, $event, $photo, $repair);
-        }
     }
 
     public function destroy(Request $request, Equipment $equipment, EquipmentRepair $repair): RedirectResponse

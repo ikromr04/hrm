@@ -43,6 +43,7 @@ export type EventKind =
     | 'taken'
     | 'written_off'
     | 'updated'
+    | 'reassigned'
     | 'condition'
     | 'accessories'
     | 'repair_added'
@@ -56,6 +57,7 @@ export const eventLabel: Record<EventKind, string> = {
     taken: 'Возвращено',
     written_off: 'Списано',
     updated: 'Изменены данные',
+    reassigned: 'Переназначение',
     condition: 'Состояние',
     accessories: 'Комплектация',
     repair_added: 'Обслуживание',
@@ -70,6 +72,7 @@ export const eventTone: Record<EventKind, StatusTone> = {
     taken: 'neutral',
     written_off: 'danger',
     updated: 'neutral',
+    reassigned: 'info',
     condition: 'info',
     accessories: 'info',
     repair_added: 'warning',
@@ -94,7 +97,6 @@ export const fieldLabel: Record<string, string> = {
     accessories: 'Комплектация',
     status: 'Статус',
     holder_user_id: 'Держатель',
-    holder_department_id: 'Отдел-держатель',
     issued_at: 'Выдано',
     written_off_at: 'Списано',
 };

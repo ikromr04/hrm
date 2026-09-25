@@ -44,10 +44,10 @@ return new class extends Migration
 
             $table->enum('status', ['issued', 'stock', 'written_off'])->default('stock')->index();
 
-            // Who holds it now: a person or a whole department, or nobody at
-            // all while it sits on the balance sheet.
+            // Who holds it now: one colleague, or nobody at all while it sits
+            // on the balance sheet. A unit is never signed out to a department:
+            // somebody answers for it by name.
             $table->foreignId('holder_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('holder_department_id')->nullable()->constrained('departments')->nullOnDelete();
 
             $table->date('issued_at')->nullable();
             $table->date('written_off_at')->nullable();
@@ -63,7 +63,6 @@ return new class extends Migration
             $table->foreignId('equipment_id')->constrained()->cascadeOnDelete();
 
             $table->foreignId('holder_user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('holder_department_id')->nullable()->constrained('departments')->nullOnDelete();
 
             $table->date('issued_at');
             $table->date('returned_at')->nullable();

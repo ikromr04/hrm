@@ -231,7 +231,6 @@ class UserSeeder extends Seeder
             if ($issued !== null) {
                 $unit->assignments()->create([
                     'holder_user_id' => $unit->holder_user_id,
-                    'holder_department_id' => $unit->holder_department_id,
                     'issued_at' => $issued,
                 ]);
             }

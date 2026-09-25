@@ -20,7 +20,6 @@ class EquipmentAssignment extends Model
     protected $fillable = [
         'equipment_id',
         'holder_user_id',
-        'holder_department_id',
         'issued_at',
         'returned_at',
         'condition_on_return',
@@ -47,11 +46,6 @@ class EquipmentAssignment extends Model
     public function holder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'holder_user_id');
-    }
-
-    public function holderDepartment(): BelongsTo
-    {
-        return $this->belongsTo(Department::class, 'holder_department_id');
     }
 
     /**

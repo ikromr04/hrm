@@ -145,16 +145,6 @@ class EquipmentTest extends TestCase
         $only('issued_to=2026-02-01', 'Монитор B');
     }
 
-    public function test_the_holder_filter_also_finds_a_department()
-    {
-        $department = Department::create(['name' => 'Отдел бухгалтерии']);
-        Equipment::factory()->ofType($this->type())->create(['name' => 'Принтер', 'status' => 'issued', 'holder_department_id' => $department->id]);
-        Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук']);
-
-        $this->actingAs($this->admin())->get('/equipment?holder='.urlencode('бухгалтер'))
-            ->assertInertia(fn (AssertableInertia $page) => $page->has('equipment.data', 1)->where('equipment.data.0.name', 'Принтер'));
-    }
-
     public function test_the_list_sorts_by_a_column_in_either_direction()
     {
         Equipment::factory()->ofType($this->type())->create(['name' => 'Б', 'inventory_number' => 'EV-0002']);
@@ -609,27 +599,16 @@ class EquipmentTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_a_unit_goes_to_one_holder_not_two()
+    public function test_a_unit_is_issued_to_a_colleague_and_to_nobody_else()
     {
-        $employee = User::factory()->create();
-        $department = Department::create(['name' => 'Отдел бухгалтерии']);
         $unit = Equipment::factory()->ofType($this->type())->create();
-        $admin = $this->admin();
 
-        // A department may hold a unit, as the design shows...
-        $this->actingAs($admin)
-            ->post("/equipment/{$unit->id}/issue", ['holder_department_id' => $department->id, 'issued_at' => '2026-03-14'])
-            ->assertSessionHasNoErrors();
-        $this->assertSame($department->id, $unit->refresh()->holder_department_id);
-
-        // ...but never a person and a department at once.
-        $this->actingAs($admin)
-            ->post("/equipment/{$unit->id}/issue", [
-                'holder_user_id' => $employee->id,
-                'holder_department_id' => $department->id,
-                'issued_at' => '2026-03-14',
-            ])
+        // Hardware is signed out by name: there is no department to hand it to.
+        $this->actingAs($this->admin())
+            ->post("/equipment/{$unit->id}/issue", ['issued_at' => '2026-03-14'])
             ->assertSessionHasErrors('holder_user_id');
+
+        $this->assertSame('stock', $unit->refresh()->status);
     }
 
     public function test_taking_a_unit_back_clears_who_had_it()

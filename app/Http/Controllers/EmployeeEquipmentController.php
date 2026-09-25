@@ -41,7 +41,6 @@ class EmployeeEquipmentController extends Controller
             $unit->update([
                 'status' => 'issued',
                 'holder_user_id' => $employee->id,
-                'holder_department_id' => null,
                 'issued_at' => $issuedAt,
             ]);
 

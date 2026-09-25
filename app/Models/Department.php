@@ -47,15 +47,6 @@ class Department extends Model
     }
 
     /**
-     * Hardware issued to the department as a whole rather than to one person,
-     * such as the printer the accounts office shares.
-     */
-    public function equipment(): HasMany
-    {
-        return $this->hasMany(Equipment::class, 'holder_department_id');
-    }
-
-    /**
      * Members who lead this department; there can be several.
      */
     public function heads(): BelongsToMany

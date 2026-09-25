@@ -215,6 +215,29 @@ class EquipmentJournalTest extends TestCase
         $this->assertSame(2, $unit->photos()->count());
     }
 
+    public function test_handing_a_unit_to_somebody_else_is_named_a_reassignment()
+    {
+        Storage::fake('public');
+        $first = User::factory()->create();
+        $second = User::factory()->create();
+        $unit = Equipment::factory()->ofType($this->type())->issuedTo($first->id)->create();
+
+        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/handover", [
+            // Multipart, so the correction is a POST that says it is a PUT.
+            '_method' => 'put',
+            'holder_user_id' => $second->id,
+            'issued_at' => now()->toDateString(),
+            'photos' => [UploadedFile::fake()->image('desk.jpg', 1200, 900)],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame($second->id, $unit->refresh()->holder_user_id);
+
+        // Named for what it is, with the picture and the change on it.
+        $event = $unit->events()->where('kind', 'reassigned')->sole();
+        $this->assertSame(1, $event->photos()->count());
+        $this->assertArrayHasKey('holder_user_id', $event->diff);
+    }
+
     public function test_a_check_keeps_its_photographs_and_a_later_one_does_not_replace_them()
     {
         Storage::fake('public');
