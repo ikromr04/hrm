@@ -104,7 +104,7 @@ export function SearchableSelect({
                         className,
                     )}
                 >
-                    <span className={cn('truncate', !chosen && 'text-muted-foreground')}>{chosen?.label ?? placeholder}</span>
+                    <span className={cn('truncate', !chosen && 'text-placeholder')}>{chosen?.label ?? placeholder}</span>
                     <ChevronDown className="size-4 shrink-0 opacity-50" />
                 </button>
             </PopoverTrigger>
@@ -119,7 +119,7 @@ export function SearchableSelect({
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder={searchPlaceholder}
-                        className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
+                        className="placeholder:text-placeholder min-w-0 flex-1 bg-transparent text-sm outline-hidden"
                     />
                 </div>
 
