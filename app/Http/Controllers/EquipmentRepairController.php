@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
 use App\Models\Equipment;
+use App\Models\EquipmentEvent;
 use App\Models\EquipmentRepair;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,9 @@ class EquipmentRepairController extends Controller
 
         $data = $this->validated($request);
 
+        // What it said before, since the save itself forgets.
+        $was = $repair->replicate();
+
         $repair->update(Arr::except($data, 'photos'));
 
         $event = $equipment->events()->create([
@@ -56,6 +60,9 @@ class EquipmentRepairController extends Controller
             // Finishing the work is the change worth naming; anything else is
             // a correction, and the entry says as much either way.
             'kind' => $repair->wasChanged('ended_at') && $repair->ended_at !== null ? 'repair_ended' : 'repair_updated',
+            // What was corrected, line by line, or the entry would say that
+            // something changed without saying what.
+            'diff' => EquipmentEvent::diffOf($repair, was: $was),
             'note' => $repair->kind,
         ]);
 

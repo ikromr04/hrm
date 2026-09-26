@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class EquipmentEvent extends Model
 {
     /** Every operation the section records, in the order a life runs. */
-    public const KINDS = ['created', 'issued', 'taken', 'written_off', 'updated', 'reassigned', 'condition', 'accessories', 'repair_added', 'repair_ended', 'repair_updated', 'repair_removed'];
+    public const KINDS = ['created', 'stocked', 'issued', 'written_off', 'updated', 'condition', 'accessories', 'repair_added', 'repair_ended', 'repair_updated', 'repair_removed'];
 
     /**
      * The attributes that are mass assignable.
@@ -87,6 +87,44 @@ class EquipmentEvent extends Model
         }
 
         return $names;
+    }
+
+    /**
+     * Dates and decimals come off a row in whatever shape the driver gives
+     * them; an entry keeps plain values, so a line reads the same however it
+     * was written. A list stays a list: the accessories are compared item by
+     * item when the entry is read.
+     */
+    public static function plain(mixed $value): string|int|float|bool|array|null
+    {
+        return match (true) {
+            $value === null || is_scalar($value) => $value,
+            $value instanceof \DateTimeInterface => $value->format('Y-m-d'),
+            is_array($value) => array_values(array_map(fn ($item) => (string) $item, $value)),
+            default => (string) $value,
+        };
+    }
+
+    /**
+     * What a save changed, as an entry keeps it: field => [before, after].
+     *
+     * Called while a model is being saved — from an observer — the row still
+     * remembers what it said, and that is where the "before" comes from. Called
+     * after the save it does not, so the caller hands over a copy taken
+     * beforehand: .
+     *
+     * @param  list<string>  $ignored
+     * @return array<string, array{mixed, mixed}>
+     */
+    public static function diffOf(Model $row, array $ignored = ['created_at', 'updated_at'], ?Model $was = null): array
+    {
+        return collect($row->getChanges())
+            ->except($ignored)
+            ->map(fn ($skip, string $field) => [
+                self::plain($was ? $was->getAttribute($field) : $row->getOriginal($field)),
+                self::plain($row->getAttribute($field)),
+            ])
+            ->all();
     }
 
     public function equipment(): BelongsTo

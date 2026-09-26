@@ -1,5 +1,17 @@
-import { fieldLabel, listDiff, readValue, type EventChanges, type NameLookup } from '@/lib/equipment';
+import { fieldLabel, listDiff, readValue, statusLabel, type ChangeValue, type EventChanges, type EventKind, type NameLookup } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
+
+/**
+ * What each kind of entry leaves unsaid under its badge. A move's status only
+ * repeats the badge above it; the dates a move clears or stamps — the issue
+ * date it ends, the check date a return fills in — follow from the move itself
+ * and are not news of their own.
+ */
+const unsaid: Partial<Record<EventKind, string[]>> = {
+    issued: ['status', 'issued_at'],
+    stocked: ['status', 'issued_at', 'checked_at'],
+    written_off: ['status', 'issued_at', 'written_off_at'],
+};
 
 /**
  * What one journal entry recorded, read out field by field: "Статус: На балансе
@@ -9,17 +21,29 @@ import { cn } from '@/lib/utils';
  */
 export function ChangeLines({
     changes,
+    kind,
     names,
     note,
     className,
 }: {
     changes: EventChanges;
+    /** What the entry was, for the fields that go without saying in it. */
+    kind?: EventKind;
     /** Names for the ids an entry kept, so a holder reads as a person. */
     names?: NameLookup;
     note?: string | null;
     className?: string;
 }) {
-    const fields = Object.entries(changes);
+    // Entries written before all this was settled still hold those fields, and
+    // leaving them out here means they read the same as the ones written since.
+    // Nobody holding a unit is not a blank: it is the unit gone back on the
+    // balance sheet, or off the books altogether if this is what struck it off.
+    const nobody = kind === 'written_off' ? statusLabel.written_off : statusLabel.stock;
+    const read = (field: string, value: ChangeValue) =>
+        field === 'holder_user_id' && (value === null || value === '') ? nobody : readValue(field, value, names);
+
+    const hidden = (kind && unsaid[kind]) ?? [];
+    const fields = Object.entries(changes).filter(([field]) => !hidden.includes(field));
 
     if (fields.length === 0) {
         return note ? <span className={cn('text-[13px]', className)}>{note}</span> : <span className="text-muted-foreground">—</span>;
@@ -50,9 +74,9 @@ export function ChangeLines({
                 return (
                     <li key={field} className="text-[13px]">
                         <span className="text-muted-foreground">{label}: </span>
-                        <span className="text-muted-foreground line-through">{readValue(field, before, names)}</span>
+                        <span className="text-muted-foreground line-through">{read(field, before)}</span>
                         <span className="text-muted-foreground"> → </span>
-                        <span className="font-medium">{readValue(field, after, names)}</span>
+                        <span className="font-medium">{read(field, after)}</span>
                     </li>
                 );
             })}

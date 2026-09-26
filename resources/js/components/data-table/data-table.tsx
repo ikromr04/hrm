@@ -38,7 +38,8 @@ interface DataTableProps<Row> {
 
     view: ViewState;
     onPin: (key: string, side: 'left' | 'right' | null) => void;
-    onHide: (key: string) => void;
+    /** Left out where the page has nowhere to bring a hidden column back from. */
+    onHide?: (key: string) => void;
     /** The column that carries the row's identity and so cannot be hidden. */
     lockedKey: string;
 
@@ -204,7 +205,7 @@ export function DataTable<Row>({
                                                                 Не закреплять
                                                             </DropdownMenuRadioItem>
                                                         </DropdownMenuRadioGroup>
-                                                        {column.key !== lockedKey && (
+                                                        {onHide && column.key !== lockedKey && (
                                                             <>
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem onSelect={() => onHide(column.key)}>

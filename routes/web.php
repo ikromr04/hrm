@@ -110,7 +110,6 @@ Route::middleware(['auth', 'can:manage-employees'])->prefix('equipment/{equipmen
     Route::put('specs', [EquipmentDetailsController::class, 'specs'])->name('specs');
     Route::put('accessories', [EquipmentDetailsController::class, 'accessories'])->name('accessories');
     Route::put('state', [EquipmentDetailsController::class, 'state'])->name('state');
-    Route::put('handover', [EquipmentDetailsController::class, 'handover'])->name('handover');
 
     // What has been done to it.
     Route::post('repairs', [EquipmentRepairController::class, 'store'])->name('repairs.store');

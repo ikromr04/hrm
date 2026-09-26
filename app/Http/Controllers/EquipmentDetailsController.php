@@ -82,44 +82,6 @@ class EquipmentDetailsController extends Controller
     }
 
     /**
-     * "Сейчас у сотрудника": a correction to the handover the unit is on, not a
-     * move — the unit stays issued throughout. The open spell in the history is
-     * corrected along with it, so the card and the history keep saying the same.
-     */
-    public function handover(Request $request, Equipment $equipment): RedirectResponse
-    {
-        abort_unless($equipment->status === 'issued', 422, 'Поправить выдачу можно только у выданного оборудования.');
-
-        $data = $request->validate([
-            'holder_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
-            'issued_at' => ['required', 'date', 'before_or_equal:today'],
-            ...self::PHOTO_RULES,
-        ], attributes: [
-            'holder_user_id' => 'сотрудник',
-            'issued_at' => 'дата выдачи',
-            'photos' => 'фотографии',
-        ]);
-
-        $holder = ['holder_user_id' => $data['holder_user_id']];
-
-        $before = (int) $equipment->events()->max('id');
-
-        $equipment->update([...$holder, 'issued_at' => $data['issued_at']]);
-
-        // No open spell means the unit predates the history; start one now.
-        $equipment->assignments()->updateOrCreate(
-            ['id' => $equipment->currentAssignment?->id],
-            [...$holder, 'issued_at' => $data['issued_at']],
-        );
-
-        // Whoever fixes who holds a unit is often looking at the thing, so the
-        // form takes pictures as well; they go on the entry for the correction.
-        $this->keepPhotos($request, $equipment, $before, 'updated');
-
-        return back();
-    }
-
-    /**
      * "Комплектация": the whole list is replaced, so removing a line is simply
      * leaving it out.
      */

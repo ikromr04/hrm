@@ -8,10 +8,10 @@ return new class extends Migration
 {
     /**
      * Everything that has ever happened to a unit, in the order it happened:
-     * put on the books, handed over, taken back, sent for repair, written off,
-     * or simply corrected. The assignments and the repairs say where a unit
-     * has been; this says who did what to it and when, which is what a
-     * question like "what changed last month" is really asking.
+     * put on the books, handed over, reassigned, taken back, serviced, written
+     * off, or simply corrected. This is the whole record of a unit's past — who
+     * did what to it and when — which is what a question like "what changed
+     * last month" is really asking.
      */
     public function up(): void
     {

@@ -1,3 +1,4 @@
+import { countActiveFilters, DataTable, useTableView, type ColumnDef, type ViewState } from '@/components/data-table';
 import { ChangeLines } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
@@ -40,9 +41,10 @@ import {
     Plus,
     Trash2,
     UserPlus,
+    X,
     type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useState, type FormEventHandler, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEventHandler, type ReactNode } from 'react';
 
 interface Holder {
     id: number;
@@ -72,14 +74,6 @@ interface Unit {
     holder: Holder | null;
 }
 
-interface Spell {
-    id: number;
-    holder: { id: number; name: string } | null;
-    issued_at: string;
-    returned_at: string | null;
-    condition_on_return: string | null;
-}
-
 interface Repair {
     id: number;
     kind: string;
@@ -97,12 +91,11 @@ interface JournalEvent {
     changes: EventChanges;
     note: string | null;
     at: string | null;
-    actor: { id: number; name: string } | null;
+    actor: { id: number; name: string; avatar: string | null } | null;
 }
 
 interface Props {
     unit: Unit;
-    assignments: Spell[];
     repairs: Repair[];
     /** Everything that has happened to this unit, newest first. */
     events: JournalEvent[];
@@ -120,7 +113,6 @@ type Neighbour = { id: number; name: string; inventory_number: string } | null;
 
 const tabs = [
     { key: 'overview', title: 'Обзор' },
-    { key: 'history', title: 'История передач' },
     { key: 'service', title: 'Обслуживание' },
     { key: 'journal', title: 'Журнал' },
 ] as const;
@@ -276,7 +268,7 @@ function MoveGroup({ moves, onPick }: { moves: { kind: AskedMove; icon: LucideIc
     );
 }
 
-/** A plain table for the history and service tabs. */
+/** A plain table, for the service tab. */
 function Table({ head, children }: { head: string[]; children: ReactNode }) {
     return (
         <div className="scroll-soft -mx-6 overflow-x-auto">
@@ -418,7 +410,7 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
-                        <DialogTitle>Проверка состояния</DialogTitle>
+                        <DialogTitle>Инвентаризация</DialogTitle>
                         <DialogDescription>Запись о проверке и её снимки останутся в журнале.</DialogDescription>
                     </DialogHeader>
 
@@ -467,87 +459,6 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
                         onChange={setPhotos}
                         error={at(form.errors, 'photos')}
                         hint="Снимки прошлых проверок остаются в журнале — новые их не заменяют."
-                    />
-
-                    <DialogFooter className="gap-2">
-                        <Button type="button" variant="outline" onClick={onClose}>
-                            Отмена
-                        </Button>
-                        <Button type="submit" disabled={form.processing}>
-                            {form.processing && <LoaderCircle className="animate-spin" />}
-                            Сохранить
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-/**
- * Correcting the handover the unit is on — a wrong date, a missing act, the
- * wrong colleague. It is not a move: the unit stays issued, and the open spell
- * in its history is corrected along with the card.
- */
-function HandoverDialog({ unit, holders, onClose }: { unit: Unit; holders: { id: number; name: string }[]; onClose: () => void }) {
-    const today = new Date().toISOString().slice(0, 10);
-    const [photos, setPhotos] = useState<File[]>([]);
-
-    const form = useForm({
-        holder_user_id: unit.holder ? String(unit.holder.id) : '',
-        issued_at: unit.issued_at ?? today,
-    });
-
-    const submit: FormEventHandler = (event) => {
-        event.preventDefault();
-        // Multipart, so the correction is a POST that says it is a PUT.
-        form.transform((data) => ({ ...data, photos, _method: 'put' }));
-        form.post(route('equipment.handover', unit.id), { preserveScroll: true, forceFormData: true, onSuccess: onClose });
-    };
-
-    return (
-        <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
-                {/* noValidate: the server's rules are the real ones. */}
-                <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-                    <DialogHeader>
-                        <DialogTitle>Переназначение</DialogTitle>
-                        <DialogDescription>Единица остаётся выданной — меняется только то, за кем она числится.</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="handover-holder">Сотрудник</Label>
-                        <SearchableSelect
-                            id="handover-holder"
-                            value={form.data.holder_user_id}
-                            onChange={(value) => form.setData('holder_user_id', value)}
-                            options={holders.map((holder) => ({ value: String(holder.id), label: holder.name }))}
-                            placeholder="Не выбран"
-                            searchPlaceholder="Поиск по фамилии или имени"
-                            empty="Сотрудник не найден"
-                            invalid={!!form.errors.holder_user_id}
-                        />
-                        <InputError message={form.errors.holder_user_id} />
-                    </div>
-
-                    <div className="grid content-start gap-2">
-                        <Label htmlFor="handover-issued">Дата выдачи</Label>
-                        <Input
-                            id="handover-issued"
-                            type="date"
-                            max={today}
-                            value={form.data.issued_at}
-                            onChange={(event) => form.setData('issued_at', event.target.value)}
-                            aria-invalid={!!form.errors.issued_at}
-                        />
-                        <InputError message={form.errors.issued_at} />
-                    </div>
-
-                    <PhotoInput
-                        photos={photos}
-                        onChange={setPhotos}
-                        error={at(form.errors, 'photos')}
-                        hint="В каком виде техника у сотрудника. Снимки останутся в журнале."
                     />
 
                     <DialogFooter className="gap-2">
@@ -868,9 +779,65 @@ function RepairDeleteDialog({ unit, repair, onClose }: { unit: Unit; repair: Rep
     );
 }
 
+/* ------------------------------------------------------------------ journal */
+
+const JOURNAL_VIEW_KEY = 'equipment.card.journal.view.v1';
+
+const journalView = (): ViewState => ({ hidden: [], pinned: { left: [], right: [] } });
+
+/**
+ * The same columns as the operations journal, without "Оборудование" and
+ * "Категория": on a unit's own card both would say what the card already says.
+ */
+function journalColumns(events: JournalEvent[]): ColumnDef[] {
+    const kinds = Array.from(new Set(events.map((event) => event.kind)));
+    const actors = new Map(events.filter((event) => event.actor).map((event) => [event.actor!.id, event.actor!.name]));
+
+    return [
+        { key: 'at', label: 'Когда', width: 150, filter: { type: 'dates', from: 'from', to: 'to' } },
+        {
+            key: 'kind',
+            label: 'Операция',
+            width: 200,
+            filter: { type: 'multi', param: 'kind', options: kinds.map((kind) => ({ value: kind, label: eventLabel[kind] })) },
+        },
+        {
+            key: 'actor',
+            label: 'Кто',
+            width: 220,
+            filter: { type: 'multi', param: 'actor', options: [...actors].map(([id, name]) => ({ value: id, label: name })) },
+        },
+        { key: 'changes', label: 'Что изменилось', width: 420 },
+    ];
+}
+
+/** Everything the journal's filters are asked about, all of it optional. */
+interface JournalFilters {
+    from: string | null;
+    to: string | null;
+    kind: string[];
+    actor: number[];
+}
+
+const noJournalFilters: JournalFilters = { from: null, to: null, kind: [], actor: [] };
+
+/** Narrowing happens here rather than on the server: the card holds every entry already. */
+function narrowJournal(events: JournalEvent[], filters: JournalFilters): JournalEvent[] {
+    return events.filter((event) => {
+        const day = event.at?.slice(0, 10) ?? '';
+
+        if (filters.from && day < filters.from) return false;
+        if (filters.to && day > filters.to) return false;
+        if (filters.kind.length > 0 && !filters.kind.includes(event.kind)) return false;
+        if (filters.actor.length > 0 && !filters.actor.includes(event.actor?.id ?? -1)) return false;
+
+        return true;
+    });
+}
+
 /* ------------------------------------------------------------------------ page */
 
-export default function EquipmentShow({ unit, assignments, repairs, events, names, holders, types, neighbours, canEdit }: Props) {
+export default function EquipmentShow({ unit, repairs, events, names, holders, types, neighbours, canEdit }: Props) {
     const [tab, setTab] = useTab();
     const [asking, setAsking] = useState<AskedMove | null>(null);
     const [repairing, setRepairing] = useState(false);
@@ -878,8 +845,55 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
     const [correcting, setCorrecting] = useState<Repair | null>(null);
     const [closing, setClosing] = useState<Repair | null>(null);
     const [deleting, setDeleting] = useState(false);
+    // The journal tab is a table of its own, narrowed here rather than on the
+    // server: every entry of this one unit is on the page already.
+    const [journalFilters, setJournalFilters] = useState<JournalFilters>(noJournalFilters);
+    const columns = useMemo(() => journalColumns(events), [events]);
+    // Columns cannot be hidden here — there is no "Колонки" menu to bring one
+    // back from — but pinning is still remembered between visits.
+    const { view, pin } = useTableView(
+        JOURNAL_VIEW_KEY,
+        columns.map((column) => column.key),
+        journalView(),
+    );
+    const shown = narrowJournal(events, journalFilters);
+
+    const journalCell = (column: ColumnDef, event: JournalEvent) => {
+        switch (column.key) {
+            case 'at':
+                return <span className="tabular-nums">{formatMoment(event.at)}</span>;
+            case 'kind':
+                return <StatusBadge tone={eventTone[event.kind]}>{eventLabel[event.kind]}</StatusBadge>;
+            case 'actor':
+                return event.actor ? (
+                    <Link
+                        href={route('employees.show', event.actor.id)}
+                        title={`Открыть профиль: ${event.actor.name}`}
+                        className="text-brand-strong flex items-center gap-2 hover:underline dark:text-[#C5E27A]"
+                    >
+                        {event.actor.avatar ? (
+                            <img src={event.actor.avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
+                        ) : (
+                            <PersonAvatar name={event.actor.name} className="size-7 text-[11px]" />
+                        )}
+                        <span className="truncate">{event.actor.name}</span>
+                    </Link>
+                ) : (
+                    <span className="text-muted-foreground">Система</span>
+                );
+            default:
+                return (
+                    <div className="flex flex-col gap-2">
+                        <ChangeLines changes={event.changes} kind={event.kind} names={names} note={event.note} />
+                        <Photos photos={event.photos} />
+                    </div>
+                );
+        }
+    };
+    const activeFilters = countActiveFilters(columns, journalFilters as unknown as Record<string, unknown>, () => true);
+
     /** Which block of the card is open in a form. */
-    const [editing, setEditing] = useState<'specs' | 'accessories' | 'state' | 'handover' | null>(null);
+    const [editing, setEditing] = useState<'specs' | 'accessories' | 'state' | null>(null);
 
     // The newest entry that came with photographs is the last look anyone had.
     const lastPhotos = events.find((event) => event.photos.length > 0)?.photos ?? [];
@@ -1007,8 +1021,9 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
 
                         <div className="flex flex-col gap-4">
                             <Section
+                                // Not editable: where a unit is follows from the moves
+                                // below, so it is changed by making one of them.
                                 title={unit.holder ? 'Сейчас у сотрудника' : 'Где сейчас'}
-                                action={canEdit && unit.status === 'issued' && <EditButton what="выдачу" onClick={() => setEditing('handover')} />}
                             >
                                 {unit.holder ? (
                                     <>
@@ -1043,7 +1058,10 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                                 )}
                             </Section>
 
-                            <Section title="Состояние" action={canEdit && <EditButton what="состояние" onClick={() => setEditing('state')} />}>
+                            <Section
+                                title="Инвентаризация"
+                                action={canEdit && <EditButton what="инвентаризацию" onClick={() => setEditing('state')} />}
+                            >
                                 <Fields columns={1}>
                                     <Field label="Текущее состояние">{unit.condition}</Field>
                                     <Field label="Последняя проверка">{formatDate(unit.checked_at)}</Field>
@@ -1068,51 +1086,6 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                             )}
                         </div>
                     </div>
-                )}
-
-                {tab === 'history' && (
-                    <Section
-                        title="История передач"
-                        action={
-                            canEdit &&
-                            unit.status !== 'written_off' &&
-                            unit.status !== 'issued' && (
-                                <Button variant="outline" size="sm" onClick={() => setAsking('issue')}>
-                                    <UserPlus />
-                                    Выдать
-                                </Button>
-                            )
-                        }
-                    >
-                        {assignments.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Передач пока не было</p>
-                        ) : (
-                            <Table head={['Сотрудник', 'Выдано', 'Возвращено', 'Состояние при возврате']}>
-                                {assignments.map((spell) => (
-                                    <tr key={spell.id} className="border-t">
-                                        <td className="px-6 py-2.5">
-                                            {spell.holder ? (
-                                                <Link href={route('employees.show', spell.holder.id)} className="font-medium hover:underline">
-                                                    {spell.holder.name}
-                                                </Link>
-                                            ) : (
-                                                <span className="font-medium">На балансе</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-2.5 tabular-nums">{formatDate(spell.issued_at)}</td>
-                                        <td className="px-6 py-2.5 tabular-nums">{formatDate(spell.returned_at) ?? dash}</td>
-                                        <td className="px-6 py-2.5">
-                                            {spell.returned_at === null ? (
-                                                <StatusBadge tone="success">{spell.holder ? 'В работе' : 'Здесь сейчас'}</StatusBadge>
-                                            ) : (
-                                                (spell.condition_on_return ?? dash)
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </Table>
-                        )}
-                    </Section>
                 )}
 
                 {tab === 'service' && (
@@ -1183,30 +1156,36 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
                 )}
 
                 {tab === 'journal' && (
-                    <Section title="Журнал">
-                        {events.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Пока ничего не происходило</p>
-                        ) : (
-                            <ol className="flex flex-col">
-                                {events.map((event) => (
-                                    <li
-                                        key={event.id}
-                                        className="flex flex-wrap items-start gap-x-4 gap-y-1 border-t py-3 first:border-t-0 first:pt-0"
-                                    >
-                                        <span className="text-muted-foreground w-28 shrink-0 text-[13px] tabular-nums">{formatMoment(event.at)}</span>
-
-                                        <StatusBadge tone={eventTone[event.kind]}>{eventLabel[event.kind]}</StatusBadge>
-
-                                        <ChangeLines changes={event.changes} names={names} note={event.note} className="min-w-0 flex-1" />
-
-                                        <span className="text-muted-foreground shrink-0 text-[13px]">{event.actor?.name ?? 'Система'}</span>
-
-                                        {event.photos.length > 0 && <Photos photos={event.photos} className="basis-full pl-44" />}
-                                    </li>
-                                ))}
-                            </ol>
+                    <div className="flex flex-col gap-3 md:min-h-0 md:flex-1">
+                        {activeFilters > 0 && (
+                            <div className="flex items-center">
+                                <Button variant="ghost" className="h-8" onClick={() => setJournalFilters(noJournalFilters)}>
+                                    <X />
+                                    Сбросить фильтры ({activeFilters})
+                                </Button>
+                            </div>
                         )}
-                    </Section>
+
+                        <DataTable
+                            columns={columns}
+                            rows={shown}
+                            rowKey={(event) => event.id}
+                            renderCell={journalCell}
+                            sort={{ key: 'at', direction: 'desc' }}
+                            sortable={[]}
+                            onSort={() => undefined}
+                            filters={journalFilters as unknown as Record<string, unknown>}
+                            onFilter={(changes) => setJournalFilters((current) => ({ ...current, ...(changes as Partial<JournalFilters>) }))}
+                            view={view}
+                            onPin={pin}
+                            lockedKey="at"
+                            empty={
+                                <span className="text-sm">
+                                    {events.length === 0 ? 'Пока ничего не происходило' : 'Под эти фильтры ничего не попало'}
+                                </span>
+                            }
+                        />
+                    </div>
                 )}
             </div>
 
@@ -1219,7 +1198,6 @@ export default function EquipmentShow({ unit, assignments, repairs, events, name
             {editing === 'specs' && <SpecsDialog unit={unit} types={types} onClose={() => setEditing(null)} />}
             {editing === 'accessories' && <AccessoriesDialog unit={unit} onClose={() => setEditing(null)} />}
             {editing === 'state' && <StateDialog unit={unit} onClose={() => setEditing(null)} />}
-            {editing === 'handover' && <HandoverDialog unit={unit} holders={holders} onClose={() => setEditing(null)} />}
         </AppLayout>
     );
 }

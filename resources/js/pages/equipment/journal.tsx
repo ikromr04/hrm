@@ -219,7 +219,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
             default:
                 return (
                     <div className="flex flex-col gap-2">
-                        <ChangeLines changes={event.changes} names={names} note={event.note} />
+                        <ChangeLines changes={event.changes} kind={event.kind} names={names} note={event.note} />
                         <Photos photos={event.photos} />
                     </div>
                 );

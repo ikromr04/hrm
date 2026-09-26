@@ -9,7 +9,7 @@ return new class extends Migration
     /**
      * Company hardware: a directory of categories ("Ноутбуки", "Мониторы") and
      * the units themselves. A unit belongs to the company, not to a person —
-     * it is bought, handed out, returned, repaired and eventually written off,
+     * it is bought, handed out, returned, serviced and eventually written off,
      * so it exists on its own and merely points at whoever holds it now.
      */
     public function up(): void
@@ -55,23 +55,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // Where a unit has been: one row per spell with somebody, the open one
-        // being where it is now. A row with no holder is a spell in stock, so
-        // the card's history reads "Фарход Рахимов", then "Склад", and so on.
-        Schema::create('equipment_assignments', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('equipment_id')->constrained()->cascadeOnDelete();
-
-            $table->foreignId('holder_user_id')->nullable()->constrained('users')->nullOnDelete();
-
-            $table->date('issued_at');
-            $table->date('returned_at')->nullable();
-            // Filled in when it comes back: "Новое, в упаковке", "Царапина на крышке".
-            $table->string('condition_on_return', 200)->nullable();
-
-            $table->timestamps();
-        });
-
         // Every piece of work done on a unit: maintenance as well as a repair.
         Schema::create('equipment_repairs', function (Blueprint $table) {
             $table->id();
@@ -94,7 +77,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('equipment_repairs');
-        Schema::dropIfExists('equipment_assignments');
         Schema::dropIfExists('equipment');
         Schema::dropIfExists('equipment_types');
     }

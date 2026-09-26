@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\EquipmentEvent;
 use App\Models\EquipmentPhoto;
@@ -12,7 +11,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -94,6 +92,8 @@ class EquipmentController extends Controller
                 'inventory_number' => $unit->inventory_number,
                 'type' => $unit->type?->name,
                 'status' => $unit->status,
+                // The write-off form opens on it, so the list carries it too.
+                'condition' => $unit->condition,
                 'holder' => $unit->holder ? [
                     'id' => $unit->holder->id,
                     'name' => "{$unit->holder->surname} {$unit->holder->name}",
@@ -217,22 +217,14 @@ class EquipmentController extends Controller
         }
 
         if (! $holder) {
-            // The books start the moment it arrives: a spell in stock, waiting.
-            $equipment->assignments()->create(['issued_at' => Carbon::today()]);
-
             return $this->afterCreating($equipment, $data);
         }
 
         // Handed over as it arrives. The move is made as a move rather than
-        // written into the new row, so the journal shows the handover and the
-        // history opens on the colleague instead of on an empty spell.
+        // written into the new row, so the journal shows both the arrival and
+        // the handover, in that order.
         $equipment->update([
             'status' => 'issued',
-            'holder_user_id' => $holder,
-            'issued_at' => $data['issued_at'],
-        ]);
-
-        $equipment->assignments()->create([
             'holder_user_id' => $holder,
             'issued_at' => $data['issued_at'],
         ]);
@@ -269,10 +261,8 @@ class EquipmentController extends Controller
         $equipment->load([
             'type:id,name',
             'holder:id,name,surname,avatar',
-            'currentAssignment',
-            'assignments.holder:id,name,surname',
             'repairs.photos',
-            'events.user:id,name,surname',
+            'events.user:id,name,surname,avatar',
             'events.photos',
         ]);
 
@@ -304,16 +294,6 @@ class EquipmentController extends Controller
                     'department' => $holderDepartment?->name,
                 ] : null,
             ],
-            'assignments' => $equipment->assignments->map(fn ($spell) => [
-                'id' => $spell->id,
-                'holder' => $spell->holder ? [
-                    'id' => $spell->holder->id,
-                    'name' => "{$spell->holder->surname} {$spell->holder->name}",
-                ] : null,
-                'issued_at' => $spell->issued_at->toDateString(),
-                'returned_at' => $spell->returned_at?->toDateString(),
-                'condition_on_return' => $spell->condition_on_return,
-            ]),
             'repairs' => $equipment->repairs->map(fn ($repair) => [
                 'id' => $repair->id,
                 'kind' => $repair->kind,
@@ -338,6 +318,7 @@ class EquipmentController extends Controller
                 'actor' => $event->user === null ? null : [
                     'id' => $event->user->id,
                     'name' => "{$event->user->surname} {$event->user->name}",
+                    'avatar' => $event->user->avatar,
                 ],
                 'photos' => $event->photos->map(fn ($photo) => [
                     'id' => $photo->id,

@@ -6,7 +6,6 @@ use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
 use App\Models\Equipment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
@@ -28,15 +27,18 @@ class EquipmentStatusController extends Controller
         $data = $request->validate([
             'holder_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
             'issued_at' => ['required', 'date', 'before_or_equal:today'],
+            // In what state it went out, so a return has something to be
+            // compared against. The form opens on what the card says now.
+            'condition' => ['nullable', 'string', 'max:200'],
             ...self::PHOTO_RULES,
         ], attributes: [
             'holder_user_id' => 'сотрудник',
             'issued_at' => 'дата выдачи',
+            'condition' => 'состояние',
             'photos' => 'фотографии',
         ]);
 
         $this->stillInService($equipment);
-        $this->closeSpell($equipment, $data['issued_at']);
 
         $before = (int) $equipment->events()->max('id');
 
@@ -44,11 +46,7 @@ class EquipmentStatusController extends Controller
             'status' => 'issued',
             'holder_user_id' => $data['holder_user_id'],
             'issued_at' => $data['issued_at'],
-        ]);
-
-        $equipment->assignments()->create([
-            'holder_user_id' => $data['holder_user_id'],
-            'issued_at' => $data['issued_at'],
+            'condition' => $data['condition'] ?? $equipment->condition,
         ]);
 
         $this->keepPhotos($request, $equipment, $before, 'issued');
@@ -57,47 +55,41 @@ class EquipmentStatusController extends Controller
     }
 
     /**
-     * Back in stock: nobody holds it any more. Whoever brought it back may say
-     * what state it is in, which is what the history column shows.
+     * Back on the balance sheet: nobody holds it any more. Whoever brought it
+     * back may say what state it is in, which goes to the card and the journal.
      */
     public function take(Request $request, Equipment $equipment): RedirectResponse
     {
         $data = $request->validate([
             'condition_on_return' => ['nullable', 'string', 'max:200'],
+            // The day it was handed back, which is the day it was last seen.
+            'returned_at' => ['required', 'date', 'before_or_equal:today'],
             ...self::PHOTO_RULES,
         ], attributes: [
             'condition_on_return' => 'состояние при возврате',
+            'returned_at' => 'дата возврата',
             'photos' => 'фотографии',
         ]);
 
         $before = (int) $equipment->events()->max('id');
 
-        $this->release($equipment, 'stock', $data['condition_on_return'] ?? null);
-
-        // Sitting in stock is a spell of its own, so the history reads in full.
-        $equipment->assignments()->create(['issued_at' => Carbon::today()]);
-
-        $this->keepPhotos($request, $equipment, $before, 'taken');
-
-        return back();
-    }
-
-    /**
-     * Nobody holds it now, whatever the reason.
-     */
-    private function release(Equipment $equipment, string $status, ?string $condition = null): void
-    {
         $this->stillInService($equipment);
-        $this->closeSpell($equipment, Carbon::today()->toDateString(), $condition);
 
-        // One save, so the journal reads the return as one act rather than as
-        // a move followed by a correction.
+        // One save, so the journal reads the return as one act rather than as a
+        // move followed by a correction. Somebody looked the thing over as it
+        // came back, so that day is when it was last checked, whether or not
+        // they had anything to say about its state.
         $equipment->update([
-            'status' => $status,
+            'status' => 'stock',
             'holder_user_id' => null,
             'issued_at' => null,
-            ...$condition === null ? [] : ['condition' => $condition, 'checked_at' => Carbon::today()],
+            'checked_at' => $data['returned_at'],
+            ...($data['condition_on_return'] ?? null) === null ? [] : ['condition' => $data['condition_on_return']],
         ]);
+
+        $this->keepPhotos($request, $equipment, $before, 'stocked');
+
+        return back();
     }
 
     /**
@@ -107,14 +99,17 @@ class EquipmentStatusController extends Controller
     {
         $data = $request->validate([
             'written_off_at' => ['required', 'date', 'before_or_equal:today'],
+            // Why it is going: the form opens on what the card says now, and
+            // whoever strikes it off says what state it is in at the end.
+            'condition' => ['nullable', 'string', 'max:200'],
             ...self::PHOTO_RULES,
         ], attributes: [
             'written_off_at' => 'дата списания',
+            'condition' => 'состояние',
             'photos' => 'фотографии',
         ]);
 
         $this->stillInService($equipment);
-        $this->closeSpell($equipment, $data['written_off_at']);
 
         $before = (int) $equipment->events()->max('id');
 
@@ -123,25 +118,12 @@ class EquipmentStatusController extends Controller
             'holder_user_id' => null,
             'issued_at' => null,
             'written_off_at' => $data['written_off_at'],
+            'condition' => $data['condition'] ?? $equipment->condition,
         ]);
 
         $this->keepPhotos($request, $equipment, $before, 'written_off');
 
         return back();
-    }
-
-    /**
-     * End whichever spell is open, so a unit is never in two places at once.
-     * The return date never precedes the handover it closes.
-     */
-    private function closeSpell(Equipment $equipment, string $on, ?string $condition = null): void
-    {
-        $open = $equipment->currentAssignment;
-
-        $open?->update([
-            'returned_at' => max($on, $open->issued_at->toDateString()),
-            'condition_on_return' => $condition,
-        ]);
     }
 
     /**

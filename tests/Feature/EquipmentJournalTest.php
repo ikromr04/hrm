@@ -63,11 +63,11 @@ class EquipmentJournalTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $employee->id, 'issued_at' => '2026-03-14']);
-        $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке']);
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке', 'returned_at' => now()->toDateString()]);
         $this->actingAs($admin)->post("/equipment/{$unit->id}/write-off", ['written_off_at' => '2026-04-01']);
 
         $kinds = $unit->events()->reorder('id')->pluck('kind')->all();
-        $this->assertSame(['created', 'issued', 'taken', 'written_off'], $kinds);
+        $this->assertSame(['created', 'issued', 'stocked', 'written_off'], $kinds);
 
         // The handover says where the unit went, and from what to what.
         $issued = $unit->events()->where('kind', 'issued')->sole();
@@ -182,11 +182,12 @@ class EquipmentJournalTest extends TestCase
 
         $this->actingAs($this->admin())->post("/equipment/{$unit->id}/take", [
             'condition_on_return' => 'Царапина на крышке',
+            'returned_at' => now()->toDateString(),
             'photos' => [UploadedFile::fake()->image('lid.jpg', 1600, 1200)],
         ])->assertSessionHasNoErrors();
 
         // On the entry that records the return, not on some entry of its own.
-        $photo = $unit->events()->where('kind', 'taken')->sole()->photos()->sole();
+        $photo = $unit->events()->where('kind', 'stocked')->sole()->photos()->sole();
         Storage::disk('public')->assertExists($photo->path);
         Storage::disk('public')->assertExists($photo->preview);
     }
@@ -215,27 +216,32 @@ class EquipmentJournalTest extends TestCase
         $this->assertSame(2, $unit->photos()->count());
     }
 
-    public function test_handing_a_unit_to_somebody_else_is_named_a_reassignment()
+    public function test_correcting_a_service_record_says_what_was_corrected()
     {
-        Storage::fake('public');
-        $first = User::factory()->create();
-        $second = User::factory()->create();
-        $unit = Equipment::factory()->ofType($this->type())->issuedTo($first->id)->create();
+        $unit = Equipment::factory()->ofType($this->type())->create();
+        $repair = $unit->repairs()->create(['kind' => 'Диагностика', 'started_at' => '2026-09-01']);
 
-        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/handover", [
-            // Multipart, so the correction is a POST that says it is a PUT.
-            '_method' => 'put',
-            'holder_user_id' => $second->id,
-            'issued_at' => now()->toDateString(),
-            'photos' => [UploadedFile::fake()->image('desk.jpg', 1200, 900)],
+        $this->actingAs($this->admin())->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
+            'kind' => 'Замена клавиатуры',
+            'started_at' => '2026-09-01',
+            'note' => 'По заявке сотрудника',
         ])->assertSessionHasNoErrors();
 
-        $this->assertSame($second->id, $unit->refresh()->holder_user_id);
+        // Not just "something changed": the entry carries the lines themselves.
+        $event = $unit->events()->where('kind', 'repair_updated')->sole();
+        $this->assertSame(['Диагностика', 'Замена клавиатуры'], $event->diff['kind']);
+        $this->assertSame([null, 'По заявке сотрудника'], $event->diff['note']);
 
-        // Named for what it is, with the picture and the change on it.
-        $event = $unit->events()->where('kind', 'reassigned')->sole();
-        $this->assertSame(1, $event->photos()->count());
-        $this->assertArrayHasKey('holder_user_id', $event->diff);
+        // Finishing the work is named as such, with the date it ended.
+        $this->actingAs($this->admin())->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
+            'kind' => 'Замена клавиатуры',
+            'started_at' => '2026-09-01',
+            'ended_at' => '2026-09-05',
+            'note' => 'По заявке сотрудника',
+        ])->assertSessionHasNoErrors();
+
+        $ended = $unit->events()->where('kind', 'repair_ended')->sole();
+        $this->assertSame([null, '2026-09-05'], $ended->diff['ended_at']);
     }
 
     public function test_a_check_keeps_its_photographs_and_a_later_one_does_not_replace_them()

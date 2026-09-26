@@ -146,7 +146,7 @@ class EmployeeWizardStepsTest extends TestCase
         $this->assertSame($employee->id, $laptop->holder_user_id);
         $this->assertSame('2026-03-02', $laptop->issued_at->toDateString());
         // The handover is in its history, like any other.
-        $this->assertSame($employee->id, $laptop->currentAssignment->holder_user_id);
+        $this->assertSame($employee->id, $laptop->refresh()->holder_user_id);
 
         $this->assertSame($employee->id, $monitor->refresh()->holder_user_id);
         $this->assertNotSame($employee->id, $taken->refresh()->holder_user_id);

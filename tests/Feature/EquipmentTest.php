@@ -222,12 +222,6 @@ class EquipmentTest extends TestCase
         $this->assertSame($employee->id, $unit->holder_user_id);
         $this->assertSame('2026-03-14', $unit->issued_at->toDateString());
 
-        // One open spell, on the colleague — no empty stretch in stock before it.
-        $spells = $unit->assignments()->reorder('id')->get();
-        $this->assertCount(1, $spells);
-        $this->assertSame($employee->id, $spells->first()->holder_user_id);
-        $this->assertNull($spells->first()->returned_at);
-
         // The journal reads as it happened: entered, then handed over.
         $this->assertSame(['created', 'issued'], $unit->events()->reorder('id')->pluck('kind')->all());
     }
@@ -333,7 +327,6 @@ class EquipmentTest extends TestCase
 
         $this->assertNull(Equipment::find($unit->id));
         // Nothing is left pointing at a unit that no longer exists.
-        $this->assertSame(0, DB::table('equipment_assignments')->where('equipment_id', $unit->id)->count());
         $this->assertSame(0, DB::table('equipment_repairs')->where('equipment_id', $unit->id)->count());
         $this->assertSame(0, DB::table('equipment_events')->where('equipment_id', $unit->id)->count());
     }
@@ -375,6 +368,7 @@ class EquipmentTest extends TestCase
             ->post("/equipment/{$unit->id}/issue", [
                 'holder_user_id' => $employee->id,
                 'issued_at' => '2026-03-14',
+                'condition' => 'Рабочее, без повреждений',
             ])
             ->assertSessionHasNoErrors();
 
@@ -383,13 +377,16 @@ class EquipmentTest extends TestCase
         $this->assertSame($employee->id, $unit->holder_user_id);
         $this->assertSame('2026-03-14', $unit->issued_at->toDateString());
 
-        // The handover is written into the unit's history.
-        $spell = $unit->currentAssignment;
-        $this->assertSame($employee->id, $spell->holder_user_id);
-        $this->assertNull($spell->returned_at);
+        // What state it went out in is kept, so a return has something to be
+        // compared against.
+        $this->assertSame('Рабочее, без повреждений', $unit->condition);
+
+        // And the journal says so, with the colleague it went to.
+        $event = $unit->events()->where('kind', 'issued')->sole();
+        $this->assertSame([null, $employee->id], $event->diff['holder_user_id']);
     }
 
-    public function test_the_history_closes_one_spell_before_it_opens_the_next()
+    public function test_the_journal_follows_a_unit_from_hand_to_hand()
     {
         $first = User::factory()->create();
         $second = User::factory()->create();
@@ -397,23 +394,18 @@ class EquipmentTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $first->id, 'issued_at' => '2026-01-10']);
-        $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке']);
+        $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке', 'returned_at' => now()->toDateString()]);
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $second->id, 'issued_at' => '2026-03-14']);
 
-        // With the first colleague, on the shelf between them, then with the
-        // second. The relation reads newest first; here the order of events is
-        // what matters, so the sort is replaced rather than added to.
-        $spells = $unit->assignments()->reorder('id')->get();
-        $this->assertCount(3, $spells);
-        $this->assertSame($first->id, $spells[0]->holder_user_id);
-        $this->assertSame('Царапина на крышке', $spells[0]->condition_on_return);
-        $this->assertNull($spells[1]->holder_user_id);
-        $this->assertNotNull($spells[1]->returned_at);
-        $this->assertSame($second->id, $spells[2]->holder_user_id);
-        $this->assertNull($spells[2]->returned_at);
+        // With the first colleague, back on the balance sheet, then with the
+        // second — the journal is the whole record of where it has been.
+        $this->assertSame(
+            ['created', 'issued', 'stocked', 'issued'],
+            $unit->events()->reorder('id')->pluck('kind')->all(),
+        );
 
-        // What came back is also what the card now says about its state.
-        $this->assertSame('Царапина на крышке', $unit->fresh()->condition);
+        // What it came back looking like is kept on the unit and in its journal.
+        $this->assertSame('Царапина на крышке', $unit->refresh()->condition);
     }
 
     public function test_the_card_shows_the_unit_its_history_and_its_repairs()
@@ -424,7 +416,6 @@ class EquipmentTest extends TestCase
             'processor' => 'Intel Core i5-1335U',
             'accessories' => ['Блок питания 65 Вт', 'Сумка'],
         ]);
-        $unit->assignments()->create(['holder_user_id' => $employee->id, 'issued_at' => '2021-03-12']);
         $unit->repairs()->create(['kind' => 'Замена аккумулятора', 'started_at' => '2024-11-02', 'ended_at' => '2024-11-06']);
 
         $this->actingAs($this->admin())
@@ -434,7 +425,6 @@ class EquipmentTest extends TestCase
                 ->where('unit.name', 'Ноутбук Dell Latitude 5440')
                 ->where('unit.processor', 'Intel Core i5-1335U')
                 ->where('unit.accessories.1', 'Сумка')
-                ->has('assignments', 1)
                 ->has('repairs', 1)
             );
     }
@@ -525,16 +515,13 @@ class EquipmentTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_the_sidebar_blocks_are_edited_too()
+    public function test_the_inventory_block_is_filled_in_by_hand()
     {
-        $first = User::factory()->create();
-        $second = User::factory()->create();
-        $unit = Equipment::factory()->ofType($this->type())->issuedTo($first->id)->create();
-        $unit->assignments()->create(['holder_user_id' => $first->id, 'issued_at' => '2026-01-10']);
-        $admin = $this->admin();
+        $employee = User::factory()->create();
+        $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
-        // "Состояние" is filled in by hand when somebody checks a unit in place.
-        $this->actingAs($admin)
+        // Somebody checks a unit where it stands, without moving it.
+        $this->actingAs($this->admin())
             ->put("/equipment/{$unit->id}/state", [
                 'condition' => 'Рабочее, следы эксплуатации',
                 'checked_at' => '2026-09-01',
@@ -545,33 +532,14 @@ class EquipmentTest extends TestCase
         $unit->refresh();
         $this->assertSame('Рабочее, следы эксплуатации', $unit->condition);
         $this->assertSame('2026-09-01', $unit->checked_at->toDateString());
-
-        // Correcting the handover moves neither the status nor the history row.
-        $this->actingAs($admin)
-            ->put("/equipment/{$unit->id}/handover", [
-                'holder_user_id' => $second->id,
-                'issued_at' => '2026-02-20',
-            ])
-            ->assertSessionHasNoErrors();
-
-        $unit->refresh();
-        $this->assertSame('issued', $unit->status);
-        $this->assertSame($second->id, $unit->holder_user_id);
-        $this->assertSame('2026-02-20', $unit->issued_at->toDateString());
-        $this->assertCount(1, $unit->assignments);
-
-        // A unit nobody holds has no handover to correct.
-        $stock = Equipment::factory()->ofType($this->type())->create();
-        $this->actingAs($admin)
-            ->put("/equipment/{$stock->id}/handover", ['holder_user_id' => $second->id, 'issued_at' => '2026-02-20'])
-            ->assertStatus(422);
+        // Who holds it is none of that block's business.
+        $this->assertSame($employee->id, $unit->holder_user_id);
     }
 
     public function test_service_is_recorded_without_moving_the_unit()
     {
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
-        $unit->assignments()->create(['holder_user_id' => $employee->id, 'issued_at' => '2026-08-01']);
 
         $this->actingAs($this->admin())
             ->post("/equipment/{$unit->id}/repairs", ['kind' => 'Диагностика', 'started_at' => '2026-09-01'])
@@ -581,7 +549,6 @@ class EquipmentTest extends TestCase
         $unit->refresh();
         $this->assertSame('issued', $unit->status);
         $this->assertSame($employee->id, $unit->holder_user_id);
-        $this->assertNull($unit->currentAssignment->returned_at);
         $this->assertCount(1, $unit->repairs);
 
         $stock = Equipment::factory()->ofType($this->type())->create();
@@ -617,13 +584,34 @@ class EquipmentTest extends TestCase
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
         $this->actingAs($this->admin())
-            ->post("/equipment/{$unit->id}/take")
+            ->post("/equipment/{$unit->id}/take", ['returned_at' => now()->toDateString()])
             ->assertSessionHasNoErrors();
 
         $unit->refresh();
         $this->assertSame('stock', $unit->status);
         $this->assertNull($unit->holder_user_id);
         $this->assertNull($unit->issued_at);
+    }
+
+    public function test_writing_a_unit_off_records_the_state_it_left_in()
+    {
+        $unit = Equipment::factory()->ofType($this->type())->create(['condition' => 'Рабочее']);
+
+        $this->actingAs($this->admin())
+            ->post("/equipment/{$unit->id}/write-off", [
+                'written_off_at' => '2026-09-20',
+                'condition' => 'Не подлежит ремонту',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $unit->refresh();
+        $this->assertSame('written_off', $unit->status);
+        $this->assertSame('Не подлежит ремонту', $unit->condition);
+
+        // Left alone when nothing was said, rather than wiped.
+        $other = Equipment::factory()->ofType($this->type())->create(['condition' => 'Рабочее']);
+        $this->actingAs($this->admin())->post("/equipment/{$other->id}/write-off", ['written_off_at' => '2026-09-20']);
+        $this->assertSame('Рабочее', $other->refresh()->condition);
     }
 
     public function test_a_written_off_unit_cannot_be_moved_again()

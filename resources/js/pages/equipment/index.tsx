@@ -59,6 +59,7 @@ interface Unit {
     inventory_number: string;
     type: string | null;
     status: Status;
+    condition: string | null;
     /** Null while nobody holds it. */
     holder: { id: number; name: string; avatar: string | null } | null;
     issued_at: string | null;

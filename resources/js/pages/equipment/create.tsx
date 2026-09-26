@@ -107,9 +107,11 @@ export default function CreateEquipment({ options }: Props) {
 
         form.post(route('equipment.store'), {
             forceFormData: true,
-            // Staying here keeps what the boxes have in common; leaving does not.
-            preserveState: again,
-            preserveScroll: again,
+            // State is kept whichever button was pressed. Inertia keeps it by
+            // default on a post, and it has to: a rejected save re-renders the
+            // page, and a remounted form would come back empty, with the
+            // server's complaints lost along with what had been typed.
+            preserveScroll: true,
             onSuccess: (page) => {
                 batch.current = false;
 
@@ -125,8 +127,18 @@ export default function CreateEquipment({ options }: Props) {
                 setPhotos([]);
                 inventory.current?.focus();
             },
-            onError: () => {
+            onError: (errors) => {
                 batch.current = false;
+
+                // The boxes carry the server's own field names, so the first
+                // thing it objected to can be brought into view and focused —
+                // otherwise a save refused over a box further up the page looks
+                // like a button that does nothing.
+                const first = Object.keys(errors)[0];
+                const box = first ? document.getElementById(first) : null;
+
+                box?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                box?.focus({ preventScroll: true });
             },
         });
     };
@@ -161,9 +173,9 @@ export default function CreateEquipment({ options }: Props) {
                                 />
                             </Field>
 
-                            <Field label="Категория" htmlFor="type" error={form.errors.equipment_type_id}>
+                            <Field label="Категория" htmlFor="equipment_type_id" error={form.errors.equipment_type_id}>
                                 <SearchableSelect
-                                    id="type"
+                                    id="equipment_type_id"
                                     value={form.data.equipment_type_id}
                                     onChange={(value) => form.setData('equipment_type_id', value)}
                                     options={options.types.map((type) => ({ value: String(type.id), label: type.name }))}
@@ -194,9 +206,9 @@ export default function CreateEquipment({ options }: Props) {
                                 />
                             </Field>
 
-                            <Field label="Серийный номер" htmlFor="serial" error={form.errors.serial_number}>
+                            <Field label="Серийный номер" htmlFor="serial_number" error={form.errors.serial_number}>
                                 <Input
-                                    id="serial"
+                                    id="serial_number"
                                     value={form.data.serial_number}
                                     onChange={(event) => form.setData('serial_number', event.target.value)}
                                     placeholder="7K2L9P3"
@@ -204,10 +216,10 @@ export default function CreateEquipment({ options }: Props) {
                                 />
                             </Field>
 
-                            <Field label="Инвентарный номер" htmlFor="inventory" error={form.errors.inventory_number}>
+                            <Field label="Инвентарный номер" htmlFor="inventory_number" error={form.errors.inventory_number}>
                                 <Input
                                     ref={inventory}
-                                    id="inventory"
+                                    id="inventory_number"
                                     value={form.data.inventory_number}
                                     onChange={(event) => form.setData('inventory_number', event.target.value)}
                                     placeholder="EV-0421"
@@ -237,9 +249,9 @@ export default function CreateEquipment({ options }: Props) {
 
                             {/* Two dates in the space of one field: a date box needs no more. */}
                             <div className={half}>
-                                <Field label="Последняя проверка" htmlFor="checked" error={form.errors.checked_at}>
+                                <Field label="Последняя проверка" htmlFor="checked_at" error={form.errors.checked_at}>
                                     <Input
-                                        id="checked"
+                                        id="checked_at"
                                         type="date"
                                         max={today}
                                         value={form.data.checked_at}
@@ -248,9 +260,9 @@ export default function CreateEquipment({ options }: Props) {
                                     />
                                 </Field>
 
-                                <Field label="След. инвентаризация" htmlFor="next" error={form.errors.next_inventory_at}>
+                                <Field label="След. инвентаризация" htmlFor="next_inventory_at" error={form.errors.next_inventory_at}>
                                     <Input
-                                        id="next"
+                                        id="next_inventory_at"
                                         type="date"
                                         value={form.data.next_inventory_at}
                                         onChange={(event) => form.setData('next_inventory_at', event.target.value)}
@@ -300,9 +312,9 @@ export default function CreateEquipment({ options }: Props) {
 
                             {issuing && (
                                 <>
-                                    <Field label="Кому" htmlFor="holder" error={form.errors.holder_user_id}>
+                                    <Field label="Кому" htmlFor="holder_user_id" error={form.errors.holder_user_id}>
                                         <SearchableSelect
-                                            id="holder"
+                                            id="holder_user_id"
                                             value={form.data.holder_user_id}
                                             onChange={(value) => form.setData('holder_user_id', value)}
                                             options={options.holders.map((holder) => ({ value: String(holder.id), label: holder.name }))}
@@ -313,9 +325,9 @@ export default function CreateEquipment({ options }: Props) {
                                         />
                                     </Field>
 
-                                    <Field label="Дата выдачи" htmlFor="issued" error={form.errors.issued_at}>
+                                    <Field label="Дата выдачи" htmlFor="issued_at" error={form.errors.issued_at}>
                                         <Input
-                                            id="issued"
+                                            id="issued_at"
                                             type="date"
                                             className="max-w-[11.5rem]"
                                             max={today}
@@ -339,6 +351,12 @@ export default function CreateEquipment({ options }: Props) {
                                         {filed[filed.length - 1].name}
                                     </Link>{' '}
                                     (инв. № {filed[filed.length - 1].inventory_number})
+                                </p>
+                            )}
+
+                            {Object.keys(form.errors).length > 0 && (
+                                <p className="mr-auto text-sm text-red-600 dark:text-red-400">
+                                    Не сохранено: проверьте {Object.keys(form.errors).length === 1 ? 'поле' : 'поля'} выше.
                                 </p>
                             )}
 

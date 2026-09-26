@@ -39,11 +39,10 @@ export function formatMonth(date: string | null): string | null {
 
 export type EventKind =
     | 'created'
+    | 'stocked'
     | 'issued'
-    | 'taken'
     | 'written_off'
     | 'updated'
-    | 'reassigned'
     | 'condition'
     | 'accessories'
     | 'repair_added'
@@ -52,13 +51,12 @@ export type EventKind =
     | 'repair_removed';
 
 export const eventLabel: Record<EventKind, string> = {
-    created: 'Поставлено на баланс',
+    created: 'Добавлено',
+    stocked: 'Поставлено на баланс',
     issued: 'Выдано',
-    taken: 'Возвращено',
     written_off: 'Списано',
     updated: 'Изменены данные',
-    reassigned: 'Переназначение',
-    condition: 'Состояние',
+    condition: 'Инвентаризация',
     accessories: 'Комплектация',
     repair_added: 'Обслуживание',
     repair_ended: 'Обслуживание завершено',
@@ -68,11 +66,10 @@ export const eventLabel: Record<EventKind, string> = {
 
 export const eventTone: Record<EventKind, StatusTone> = {
     created: 'info',
+    stocked: 'info',
     issued: 'success',
-    taken: 'neutral',
     written_off: 'danger',
     updated: 'neutral',
-    reassigned: 'info',
     condition: 'info',
     accessories: 'info',
     repair_added: 'warning',
@@ -97,6 +94,11 @@ export const fieldLabel: Record<string, string> = {
     accessories: 'Комплектация',
     status: 'Статус',
     holder_user_id: 'Держатель',
+    // A record of service work has fields of its own.
+    kind: 'Тип работ',
+    started_at: 'Дата начала',
+    ended_at: 'Дата окончания',
+    note: 'Комментарий',
     issued_at: 'Выдано',
     written_off_at: 'Списано',
 };
@@ -109,7 +111,7 @@ export type NameLookup = Record<string, Record<string, string>>;
 /** What one journal entry recorded: field => [before, after]. */
 export type EventChanges = Record<string, [ChangeValue, ChangeValue]>;
 
-const dateFields = ['checked_at', 'next_inventory_at', 'issued_at', 'written_off_at'];
+const dateFields = ['checked_at', 'next_inventory_at', 'issued_at', 'written_off_at', 'started_at', 'ended_at'];
 
 /**
  * What a list-valued change came to: which items appeared and which went.

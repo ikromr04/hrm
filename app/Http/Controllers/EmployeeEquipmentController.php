@@ -36,15 +36,11 @@ class EmployeeEquipmentController extends Controller
                 return;
             }
 
-            $unit->currentAssignment?->update(['returned_at' => max($issuedAt, $unit->currentAssignment->issued_at->toDateString())]);
-
             $unit->update([
                 'status' => 'issued',
                 'holder_user_id' => $employee->id,
                 'issued_at' => $issuedAt,
             ]);
-
-            $unit->assignments()->create(['holder_user_id' => $employee->id, 'issued_at' => $issuedAt]);
         });
 
         return back();

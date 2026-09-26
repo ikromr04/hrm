@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * One unit of company hardware, identified by its inventory number. It belongs
@@ -72,23 +71,6 @@ class Equipment extends Model
             'next_inventory_at' => 'date',
             'accessories' => 'array',
         ];
-    }
-
-    /**
-     * Where the unit has been, the spell it is in now first.
-     */
-    public function assignments(): HasMany
-    {
-        return $this->hasMany(EquipmentAssignment::class)->orderByDesc('issued_at')->orderByDesc('id');
-    }
-
-    /**
-     * The spell it is in now: with somebody, or in stock. Null before the first
-     * handover, for units added and never moved.
-     */
-    public function currentAssignment(): HasOne
-    {
-        return $this->hasOne(EquipmentAssignment::class)->open()->latestOfMany('issued_at');
     }
 
     public function repairs(): HasMany

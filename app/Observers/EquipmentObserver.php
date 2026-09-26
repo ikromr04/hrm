@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Equipment;
+use App\Models\EquipmentEvent;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -19,12 +20,17 @@ class EquipmentObserver
     private const STATE = ['condition', 'checked_at', 'next_inventory_at'];
 
     /**
-     * The "Сейчас у сотрудника" block. Changed on its own it is a
-     * reassignment — the unit stays out, it is somebody else who answers for
-     * it now — and not the plain correction the journal would otherwise call it.
+     * The "Сейчас у сотрудника" block. A change of holder here is a handover
+     * like any other, whatever form it was made in, and not the plain
+     * correction the journal would otherwise call it.
      */
     private const HANDOVER = ['holder_user_id', 'issued_at'];
 
+    /**
+     * A unit joining the fleet. It lands on the balance sheet like a unit coming
+     * back does, but the journal keeps the two apart: one is the day the company
+     * bought the thing, the other is a Tuesday when somebody returned it.
+     */
     public function created(Equipment $equipment): void
     {
         $equipment->events()->create([
@@ -40,13 +46,7 @@ class EquipmentObserver
         // list is a list on either side of the arrow. What `getChanges` holds
         // is on its way to the database — for the accessories that is raw
         // JSON, which nobody wants to read.
-        $changes = collect($equipment->getChanges())
-            ->except(self::IGNORED)
-            ->map(fn ($ignored, string $field) => [
-                $this->plain($equipment->getOriginal($field)),
-                $this->plain($equipment->getAttribute($field)),
-            ])
-            ->all();
+        $changes = EquipmentEvent::diffOf($equipment, self::IGNORED);
 
         if ($changes === []) {
             return;
@@ -60,11 +60,14 @@ class EquipmentObserver
         $kind = match (true) {
             array_key_exists('status', $changes) => match ($equipment->status) {
                 'issued' => 'issued',
-                'stock' => 'taken',
+                'stock' => 'stocked',
                 default => 'written_off',
             },
             array_diff($fields, self::STATE) === [] => 'condition',
-            array_diff($fields, self::HANDOVER) === [] => 'reassigned',
+            // Handing a unit to somebody else is a handover like any other, so
+            // it is recorded as one. A date on its own is not: that is a
+            // correction to the date, and it stays a plain change.
+            array_key_exists('holder_user_id', $changes) && array_diff($fields, self::HANDOVER) === [] => 'issued',
             $fields === ['accessories'] => 'accessories',
             default => 'updated',
         };
@@ -78,21 +81,5 @@ class EquipmentObserver
 
         // Said once, for the save that asked for it.
         $equipment->journalNote = null;
-    }
-
-    /**
-     * Dates and decimals come off the row in whatever shape the driver gives
-     * them; the journal keeps plain values, so a line reads the same however
-     * it was written. A list stays a list: the accessories are compared item
-     * by item when the entry is read, to say what was added and what was not.
-     */
-    private function plain(mixed $value): string|int|float|bool|array|null
-    {
-        return match (true) {
-            $value === null || is_scalar($value) => $value,
-            $value instanceof \DateTimeInterface => $value->format('Y-m-d'),
-            is_array($value) => array_values(array_map(fn ($item) => (string) $item, $value)),
-            default => (string) $value,
-        };
     }
 }

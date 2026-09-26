@@ -13,6 +13,7 @@ use App\Models\UserChild;
 use App\Models\UserDetail;
 use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Seeder;
 
 class UserSeeder extends Seeder
@@ -140,7 +141,7 @@ class UserSeeder extends Seeder
             }
         }
 
-        $this->addEquipmentHistory();
+        $this->addEquipmentPast();
     }
 
     /**
@@ -207,58 +208,17 @@ class UserSeeder extends Seeder
     }
 
     /**
-     * Where each unit has been and what has been done to it, so a card opens on
-     * a life rather than on a blank page: a spell on the shelf after it was
-     * bought, the handover that followed, and the odd piece of service work.
+     * What has happened to each unit, so a card opens on a life rather than on
+     * a blank page: the day it was bought, the odd piece of service work, the
+     * handover it is on and, for what has left the fleet, the day it went.
      *
-     * Documents are left alone: a row without the file behind it would only
-     * give the card a link that leads nowhere.
+     * The journal is the only record of a unit's past, and the observer writes
+     * an entry for every move a controller makes — but the seeder puts units
+     * straight into their final state, so the entries those moves would have
+     * written are put here, dated when they happened rather than now, which is
+     * the whole point of a journal you can ask about a period.
      */
-    private function addEquipmentHistory(): void
-    {
-        Equipment::doesntHave('assignments')->with('type')->get()->each(function (Equipment $unit) {
-            // When it arrived: the shelf spell that opens its history starts here.
-            $bought = fake()->dateTimeBetween('-5 years', '-1 year')->format('Y-m-d');
-            $issued = $unit->issued_at?->toDateString();
-
-            // On the shelf from the day it arrived until somebody took it.
-            $unit->assignments()->create([
-                'issued_at' => $bought,
-                'returned_at' => $issued ?? ($unit->status === 'stock' ? null : $unit->written_off_at?->toDateString() ?? now()->toDateString()),
-                'condition_on_return' => $issued ? 'Новое, в упаковке' : null,
-            ]);
-
-            if ($issued !== null) {
-                $unit->assignments()->create([
-                    'holder_user_id' => $unit->holder_user_id,
-                    'issued_at' => $issued,
-                ]);
-            }
-
-            // Looked after now and then, the way any fleet is.
-            for ($visit = fake()->numberBetween(0, 2); $visit > 0; $visit--) {
-                $started = fake()->dateTimeBetween($bought, '-1 month');
-
-                $unit->repairs()->create([
-                    'kind' => fake()->randomElement(self::REPAIRS),
-                    'started_at' => $started,
-                    'ended_at' => (clone $started)->modify('+'.fake()->numberBetween(1, 6).' days'),
-                    'note' => fake()->randomElement(['Плановое ТО', 'Износ детали', 'По заявке сотрудника', null]),
-                ]);
-            }
-        });
-
-        $this->addEquipmentJournal();
-    }
-
-    /**
-     * The journal behind the history just built. The observer writes an entry
-     * for every move a controller makes, but the seeder puts units straight
-     * into their final state, so the entries that would have accompanied those
-     * moves are written here — dated when they happened rather than now, which
-     * is the whole point of a journal you can ask about a period.
-     */
-    private function addEquipmentJournal(): void
+    private function addEquipmentPast(): void
     {
         $actors = User::active()->inRandomOrder()->limit(5)->pluck('id');
 
@@ -266,42 +226,52 @@ class UserSeeder extends Seeder
             return;
         }
 
-        Equipment::with(['assignments', 'repairs'])->get()->each(function (Equipment $unit) use ($actors) {
-            // Its own creation entry belongs to the day it was bought.
-            $unit->events()->where('kind', 'created')->get()->each(function ($event) use ($unit, $actors) {
-                $event->user_id = $actors->random();
-                $event->created_at = $unit->assignments->min('issued_at') ?? $event->created_at;
-                $event->updated_at = $event->created_at;
-                $event->save();
+        // Units nothing has been written about yet, so a second run adds nothing.
+        Equipment::query()
+            ->doesntHave('repairs')
+            ->whereDoesntHave('events', fn (Builder $q) => $q->where('kind', '!=', 'created'))
+            ->get()
+            ->each(function (Equipment $unit) use ($actors) {
+                $bought = fake()->dateTimeBetween('-5 years', '-1 year')->format('Y-m-d');
+
+                // Its own arrival entry belongs to the day it was bought.
+                $unit->events()->where('kind', 'created')->get()->each(function ($event) use ($bought, $actors) {
+                    $event->user_id = $actors->random();
+                    $event->created_at = $bought;
+                    $event->updated_at = $bought;
+                    $event->save();
+                });
+
+                // Looked after now and then, the way any fleet is.
+                for ($visit = fake()->numberBetween(0, 2); $visit > 0; $visit--) {
+                    $started = fake()->dateTimeBetween($bought, '-1 month');
+
+                    $repair = $unit->repairs()->create([
+                        'kind' => fake()->randomElement(self::REPAIRS),
+                        'started_at' => $started,
+                        'ended_at' => (clone $started)->modify('+'.fake()->numberBetween(1, 6).' days'),
+                        'note' => fake()->randomElement(['Плановое ТО', 'Износ детали', 'По заявке сотрудника', null]),
+                    ]);
+
+                    $this->journal($unit, $actors->random(), 'repair_added', $repair->started_at, null, $repair->kind);
+                }
+
+                if ($unit->issued_at !== null) {
+                    $this->journal($unit, $actors->random(), 'issued', $unit->issued_at, [
+                        'status' => ['stock', 'issued'],
+                        'holder_user_id' => [null, $unit->holder_user_id],
+                    ]);
+                }
+
+                if ($unit->written_off_at !== null) {
+                    $this->journal($unit, $actors->random(), 'written_off', $unit->written_off_at, [
+                        'status' => ['stock', 'written_off'],
+                        'written_off_at' => [null, $unit->written_off_at->toDateString()],
+                    ]);
+                }
             });
-
-            foreach ($unit->assignments as $spell) {
-                // A spell with a holder began with a handover; one without began
-                // with the unit coming back to the shelf.
-                $this->journal($unit, $actors->random(), $spell->holder_user_id ? 'issued' : 'taken', $spell->issued_at, [
-                    'status' => [$spell->holder_user_id ? 'stock' : 'issued', $spell->holder_user_id ? 'issued' : 'stock'],
-                    'holder_user_id' => [null, $spell->holder_user_id],
-                ]);
-            }
-
-            foreach ($unit->repairs as $repair) {
-                $this->journal($unit, $actors->random(), 'repair_added', $repair->started_at, null, $repair->kind);
-            }
-
-            if ($unit->written_off_at !== null) {
-                $this->journal($unit, $actors->random(), 'written_off', $unit->written_off_at, [
-                    'status' => ['stock', 'written_off'],
-                    'written_off_at' => [null, $unit->written_off_at->toDateString()],
-                ]);
-            }
-        });
     }
 
-    /**
-     * One journal entry, dated when the thing it records actually happened.
-     *
-     * @param  array<string, array<int, mixed>>|null  $changes
-     */
     private function journal(Equipment $unit, int $actor, string $kind, mixed $on, ?array $changes = null, ?string $note = null): void
     {
         $event = $unit->events()->create(['user_id' => $actor, 'kind' => $kind, 'diff' => $changes, 'note' => $note]);

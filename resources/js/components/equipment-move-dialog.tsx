@@ -33,6 +33,8 @@ interface MoveUnit {
     id: number;
     name: string;
     inventory_number: string;
+    /** What the card says about it now, which the write-off form opens on. */
+    condition: string | null;
 }
 
 /**
@@ -56,18 +58,22 @@ export function EquipmentMoveDialog({
     const form = useForm({
         holder_user_id: '',
         issued_at: today,
-        condition_on_return: '',
+        // Opens on what the card says now: a return usually confirms it, and
+        // what has changed is quicker to correct than to type out.
+        condition_on_return: unit.condition ?? '',
+        returned_at: today,
         written_off_at: today,
+        condition: unit.condition ?? '',
     });
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
         form.transform((data) => {
-            if (kind === 'issue') return { holder_user_id: data.holder_user_id, issued_at: data.issued_at, photos };
-            if (kind === 'take') return { condition_on_return: data.condition_on_return, photos };
+            if (kind === 'issue') return { holder_user_id: data.holder_user_id, issued_at: data.issued_at, condition: data.condition, photos };
+            if (kind === 'take') return { condition_on_return: data.condition_on_return, returned_at: data.returned_at, photos };
 
-            return { written_off_at: data.written_off_at, photos };
+            return { written_off_at: data.written_off_at, condition: data.condition, photos };
         });
 
         // Any move may carry pictures, so every one of them goes as multipart.
@@ -104,6 +110,19 @@ export function EquipmentMoveDialog({
                             </div>
 
                             <div className="grid content-start gap-2">
+                                <Label htmlFor="move-condition-out">Состояние при выдаче</Label>
+                                <Input
+                                    id="move-condition-out"
+                                    value={form.data.condition}
+                                    onChange={(event) => form.setData('condition', event.target.value)}
+                                    placeholder="Рабочее, без повреждений"
+                                    aria-invalid={!!form.errors.condition}
+                                />
+                                <InputError message={form.errors.condition} />
+                                <p className="text-muted-foreground text-[13px]">В каком виде вещь ушла — на случай спора при возврате.</p>
+                            </div>
+
+                            <div className="grid content-start gap-2">
                                 <Label htmlFor="move-issued">Дата выдачи</Label>
                                 <Input
                                     id="move-issued"
@@ -119,34 +138,65 @@ export function EquipmentMoveDialog({
                     )}
 
                     {kind === 'take' && (
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="move-condition">Состояние при возврате</Label>
-                            <Input
-                                id="move-condition"
-                                value={form.data.condition_on_return}
-                                onChange={(event) => form.setData('condition_on_return', event.target.value)}
-                                placeholder="Рабочее, без повреждений"
-                                aria-invalid={!!form.errors.condition_on_return}
-                            />
-                            <InputError message={form.errors.condition_on_return} />
-                            <p className="text-muted-foreground text-[13px]">Попадёт в историю передач и в блок «Состояние».</p>
-                        </div>
+                        <>
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="move-condition">Состояние при возврате</Label>
+                                <Input
+                                    id="move-condition"
+                                    value={form.data.condition_on_return}
+                                    onChange={(event) => form.setData('condition_on_return', event.target.value)}
+                                    placeholder="Рабочее, без повреждений"
+                                    aria-invalid={!!form.errors.condition_on_return}
+                                />
+                                <InputError message={form.errors.condition_on_return} />
+                                <p className="text-muted-foreground text-[13px]">Попадёт в журнал и в блок «Инвентаризация».</p>
+                            </div>
+
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="move-returned">Дата возврата</Label>
+                                <Input
+                                    id="move-returned"
+                                    type="date"
+                                    max={today}
+                                    value={form.data.returned_at}
+                                    onChange={(event) => form.setData('returned_at', event.target.value)}
+                                    aria-invalid={!!form.errors.returned_at}
+                                />
+                                <InputError message={form.errors.returned_at} />
+                                <p className="text-muted-foreground text-[13px]">Ляжет в карточку как день последней проверки.</p>
+                            </div>
+                        </>
                     )}
 
                     {kind === 'write-off' && (
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="move-written-off">Дата списания</Label>
-                            <Input
-                                id="move-written-off"
-                                type="date"
-                                max={today}
-                                value={form.data.written_off_at}
-                                onChange={(event) => form.setData('written_off_at', event.target.value)}
-                                aria-invalid={!!form.errors.written_off_at}
-                            />
-                            <InputError message={form.errors.written_off_at} />
-                            <p className="text-muted-foreground text-[13px]">Списанную единицу больше нельзя выдать.</p>
-                        </div>
+                        <>
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="move-condition-off">Состояние при списании</Label>
+                                <Input
+                                    id="move-condition-off"
+                                    value={form.data.condition}
+                                    onChange={(event) => form.setData('condition', event.target.value)}
+                                    placeholder="Не подлежит ремонту"
+                                    aria-invalid={!!form.errors.condition}
+                                />
+                                <InputError message={form.errors.condition} />
+                                <p className="text-muted-foreground text-[13px]">Останется на карточке как последнее, что о ней известно.</p>
+                            </div>
+
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="move-written-off">Дата списания</Label>
+                                <Input
+                                    id="move-written-off"
+                                    type="date"
+                                    max={today}
+                                    value={form.data.written_off_at}
+                                    onChange={(event) => form.setData('written_off_at', event.target.value)}
+                                    aria-invalid={!!form.errors.written_off_at}
+                                />
+                                <InputError message={form.errors.written_off_at} />
+                                <p className="text-muted-foreground text-[13px]">Списанную единицу больше нельзя выдать.</p>
+                            </div>
+                        </>
                     )}
 
                     <PhotoInput photos={photos} onChange={setPhotos} error={at(form.errors, 'photos')} hint={photoHint[kind]} />
