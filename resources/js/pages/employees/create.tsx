@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { languageLevelLabels, languageLevels, monthNames, sexLabels, type LanguageLevel, type Sex } from '@/lib/employee';
+import { languageLevelLabels, languageLevels, sexLabels, type LanguageLevel, type Sex } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -131,6 +131,19 @@ type Job = {
     ended_year: string;
 };
 
+/** This month, which no date of a past job can be later than. */
+const thisMonth = new Date().toISOString().slice(0, 7);
+
+/** A year and a month as a month box reads them: "2020-09". */
+const asMonth = (year: string, month: string) => (year && month ? `${year}-${String(month).padStart(2, '0')}` : '');
+
+/** And back apart again, since the server keeps a month and a year of its own. */
+const fromMonth = (value: string, field: 'started' | 'ended') => {
+    const [year, month] = value.split('-');
+
+    return { [`${field}_year`]: year ?? '', [`${field}_month`]: month ? String(Number(month)) : '' };
+};
+
 const blankJob: Job = { organization: '', position: '', country: '', started_month: '', started_year: '', ended_month: '', ended_year: '' };
 
 type Child = { full_name: string; birth_date: string };
@@ -242,6 +255,38 @@ export default function CreateEmployee({ options }: { options: Options }) {
      */
     const next = (after: After = 'next') => {
         if (step === 0) {
+            if (employee) {
+                // Already on the books: this step now corrects what it filed.
+                // Filing again would be refused over the e-mail it has taken,
+                // which is what used to strand whoever stepped back to look.
+                main.transform((data) => ({
+                    surname: data.surname,
+                    name: data.name,
+                    patronymic: data.patronymic,
+                    sex: data.sex,
+                    birth_date: data.birth_date,
+                    birth_place: data.birth_place,
+                    citizenship: data.citizenship,
+                    nationality: data.nationality,
+                    home_address: data.home_address,
+                    roles: data.roles,
+                    positions: data.positions,
+                    departments: data.departments,
+                }));
+                main.put(route('employees.personal', employee.id), {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => {
+                        main.transform((data) => ({ hired_at: data.hired_at }));
+                        main.put(route('employees.employment', employee.id), go(after, 1));
+                    },
+                });
+
+                return;
+            }
+
+            // A plain send: an earlier correction may have left a transform behind.
+            main.transform((data) => data);
             main.post(route('employees.store'), {
                 preserveScroll: true,
                 preserveState: true,
@@ -362,8 +407,11 @@ export default function CreateEmployee({ options }: { options: Options }) {
                             {steps.map((item, index) => {
                                 const done = index < step;
                                 const current = index === step;
-                                // Going back is allowed; skipping ahead is not.
-                                const reachable = done && employee !== null;
+                                // Once the colleague is on the books every step is
+                                // open, in both directions: each is a card of its own,
+                                // filed by its own button. Before that there is
+                                // nothing to file, so only the first step works.
+                                const reachable = employee !== null;
 
                                 return (
                                     <li key={item.title}>
@@ -446,6 +494,16 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     </div>
 
                                     <div className="grid gap-4 sm:grid-cols-3">
+                                        <Field label="E-mail" error={main.errors.email}>
+                                            <Input
+                                                type="email"
+                                                value={main.data.email}
+                                                onChange={(event) => main.setData('email', event.target.value)}
+                                                placeholder="name@evolet.tj"
+                                                aria-invalid={!!main.errors.email}
+                                            />
+                                            <p className="text-muted-foreground text-[13px]">С этим адресом сотрудник входит в систему.</p>
+                                        </Field>
                                         <Field label="Пол" error={main.errors.sex}>
                                             <SearchableSelect
                                                 value={main.data.sex}
@@ -466,6 +524,9 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 aria-invalid={!!main.errors.birth_date}
                                             />
                                         </Field>
+                                    </div>
+
+                                    <div className="grid gap-4 sm:grid-cols-3">
                                         <Field label="Место рождения" error={main.errors.birth_place}>
                                             <Input
                                                 value={main.data.birth_place}
@@ -474,9 +535,6 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 aria-invalid={!!main.errors.birth_place}
                                             />
                                         </Field>
-                                    </div>
-
-                                    <div className="grid gap-4 sm:grid-cols-3">
                                         <Field label="Гражданство" error={main.errors.citizenship}>
                                             <Input
                                                 list="citizenships"
@@ -503,6 +561,9 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 ))}
                                             </datalist>
                                         </Field>
+                                    </div>
+
+                                    <div className="grid gap-4 sm:grid-cols-3">
                                         <Field label="Начало работы" error={main.errors.hired_at}>
                                             <Input
                                                 type="date"
@@ -512,28 +573,15 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 aria-invalid={!!main.errors.hired_at}
                                             />
                                         </Field>
+                                        {/* An address is longer than a date, so it takes the other two. */}
+                                        <Field label="Домашний адрес" error={main.errors.home_address} className="sm:col-span-2">
+                                            <Input
+                                                value={main.data.home_address}
+                                                onChange={(event) => main.setData('home_address', event.target.value)}
+                                                aria-invalid={!!main.errors.home_address}
+                                            />
+                                        </Field>
                                     </div>
-
-                                    <Field label="Домашний адрес" error={main.errors.home_address}>
-                                        <Input
-                                            value={main.data.home_address}
-                                            onChange={(event) => main.setData('home_address', event.target.value)}
-                                            aria-invalid={!!main.errors.home_address}
-                                        />
-                                    </Field>
-
-                                    <Field label="E-mail" error={main.errors.email}>
-                                        <Input
-                                            type="email"
-                                            value={main.data.email}
-                                            onChange={(event) => main.setData('email', event.target.value)}
-                                            placeholder="name@evolet.tj"
-                                            aria-invalid={!!main.errors.email}
-                                        />
-                                        <p className="text-muted-foreground text-[13px]">
-                                            С этим адресом сотрудник входит в систему; туда же придёт пароль.
-                                        </p>
-                                    </Field>
 
                                     <div className="grid gap-4 sm:grid-cols-3">
                                         <Field label="Позиция" error={at(main.errors, 'roles')}>
@@ -567,15 +615,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 1 && (
                                 <div className="flex flex-col gap-6">
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <Field label="E-mail" error={contacts.errors.email}>
-                                            <Input
-                                                type="email"
-                                                value={contacts.data.email}
-                                                onChange={(event) => contacts.setData('email', event.target.value)}
-                                                aria-invalid={!!contacts.errors.email}
-                                            />
-                                        </Field>
+                                    <div className="grid gap-4 sm:grid-cols-3">
                                         <Field label="Телефон" error={contacts.errors.phone}>
                                             <Input
                                                 value={contacts.data.phone}
@@ -592,7 +632,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 aria-invalid={!!contacts.errors.sos_phone}
                                             />
                                         </Field>
-                                        <Field label="Чей это номер" error={contacts.errors.sos_contact}>
+                                        <Field label="Чей это номер" error={contacts.errors.sos_contact ?? contacts.errors.email}>
                                             <Input
                                                 value={contacts.data.sos_contact}
                                                 onChange={(event) => contacts.setData('sos_contact', event.target.value)}
@@ -614,6 +654,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                             <div key={index} className="flex items-center gap-2">
                                                 <SearchableSelect
                                                     className="flex-1"
+                                                    invalid={!!at(languages.errors, `languages.${index}.id`)}
                                                     value={spoken.id}
                                                     onChange={(value) =>
                                                         languages.setData(
@@ -633,6 +674,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 />
                                                 <SearchableSelect
                                                     className="w-48"
+                                                    invalid={!!at(languages.errors, `languages.${index}.level`)}
                                                     value={spoken.level}
                                                     onChange={(value) =>
                                                         languages.setData(
@@ -680,23 +722,25 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 2 && (
                                 <div className="flex flex-col gap-6">
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <Field label="Серия паспорта" error={passport.errors.passport_series}>
-                                            <Input
-                                                value={passport.data.passport_series}
-                                                onChange={(event) => passport.setData('passport_series', event.target.value)}
-                                                placeholder="A"
-                                                aria-invalid={!!passport.errors.passport_series}
-                                            />
-                                        </Field>
-                                        <Field label="Номер паспорта" error={passport.errors.passport_number}>
-                                            <Input
-                                                value={passport.data.passport_number}
-                                                onChange={(event) => passport.setData('passport_number', event.target.value)}
-                                                placeholder="01234567"
-                                                aria-invalid={!!passport.errors.passport_number}
-                                            />
-                                        </Field>
+                                    <div className="grid gap-4 sm:grid-cols-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <Field label="Серия паспорта" error={passport.errors.passport_series}>
+                                                <Input
+                                                    value={passport.data.passport_series}
+                                                    onChange={(event) => passport.setData('passport_series', event.target.value)}
+                                                    placeholder="A"
+                                                    aria-invalid={!!passport.errors.passport_series}
+                                                />
+                                            </Field>
+                                            <Field label="Номер паспорта" error={passport.errors.passport_number}>
+                                                <Input
+                                                    value={passport.data.passport_number}
+                                                    onChange={(event) => passport.setData('passport_number', event.target.value)}
+                                                    placeholder="01234567"
+                                                    aria-invalid={!!passport.errors.passport_number}
+                                                />
+                                            </Field>
+                                        </div>
                                         <Field label="Дата выдачи" error={passport.errors.passport_issued_at}>
                                             <Input
                                                 type="date"
@@ -715,7 +759,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 border-t pt-6 sm:grid-cols-2">
+                                    <div className="grid gap-4 border-t pt-6 sm:grid-cols-3">
                                         <Field label="Семейное положение" error={family.errors.marital_status}>
                                             <SearchableSelect
                                                 value={family.data.marital_status}
@@ -730,6 +774,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                         <Field label="Дети">
                                             <SearchableSelect
+                                                invalid={!!family.errors.has_children}
                                                 value={family.data.has_children}
                                                 onChange={(value) => family.setData('has_children', value as 'yes' | 'no')}
                                                 options={[
@@ -739,28 +784,28 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 placeholder="Не указано"
                                             />
                                         </Field>
-
-                                        {family.data.marital_status === 'married' && (
-                                            <>
-                                                <Field label="ФИО супруга" error={family.errors.spouse_name}>
-                                                    <Input
-                                                        value={family.data.spouse_name}
-                                                        onChange={(event) => family.setData('spouse_name', event.target.value)}
-                                                        aria-invalid={!!family.errors.spouse_name}
-                                                    />
-                                                </Field>
-                                                <Field label="Дата рождения супруга" error={family.errors.spouse_birth_date}>
-                                                    <Input
-                                                        type="date"
-                                                        max={today}
-                                                        value={family.data.spouse_birth_date}
-                                                        onChange={(event) => family.setData('spouse_birth_date', event.target.value)}
-                                                        aria-invalid={!!family.errors.spouse_birth_date}
-                                                    />
-                                                </Field>
-                                            </>
-                                        )}
                                     </div>
+
+                                    {family.data.marital_status === 'married' && (
+                                        <div className="flex items-end gap-2">
+                                            <Field label="ФИО супруга" className="flex-1" error={family.errors.spouse_name}>
+                                                <Input
+                                                    value={family.data.spouse_name}
+                                                    onChange={(event) => family.setData('spouse_name', event.target.value)}
+                                                    aria-invalid={!!family.errors.spouse_name}
+                                                />
+                                            </Field>
+                                            <Field label="Дата рождения" error={family.errors.spouse_birth_date}>
+                                                <Input
+                                                    type="date"
+                                                    max={today}
+                                                    value={family.data.spouse_birth_date}
+                                                    onChange={(event) => family.setData('spouse_birth_date', event.target.value)}
+                                                    aria-invalid={!!family.errors.spouse_birth_date}
+                                                />
+                                            </Field>
+                                        </div>
+                                    )}
 
                                     {family.data.has_children === 'yes' && (
                                         <div className="flex flex-col gap-3">
@@ -781,6 +826,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                                     ),
                                                                 )
                                                             }
+                                                            aria-invalid={!!at(family.errors, `children.${index}.full_name`)}
                                                         />
                                                     </Field>
                                                     <Field label="Дата рождения" error={at(family.errors, `children.${index}.birth_date`)}>
@@ -796,6 +842,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                                     ),
                                                                 )
                                                             }
+                                                            aria-invalid={!!at(family.errors, `children.${index}.birth_date`)}
                                                         />
                                                     </Field>
                                                     <Button
@@ -842,7 +889,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     onRemove={(index) => dropRecord(educations, index)}
                                 >
                                     {(record, index) => (
-                                        <div className="grid gap-4 sm:grid-cols-2">
+                                        <div className="grid gap-4 sm:grid-cols-3">
                                             <Field
                                                 label="Учебное заведение"
                                                 className="sm:col-span-2"
@@ -851,42 +898,54 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 <Input
                                                     value={record.institution}
                                                     onChange={(event) => setRecord(educations, index, { institution: event.target.value })}
-                                                />
-                                            </Field>
-                                            <Field label="Факультет" error={at(educations.errors, `records.${index}.faculty`)}>
-                                                <Input
-                                                    value={record.faculty}
-                                                    onChange={(event) => setRecord(educations, index, { faculty: event.target.value })}
+                                                    aria-invalid={!!at(educations.errors, `records.${index}.institution`)}
                                                 />
                                             </Field>
                                             <Field label="Специальность" error={at(educations.errors, `records.${index}.specialty`)}>
                                                 <Input
                                                     value={record.specialty}
                                                     onChange={(event) => setRecord(educations, index, { specialty: event.target.value })}
+                                                    aria-invalid={!!at(educations.errors, `records.${index}.specialty`)}
+                                                />
+                                            </Field>
+                                            <Field
+                                                label="Факультет"
+                                                className="sm:col-span-2"
+                                                error={at(educations.errors, `records.${index}.faculty`)}
+                                            >
+                                                <Input
+                                                    value={record.faculty}
+                                                    onChange={(event) => setRecord(educations, index, { faculty: event.target.value })}
+                                                    aria-invalid={!!at(educations.errors, `records.${index}.faculty`)}
+                                                />
+                                            </Field>
+                                            <Field label="Номер диплома" error={at(educations.errors, `records.${index}.diploma_number`)}>
+                                                <Input
+                                                    value={record.diploma_number}
+                                                    onChange={(event) => setRecord(educations, index, { diploma_number: event.target.value })}
+                                                    aria-invalid={!!at(educations.errors, `records.${index}.diploma_number`)}
                                                 />
                                             </Field>
                                             <Field label="Год поступления" error={at(educations.errors, `records.${index}.started_year`)}>
                                                 <Input
                                                     type="number"
+                                                    inputMode="numeric"
+                                                    min={1950}
+                                                    placeholder="2015"
                                                     value={record.started_year}
                                                     onChange={(event) => setRecord(educations, index, { started_year: event.target.value })}
+                                                    aria-invalid={!!at(educations.errors, `records.${index}.started_year`)}
                                                 />
                                             </Field>
                                             <Field label="Год окончания" error={at(educations.errors, `records.${index}.graduated_year`)}>
                                                 <Input
                                                     type="number"
+                                                    inputMode="numeric"
+                                                    min={1950}
+                                                    placeholder="Пусто — ещё учится"
                                                     value={record.graduated_year}
                                                     onChange={(event) => setRecord(educations, index, { graduated_year: event.target.value })}
-                                                />
-                                            </Field>
-                                            <Field
-                                                label="Номер диплома"
-                                                className="sm:col-span-2"
-                                                error={at(educations.errors, `records.${index}.diploma_number`)}
-                                            >
-                                                <Input
-                                                    value={record.diploma_number}
-                                                    onChange={(event) => setRecord(educations, index, { diploma_number: event.target.value })}
+                                                    aria-invalid={!!at(educations.errors, `records.${index}.graduated_year`)}
                                                 />
                                             </Field>
                                         </div>
@@ -903,72 +962,59 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     onRemove={(index) => dropRecord(jobs, index)}
                                 >
                                     {(record, index) => (
-                                        <div className="grid gap-4 sm:grid-cols-2">
-                                            <Field
-                                                label="Организация"
-                                                className="sm:col-span-2"
-                                                error={at(jobs.errors, `records.${index}.organization`)}
-                                            >
+                                        <div className="grid gap-4 sm:grid-cols-3">
+                                            <Field label="Организация" error={at(jobs.errors, `records.${index}.organization`)}>
                                                 <Input
                                                     value={record.organization}
                                                     onChange={(event) => setRecord(jobs, index, { organization: event.target.value })}
+                                                    aria-invalid={!!at(jobs.errors, `records.${index}.organization`)}
                                                 />
                                             </Field>
                                             <Field label="Должность" error={at(jobs.errors, `records.${index}.position`)}>
                                                 <Input
                                                     value={record.position}
                                                     onChange={(event) => setRecord(jobs, index, { position: event.target.value })}
+                                                    aria-invalid={!!at(jobs.errors, `records.${index}.position`)}
                                                 />
                                             </Field>
                                             <Field label="Страна" error={at(jobs.errors, `records.${index}.country`)}>
                                                 <Input
+                                                    list="job-countries"
                                                     value={record.country}
                                                     onChange={(event) => setRecord(jobs, index, { country: event.target.value })}
+                                                    aria-invalid={!!at(jobs.errors, `records.${index}.country`)}
                                                 />
                                             </Field>
 
-                                            <Field label="Вступление" error={at(jobs.errors, `records.${index}.started_year`)}>
-                                                <div className="flex gap-2">
-                                                    <SearchableSelect
-                                                        className="flex-1"
-                                                        value={record.started_month}
-                                                        onChange={(value) => setRecord(jobs, index, { started_month: value })}
-                                                        options={monthNames.map((month, position) => ({
-                                                            value: String(position + 1),
-                                                            label: month,
-                                                        }))}
-                                                        placeholder="Месяц"
-                                                    />
-                                                    <Input
-                                                        type="number"
-                                                        className="w-24"
-                                                        placeholder="Год"
-                                                        value={record.started_year}
-                                                        onChange={(event) => setRecord(jobs, index, { started_year: event.target.value })}
-                                                    />
-                                                </div>
+                                            {/*
+                                             * One box per date, picked as a month: that is the precision a
+                                             * previous job is remembered to, and the record keeps the two
+                                             * halves apart as the server does.
+                                             */}
+                                            <Field label="Дата вступления" error={at(jobs.errors, `records.${index}.started_year`)}>
+                                                <Input
+                                                    type="month"
+                                                    max={thisMonth}
+                                                    value={asMonth(record.started_year, record.started_month)}
+                                                    onChange={(event) => setRecord(jobs, index, fromMonth(event.target.value, 'started'))}
+                                                    aria-invalid={
+                                                        !!at(jobs.errors, `records.${index}.started_month`) ||
+                                                        !!at(jobs.errors, `records.${index}.started_year`)
+                                                    }
+                                                />
                                             </Field>
-
-                                            <Field label="Уход" error={at(jobs.errors, `records.${index}.ended_year`)}>
-                                                <div className="flex gap-2">
-                                                    <SearchableSelect
-                                                        className="flex-1"
-                                                        value={record.ended_month}
-                                                        onChange={(value) => setRecord(jobs, index, { ended_month: value })}
-                                                        options={monthNames.map((month, position) => ({
-                                                            value: String(position + 1),
-                                                            label: month,
-                                                        }))}
-                                                        placeholder="Месяц"
-                                                    />
-                                                    <Input
-                                                        type="number"
-                                                        className="w-24"
-                                                        placeholder="Год"
-                                                        value={record.ended_year}
-                                                        onChange={(event) => setRecord(jobs, index, { ended_year: event.target.value })}
-                                                    />
-                                                </div>
+                                            <Field label="Дата ухода" error={at(jobs.errors, `records.${index}.ended_year`)}>
+                                                <Input
+                                                    type="month"
+                                                    max={thisMonth}
+                                                    value={asMonth(record.ended_year, record.ended_month)}
+                                                    onChange={(event) => setRecord(jobs, index, fromMonth(event.target.value, 'ended'))}
+                                                    aria-invalid={
+                                                        !!at(jobs.errors, `records.${index}.ended_month`) ||
+                                                        !!at(jobs.errors, `records.${index}.ended_year`)
+                                                    }
+                                                />
+                                                <p className="text-muted-foreground text-[13px]">Пусто — работает там до сих пор.</p>
                                             </Field>
                                         </div>
                                     )}
@@ -976,8 +1022,8 @@ export default function CreateEmployee({ options }: { options: Options }) {
                             )}
 
                             {step === 5 && (
-                                <div className="flex flex-col gap-4">
-                                    <Field label="Что выдаём" error={at(equipment.errors, 'equipment')}>
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <Field label="Что выдаём" className="sm:col-span-2" error={at(equipment.errors, 'equipment')}>
                                         <MultiSelect
                                             options={options.stock.map((unit) => ({
                                                 value: unit.id,

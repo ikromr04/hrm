@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('institution', 200);
             $table->string('faculty', 150);
             $table->string('specialty', 150);
+            // Years, not dates: a diploma names a year, and nobody remembers
+            // the day they enrolled.
             $table->unsignedSmallInteger('started_year');
             // Empty while still studying.
             $table->unsignedSmallInteger('graduated_year')->nullable();
