@@ -33,6 +33,5 @@ class AppServiceProvider extends ServiceProvider
         // Deciding on time off. A request goes to the head of the employee's
         // department first and to HR — admins, for now — after that, so anyone
         // who heads a department sees this side of the section at all.
-        Gate::define('approve-leave', fn (User $user) => $user->departments()->wherePivot('is_head', true)->exists());
     }
 }
