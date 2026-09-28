@@ -58,6 +58,7 @@ interface Unit {
     name: string;
     equipment_type_id: number;
     type: string | null;
+    type_icon: string | null;
     maker: string | null;
     model: string | null;
     serial_number: string | null;
@@ -919,7 +920,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
             <div className="flex flex-1 flex-col gap-5 p-3 md:px-5 md:py-4">
                 {/* Aligned along the bottom, so the title, the actions and the arrows sit on one line. */}
                 <div className="flex flex-wrap items-end gap-5">
-                    <CategoryChip type={unit.type} size={72} iconSize={32} />
+                    <CategoryChip icon={unit.type_icon} size={72} iconSize={32} />
 
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">

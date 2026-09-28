@@ -17,6 +17,9 @@ return new class extends Migration
         Schema::create('equipment_types', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100)->unique();
+            // Which of the drawings the interface has stands for this category,
+            // picked in the directory. Empty means the plain box.
+            $table->string('icon', 30)->nullable();
             $table->timestamps();
         });
 

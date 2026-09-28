@@ -1,6 +1,5 @@
 import { type StatusTone } from '@/components/status-badge';
 import { formatDate, shortMonths } from '@/lib/employee';
-import { Headphones, Laptop, Monitor, Printer, Smartphone, type LucideIcon } from 'lucide-react';
 
 export type EquipmentStatus = 'issued' | 'stock' | 'written_off';
 
@@ -15,15 +14,6 @@ export const statusLabel: Record<EquipmentStatus, string> = {
     issued: 'Выдано',
     stock: 'На балансе',
     written_off: 'Списано',
-};
-
-/** An icon per category, as the design draws them; anything else gets a box. */
-export const categoryIcon: Record<string, LucideIcon> = {
-    Ноутбуки: Laptop,
-    Мониторы: Monitor,
-    Телефоны: Smartphone,
-    Печать: Printer,
-    Периферия: Headphones,
 };
 
 /** "декабрь 2026": an inventory is due in a month, not on a day. */

@@ -22,6 +22,7 @@ class EquipmentType extends Model
      */
     protected $fillable = [
         'name',
+        'icon',
     ];
 
     /**

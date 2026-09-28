@@ -58,6 +58,7 @@ interface Unit {
     serial_number: string | null;
     inventory_number: string;
     type: string | null;
+    type_icon: string | null;
     status: Status;
     condition: string | null;
     /** Null while nobody holds it. */
@@ -69,7 +70,7 @@ interface Unit {
 }
 
 /** The tab above the table: a status, the units being serviced, or everything. */
-type Tab = Status | 'service' | null;
+type Tab = Status | 'service' | 'all';
 
 interface Filters {
     q: string;
@@ -92,7 +93,7 @@ interface Options {
 interface Props {
     equipment: Paginated<Unit>;
     filters: Filters;
-    /** The tab above the table; null is "Все", "service" is not a status. */
+    /** The tab above the table; "all" is "Все", "service" is not a status. */
     tab: Tab;
     sort: Sort;
     sortable: string[];
@@ -105,8 +106,8 @@ interface Props {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Оборудование', href: '/equipment' }];
 
-const STORAGE_KEY = 'equipment.table.view.v1';
-const DEFAULT_SORT: Sort = { key: 'name', direction: 'asc' };
+const STORAGE_KEY = 'equipment.table.view.v2';
+const DEFAULT_SORT: Sort = { key: 'holder', direction: 'asc' };
 
 /** Red, for the one action that cannot be undone. */
 const dangerItem = 'text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!';
@@ -237,6 +238,12 @@ function Holder({ unit }: { unit: Unit }) {
 function buildColumns(options: Options): ColumnDef[] {
     return [
         {
+            key: 'holder',
+            label: 'У кого',
+            width: 250,
+            filter: { type: 'text', param: 'holder', placeholder: 'Фамилия сотрудника' },
+        },
+        {
             key: 'name',
             label: 'Наименование',
             width: 380,
@@ -261,12 +268,6 @@ function buildColumns(options: Options): ColumnDef[] {
             filter: { type: 'multi', param: 'status', options: options.statuses.map((s) => ({ value: s.value, label: s.label })) },
         },
         {
-            key: 'holder',
-            label: 'У кого',
-            width: 250,
-            filter: { type: 'text', param: 'holder', placeholder: 'Фамилия сотрудника' },
-        },
-        {
             key: 'issued_at',
             label: 'Выдано',
             width: 170,
@@ -275,7 +276,7 @@ function buildColumns(options: Options): ColumnDef[] {
     ];
 }
 
-const defaultView = (): ViewState => ({ hidden: [], pinned: { left: ['name'], right: [] } });
+const defaultView = (): ViewState => ({ hidden: [], pinned: { left: ['holder'], right: [] } });
 
 export default function EquipmentIndex({ equipment, filters, tab, sort, sortable, perPage, perPageOptions, counts, options, canEdit }: Props) {
     const columns = useMemo(() => buildColumns(options), [options]);
@@ -326,7 +327,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
     }, [query]);
 
     const tabs: { key: Tab; label: string; count: number }[] = [
-        { key: null, label: 'Все', count: counts.all },
+        { key: 'all', label: 'Все', count: counts.all },
         ...(['issued', 'stock'] as Status[]).map((key) => ({ key, label: statusLabel[key], count: counts[key] })),
         // Not a status: a unit can be with its owner and on service at once.
         { key: 'service', label: 'На обслуживании', count: counts.service },
@@ -340,7 +341,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
             case 'name':
                 return (
                     <Link href={route('equipment.show', unit.id)} className="group flex items-center gap-3" title={`Открыть: ${unit.name}`}>
-                        <CategoryChip type={unit.type} />
+                        <CategoryChip icon={unit.type_icon} />
                         <div className="flex min-w-0 flex-col gap-0.5">
                             {/* Brand colour and an underline on hover: the app's mark of a link. */}
                             <span className="text-brand-strong truncate font-medium group-hover:underline dark:text-[#C5E27A]">{unit.name}</span>
@@ -399,7 +400,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
 
                             return (
                                 <button
-                                    key={item.key ?? 'all'}
+                                    key={item.key}
                                     type="button"
                                     onClick={() => visit({ tab: item.key })}
                                     aria-current={active ? 'page' : undefined}
@@ -500,7 +501,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                     view={view}
                     onPin={pin}
                     onHide={(key) => toggleHidden(key, true)}
-                    lockedKey="name"
+                    lockedKey="holder"
                     actions={canEdit ? (unit) => <RowActions unit={unit} onAsk={setAsking} onDelete={setDeleting} /> : undefined}
                     empty="Ничего не найдено."
                     footer={

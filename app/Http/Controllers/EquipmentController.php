@@ -28,7 +28,8 @@ class EquipmentController extends Controller
     /** Columns the list can be ordered by, named as the table names them. */
     private const SORTS = ['name', 'inventory_number', 'type', 'status', 'holder', 'issued_at'];
 
-    private const DEFAULT_SORT = 'name';
+    /** Who has it: the question the list is opened with, so it is read in that order. */
+    private const DEFAULT_SORT = 'holder';
 
     public function index(Request $request): Response
     {
@@ -54,7 +55,7 @@ class EquipmentController extends Controller
             // statuses it takes "service", which is not one: a unit is being
             // looked after when it has a record that has not ended, whoever
             // holds it meanwhile.
-            'tab' => ['nullable', Rule::in([...Equipment::STATUSES, 'service'])],
+            'tab' => ['nullable', Rule::in([...Equipment::STATUSES, 'service', 'all'])],
         ]);
 
         $filters = [
@@ -68,15 +69,18 @@ class EquipmentController extends Controller
             'issued_to' => $input['issued_to'] ?? null,
         ];
 
-        $tab = $input['tab'] ?? null;
+        // The list opens on what is out with people, which is what it is asked
+        // for most of the time. "Все" has to say so in the query: no tab at all
+        // means the default, not everything.
+        $tab = $input['tab'] ?? 'issued';
         $sort = $input['sort'] ?? self::DEFAULT_SORT;
         $direction = $input['direction'] ?? 'asc';
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
-        $query = Equipment::query()->with(['type:id,name', 'holder:id,name,surname,avatar']);
+        $query = Equipment::query()->with(['type:id,name,icon', 'holder:id,name,surname,avatar']);
         $query->withExists(['repairs as repairs_exists' => fn (Builder $q) => $q->whereNull('ended_at')]);
         $query->when($tab === 'service', fn (Builder $q) => $q->underService())
-            ->when($tab !== null && $tab !== 'service', fn (Builder $q) => $q->where('status', $tab));
+            ->when(! in_array($tab, ['all', 'service'], true), fn (Builder $q) => $q->where('status', $tab));
         $this->applyFilters($query, $filters);
         $this->applySort($query, $sort, $direction);
 
@@ -91,6 +95,7 @@ class EquipmentController extends Controller
                 'serial_number' => $unit->serial_number,
                 'inventory_number' => $unit->inventory_number,
                 'type' => $unit->type?->name,
+                'type_icon' => $unit->type?->icon,
                 'status' => $unit->status,
                 // The write-off form opens on it, so the list carries it too.
                 'condition' => $unit->condition,
@@ -259,7 +264,7 @@ class EquipmentController extends Controller
     public function show(Request $request, Equipment $equipment): Response
     {
         $equipment->load([
-            'type:id,name',
+            'type:id,name,icon',
             'holder:id,name,surname,avatar',
             'repairs.photos',
             'events.user:id,name,surname,avatar',
@@ -274,6 +279,7 @@ class EquipmentController extends Controller
                 'name' => $equipment->name,
                 'equipment_type_id' => $equipment->equipment_type_id,
                 'type' => $equipment->type?->name,
+                'type_icon' => $equipment->type?->icon,
                 'maker' => $equipment->maker,
                 'model' => $equipment->model,
                 'serial_number' => $equipment->serial_number,

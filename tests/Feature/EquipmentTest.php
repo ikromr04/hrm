@@ -7,6 +7,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentType;
 use App\Models\User;
 use App\Models\UserDetail;
+use App\Support\EquipmentIcons;
 use Database\Seeders\EquipmentTypeSeeder;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
@@ -108,6 +109,28 @@ class EquipmentTest extends TestCase
         $this->assertSame('Замена клавиатуры', $unit->events()->where('kind', 'repair_ended')->sole()->note);
     }
 
+    public function test_the_list_opens_on_what_is_out_with_people()
+    {
+        $holder = User::factory()->create(['surname' => 'Азимов']);
+        Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Выданный ноутбук']);
+        Equipment::factory()->ofType($this->type())->create(['name' => 'Свободный ноутбук']);
+
+        // No tab in the query means the one the list opens on, not everything.
+        $this->actingAs($this->admin())
+            ->get('/equipment')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('tab', 'issued')
+                ->where('sort.key', 'holder')
+                ->has('equipment.data', 1)
+                ->where('equipment.data.0.name', 'Выданный ноутбук')
+            );
+
+        // Все says so, and then nothing is left out.
+        $this->actingAs($this->admin())
+            ->get('/equipment?tab=all')
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('equipment.data', 2));
+    }
+
     public function test_the_tab_above_the_table_picks_one_status()
     {
         $holder = User::factory()->create();
@@ -130,7 +153,7 @@ class EquipmentTest extends TestCase
 
         $admin = $this->admin();
 
-        $only = fn (string $query, string $name) => $this->actingAs($admin)->get("/equipment?{$query}")
+        $only = fn (string $query, string $name) => $this->actingAs($admin)->get("/equipment?tab=all&{$query}")
             ->assertInertia(fn (AssertableInertia $page) => $page->has('equipment.data', 1)->where('equipment.data.0.name', $name));
 
         $only('name=Монитор', 'Монитор B');
@@ -152,11 +175,11 @@ class EquipmentTest extends TestCase
 
         $admin = $this->admin();
 
-        // The default order, and the same column turned around.
-        $this->actingAs($admin)->get('/equipment')
+        // A column of the table, and the same one turned around.
+        $this->actingAs($admin)->get('/equipment?tab=all&sort=name')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('equipment.data.0.name', 'А'));
 
-        $this->actingAs($admin)->get('/equipment?sort=name&direction=desc')
+        $this->actingAs($admin)->get('/equipment?tab=all&sort=name&direction=desc')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('equipment.data.0.name', 'Б'));
 
         // A column the table does not offer is refused rather than ignored.
@@ -175,7 +198,7 @@ class EquipmentTest extends TestCase
         $admin = $this->admin();
 
         foreach (['Latitude', 'EV-0421', '7K2L9P3'] as $term) {
-            $this->actingAs($admin)->get('/equipment?q='.urlencode($term))
+            $this->actingAs($admin)->get('/equipment?tab=all&q='.urlencode($term))
                 ->assertInertia(fn (AssertableInertia $page) => $page
                     ->has('equipment.data', 1)
                     ->where('equipment.data.0.inventory_number', 'EV-0421')
@@ -656,6 +679,61 @@ class EquipmentTest extends TestCase
                 ->has('employee.private.equipment', 1)
                 ->where('employee.private.equipment.0.inventory_number', 'EV-0421')
             );
+    }
+
+    public function test_the_profile_journal_follows_what_passed_through_their_hands()
+    {
+        $first = User::factory()->create();
+        $second = User::factory()->create();
+        $admin = $this->admin();
+        $laptop = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук Dell']);
+        $untouched = Equipment::factory()->ofType($this->type())->create(['name' => 'Чужой монитор']);
+
+        // To the first colleague, serviced while he had it, back, then on to the second.
+        $this->actingAs($admin)->post("/equipment/{$laptop->id}/issue", ['holder_user_id' => $first->id, 'issued_at' => '2026-01-10']);
+        $this->actingAs($admin)->post("/equipment/{$laptop->id}/repairs", ['kind' => 'Замена клавиатуры', 'started_at' => '2026-02-01', 'ended_at' => '2026-02-03']);
+        $this->actingAs($admin)->post("/equipment/{$laptop->id}/take", ['returned_at' => '2026-03-01']);
+        $this->actingAs($admin)->post("/equipment/{$laptop->id}/issue", ['holder_user_id' => $second->id, 'issued_at' => '2026-03-02']);
+
+        // Nothing of another unit he never held leaks in.
+        $this->actingAs($admin)->post("/equipment/{$untouched->id}/issue", ['holder_user_id' => $second->id, 'issued_at' => '2026-01-01']);
+
+        $this->actingAs($admin)
+            ->get("/employees/{$first->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                // The handover, the service, the return, and where it went next.
+                ->has('employee.private.equipment_history.events', 4)
+                ->where('employee.private.equipment_history.events.0.unit.name', 'Ноутбук Dell')
+            );
+    }
+
+    public function test_a_category_is_drawn_by_the_icon_it_was_given()
+    {
+        $admin = $this->admin();
+
+        // The form offers the drawings the interface has, and takes one of them.
+        $this->actingAs($admin)
+            ->get('/directories/equipment')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('icons', EquipmentIcons::KEYS)
+                ->where('items', fn ($items) => collect($items)->firstWhere('name', 'Ноутбуки')['icon'] === 'laptop')
+            );
+
+        $this->actingAs($admin)
+            ->post('/directories/equipment', ['name' => 'Планшеты', 'icon' => 'tablet'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('tablet', EquipmentType::firstWhere('name', 'Планшеты')->icon);
+
+        // A drawing the interface cannot draw is refused rather than stored.
+        $this->actingAs($admin)
+            ->post('/directories/equipment', ['name' => 'Швабры', 'icon' => 'broom'])
+            ->assertSessionHasErrors('icon');
+
+        // And a category may go without one: then it is the plain box.
+        $this->actingAs($admin)
+            ->post('/directories/equipment', ['name' => 'Прочее'])
+            ->assertSessionHasNoErrors();
+        $this->assertNull(EquipmentType::firstWhere('name', 'Прочее')->icon);
     }
 
     public function test_the_directory_counts_units_in_service()

@@ -1,9 +1,11 @@
 import { EmployeeActions } from '@/components/employee-actions';
+import { ChangeLines } from '@/components/equipment-changes';
 import InputError from '@/components/input-error';
 import { LevelBadge } from '@/components/language-badges';
 import { MultiSelect } from '@/components/multi-select';
 import { PersonAvatar } from '@/components/person-avatar';
 import { SosPhone } from '@/components/phones';
+import { Photos, type Photo } from '@/components/photo-viewer';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -34,11 +36,24 @@ import {
     type SpokenLanguage,
     type WorkExperience,
 } from '@/lib/employee';
+import { eventLabel, eventTone, type EventChanges, type EventKind, type NameLookup } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Camera, ChevronLeft, ChevronRight, Construction, Laptop, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
+
+/** One line of the equipment journal, narrowed to this colleague's spells. */
+interface HistoryEvent {
+    id: number;
+    unit: { id: number; name: string; inventory_number: string; type: string | null } | null;
+    kind: EventKind;
+    changes: EventChanges;
+    note: string | null;
+    at: string | null;
+    actor: { id: number; name: string; avatar: string | null } | null;
+    photos: Photo[];
+}
 
 interface ProfilePrivate extends PrivateDetails {
     educations: (Education & { id: number })[];
@@ -46,6 +61,8 @@ interface ProfilePrivate extends PrivateDetails {
     work_experiences: (WorkExperience & { id: number })[];
     /** Grouped by kind, which is resolved to its directory name here. */
     equipment: (Equipment & { id: number })[];
+    /** What has passed through their hands and what happened to it meanwhile. */
+    equipment_history: { events: HistoryEvent[]; names: NameLookup };
     birth_place: string | null;
     passport: { series: string | null; number: string | null; issued_at: string | null; issued_by: string | null };
 }
@@ -86,7 +103,6 @@ const TABS = [
     { key: 'education', title: 'Образование', private: true },
     { key: 'experience', title: 'Трудовая деятельность', private: true },
     { key: 'equipment', title: 'Оборудование', private: true },
-    { key: 'vacation', title: 'Отпуск', soon: true },
     { key: 'pir', title: 'ПИР', soon: true },
     { key: 'kpi', title: 'KPI', soon: true },
     { key: 'attendance', title: 'Посещаемость', soon: true },
@@ -1300,21 +1316,20 @@ function Soon({ title }: { title: string }) {
 }
 
 /**
- * A block of the profile. Given an `action`, the title turns into a header
- * strip ruled off from the body, with the action on the right.
+ * A block of the profile. A title always becomes a header strip ruled off from
+ * the body — with the action on the right where there is one, and the same
+ * height either way, so blocks with a pencil and blocks without still read as
+ * one set. A card that fills a whole tab passes no title: the tab names it.
  */
 function Section({ title, children, className, action }: { title?: string; children: ReactNode; className?: string; action?: ReactNode }) {
     return (
         <Card className={cn('flex flex-col gap-4 rounded-xl px-6 py-5', className)}>
-            {action ? (
+            {title && (
                 // Flush to the card's edges, so the strip reads as its header.
-                <div className="bg-muted/60 -mx-6 -mt-5 flex items-center justify-between gap-3 rounded-t-xl border-b px-6 py-2">
+                <div className="bg-muted/60 -mx-6 -mt-5 flex min-h-11 items-center justify-between gap-3 rounded-t-xl border-b px-6 py-2">
                     <h2 className="text-base font-semibold">{title}</h2>
                     {action}
                 </div>
-            ) : (
-                // A card that fills a whole tab needs no heading: the tab names it.
-                title && <h2 className="text-base font-semibold">{title}</h2>
             )}
             {children}
         </Card>
@@ -1472,6 +1487,44 @@ function WorkExperiences({
  * What the person holds right now, for reading only: a unit is handed out and
  * taken back in the equipment section, so its status has a single home.
  */
+/**
+ * Everything that happened to those units while they were here: handed over,
+ * looked after, checked, handed on. One story, so the entries are read together
+ * and each says which unit it is about.
+ */
+function EquipmentJournal({ events, names }: { events: HistoryEvent[]; names: NameLookup }) {
+    return (
+        <Section title="Журнал">
+            {events.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Оборудование за этим сотрудником не числилось</p>
+            ) : (
+                <ol className="flex flex-col">
+                    {events.map((event) => (
+                        <li key={event.id} className="flex flex-col gap-1.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <StatusBadge tone={eventTone[event.kind]}>{eventLabel[event.kind]}</StatusBadge>
+                                <span className="text-muted-foreground text-[13px] tabular-nums">{formatDate(event.at)}</span>
+                            </div>
+
+                            {event.unit && (
+                                <Link href={route('equipment.show', event.unit.id)} className="text-sm font-medium hover:underline">
+                                    {event.unit.name}
+                                </Link>
+                            )}
+
+                            <ChangeLines changes={event.changes} kind={event.kind} names={names} note={event.note} />
+
+                            <Photos photos={event.photos} />
+
+                            <span className="text-muted-foreground text-[13px]">{event.actor?.name ?? 'Система'}</span>
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </Section>
+    );
+}
+
 function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
     return (
         <ul className="flex flex-col">
@@ -1789,25 +1842,39 @@ export default function EmployeeProfile({
                         )}
 
                         {tab === 'equipment' && details && (
-                            <>
-                                <Section>
-                                    {details.equipment.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm">Не выдано</p>
-                                    ) : (
-                                        <EquipmentList items={details.equipment} />
-                                    )}
-                                </Section>
+                            // What they hold now on the left, what has been
+                            // through their hands on the right.
+                            <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
+                                <div className={pane}>
+                                    <Section
+                                        title="Текущие оборудования"
+                                        action={
+                                            canEdit && (
+                                                // A text link rather than a button: the strip keeps the
+                                                // height it has without one.
+                                                <Link
+                                                    // "У кого" is a name search now, so the link passes the name.
+                                                    href={route('equipment.index', { holder: `${employee.surname} ${employee.name}` })}
+                                                    className="text-brand-strong flex shrink-0 items-center gap-1.5 text-[13px] font-medium hover:underline dark:text-[#C5E27A]"
+                                                >
+                                                    <Laptop className="size-4" />
+                                                    Открыть в разделе оборудования
+                                                </Link>
+                                            )
+                                        }
+                                    >
+                                        {details.equipment.length === 0 ? (
+                                            <p className="text-muted-foreground text-sm">Не выдано</p>
+                                        ) : (
+                                            <EquipmentList items={details.equipment} />
+                                        )}
+                                    </Section>
+                                </div>
 
-                                {canEdit && (
-                                    <Button variant="outline" className="self-start" asChild>
-                                        {/* "У кого" is a name search now, so the link passes the name. */}
-                                        <Link href={route('equipment.index', { holder: `${employee.surname} ${employee.name}` })}>
-                                            <Laptop />
-                                            Открыть в разделе оборудования
-                                        </Link>
-                                    </Button>
-                                )}
-                            </>
+                                <div className={pane}>
+                                    <EquipmentJournal events={details.equipment_history.events} names={details.equipment_history.names} />
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}

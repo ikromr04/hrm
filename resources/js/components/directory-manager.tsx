@@ -1,3 +1,4 @@
+import { IconChip } from '@/components/equipment-icon';
 import InputError from '@/components/input-error';
 import { PeoplePicker, type PickablePerson } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { Link, router, useForm } from '@inertiajs/react';
@@ -27,6 +29,8 @@ export interface DirectoryItem {
     heads?: { id: number; name: string }[];
     /** Departments only: working members who do not lead it. */
     member_ids?: number[];
+    /** Equipment categories only: which drawing stands for it. */
+    icon?: string | null;
 }
 
 interface Labels {
@@ -55,6 +59,8 @@ interface DirectoryManagerProps {
     tree?: boolean;
     /** When given, each record has heads and members chosen from these people (departments). */
     people?: PickablePerson[];
+    /** When given, each record is drawn by one of these (equipment categories). */
+    icons?: string[];
 }
 
 type Row = DirectoryItem & { depth: number };
@@ -97,6 +103,7 @@ export function DirectoryManager({
     countLabel = 'Сотрудников',
     tree = false,
     people,
+    icons,
 }: DirectoryManagerProps) {
     const [query, setQuery] = useState('');
     const [editing, setEditing] = useState<DirectoryItem | 'new' | null>(null);
@@ -152,6 +159,9 @@ export function DirectoryManager({
                                     <td className="px-6 py-2.5">
                                         <span className="flex items-center gap-2" style={{ paddingLeft: query ? 0 : row.depth * 24 }}>
                                             {tree && row.depth > 0 && !query && <span className="text-muted-foreground">└</span>}
+                                            {icons && (
+                                                <IconChip icon={(row.icon && equipmentIcons[row.icon]) || fallbackIcon} size={28} iconSize={15} />
+                                            )}
                                             <span className={cn(tree && row.depth === 0 && 'font-semibold')}>{row.label}</span>
                                             {row.protected && (
                                                 <Lock className="text-muted-foreground size-3.5" aria-label="Системная запись: удалить нельзя" />
@@ -244,6 +254,7 @@ export function DirectoryManager({
                     labels={labels}
                     tree={tree}
                     people={people}
+                    icons={icons}
                     onClose={() => setEditing(null)}
                 />
             )}
@@ -261,6 +272,7 @@ function EditorDialog({
     labels,
     tree,
     people,
+    icons,
     onClose,
 }: {
     item: DirectoryItem | null;
@@ -270,13 +282,15 @@ function EditorDialog({
     labels: Labels;
     tree: boolean;
     people?: PickablePerson[];
+    icons?: string[];
     onClose: () => void;
 }) {
-    const form = useForm<{ label: string; parent_id: number | null; head_ids: number[]; member_ids: number[] }>({
+    const form = useForm<{ label: string; parent_id: number | null; head_ids: number[]; member_ids: number[]; icon: string | null }>({
         label: item?.label ?? '',
         parent_id: item?.parent_id ?? null,
         head_ids: item?.heads?.map((head) => head.id) ?? [],
         member_ids: item?.member_ids ?? [],
+        icon: item?.icon ?? null,
     });
 
     // A head is a member too, listed once: new heads leave the member list,
@@ -298,6 +312,7 @@ function EditorDialog({
             [field]: data.label.trim(),
             ...(tree ? { parent_id: data.parent_id } : {}),
             ...(people ? { head_ids: data.head_ids, member_ids: data.member_ids } : {}),
+            ...(icons ? { icon: data.icon } : {}),
         }));
         const options = { preserveScroll: true, onSuccess: onClose };
 
@@ -328,6 +343,39 @@ function EditorDialog({
                         />
                         <InputError message={errors[field]} />
                     </div>
+
+                    {icons && (
+                        <div className="grid content-start gap-2">
+                            <Label>Иконка</Label>
+                            {/* A grid of them: a list of names would say nothing about how each looks. */}
+                            <div className="flex flex-wrap gap-2">
+                                {icons.map((key) => {
+                                    const Icon = equipmentIcons[key] ?? fallbackIcon;
+                                    const chosen = form.data.icon === key;
+
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            aria-pressed={chosen}
+                                            aria-label={`Иконка ${key}`}
+                                            onClick={() => form.setData('icon', chosen ? null : key)}
+                                            className={cn(
+                                                'flex size-10 items-center justify-center rounded-lg border transition-colors',
+                                                chosen
+                                                    ? 'border-transparent bg-[#EEF5DC] text-[#4A6410] dark:bg-[#A8CF45]/15 dark:text-[#C5E27A]'
+                                                    : 'text-muted-foreground hover:bg-accent',
+                                            )}
+                                        >
+                                            <Icon className="size-5" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <InputError message={errors.icon} />
+                            <p className="text-muted-foreground text-[13px]">Без выбора — обычная коробка.</p>
+                        </div>
+                    )}
 
                     {tree && (
                         <div className="grid content-start gap-2">

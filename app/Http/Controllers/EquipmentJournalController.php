@@ -52,7 +52,7 @@ class EquipmentJournalController extends Controller
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
         $query = EquipmentEvent::query()
-            ->with(['user:id,name,surname,avatar', 'equipment:id,name,inventory_number,equipment_type_id', 'equipment.type:id,name', 'photos'])
+            ->with(['user:id,name,surname,avatar', 'equipment:id,name,inventory_number,equipment_type_id', 'equipment.type:id,name,icon', 'photos'])
             ->when($from, fn (Builder $q, Carbon $at) => $q->where('created_at', '>=', $at))
             ->when($to, fn (Builder $q, Carbon $at) => $q->where('created_at', '<=', $at))
             ->when($filters['kind'], fn (Builder $q, array $kinds) => $q->whereIn('kind', $kinds))
@@ -83,6 +83,7 @@ class EquipmentJournalController extends Controller
                 'name' => $event->equipment->name,
                 'inventory_number' => $event->equipment->inventory_number,
                 'type' => $event->equipment->type?->name,
+                'type_icon' => $event->equipment->type?->icon,
             ],
             'actor' => $event->user === null ? null : [
                 'id' => $event->user->id,

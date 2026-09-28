@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentType;
+use App\Support\EquipmentIcons;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,10 +20,12 @@ class EquipmentTypeController extends Controller
     public function index(): Response
     {
         return Inertia::render('directories/equipment', [
+            // What a category may be drawn by; the form offers exactly these.
+            'icons' => EquipmentIcons::KEYS,
             // Units in the category, written-off ones aside: the directory
             // counts hardware, and the number links nowhere else.
             'items' => EquipmentType::query()
-                ->select(['id', 'name'])
+                ->select(['id', 'name', 'icon'])
                 ->withCount(['equipment as users_count' => fn ($q) => $q->inService()])
                 ->orderBy('name')
                 ->get(),
@@ -52,12 +55,17 @@ class EquipmentTypeController extends Controller
     }
 
     /**
-     * @return array{name: string}
+     * @return array{name: string, icon: string|null}
      */
     private function validated(Request $request, ?EquipmentType $type = null): array
     {
         return $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('equipment_types', 'name')->ignore($type)],
-        ], attributes: ['name' => 'название']);
+            // One of the drawings the interface has, or none for the plain box.
+            'icon' => ['nullable', Rule::in(EquipmentIcons::KEYS)],
+        ], attributes: [
+            'name' => 'название',
+            'icon' => 'иконка',
+        ]);
     }
 }

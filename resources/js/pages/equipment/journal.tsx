@@ -43,7 +43,7 @@ interface JournalEvent {
     changes: EventChanges;
     note: string | null;
     at: string | null;
-    unit: { id: number; name: string; inventory_number: string; type: string | null } | null;
+    unit: { id: number; name: string; inventory_number: string; type: string | null; type_icon: string | null } | null;
     actor: { id: number; name: string; avatar: string | null } | null;
 }
 
@@ -184,7 +184,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                         className="group flex items-center gap-3"
                         title={`Открыть: ${event.unit.name}`}
                     >
-                        <CategoryChip type={event.unit.type} size={32} iconSize={16} />
+                        <CategoryChip icon={event.unit.type_icon} size={32} iconSize={16} />
                         <div className="flex min-w-0 flex-col gap-0.5">
                             <span className="text-brand-strong truncate font-medium group-hover:underline dark:text-[#C5E27A]">
                                 {event.unit.name}

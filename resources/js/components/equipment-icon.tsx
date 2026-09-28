@@ -1,6 +1,6 @@
-import { categoryIcon } from '@/lib/equipment';
+import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { cn } from '@/lib/utils';
-import { Package, type LucideIcon } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
 
 const tones = {
     brand: 'bg-[#EEF5DC] text-[#4A6410] dark:bg-[#A8CF45]/15 dark:text-[#C5E27A]',
@@ -31,7 +31,7 @@ export function IconChip({
     );
 }
 
-/** The chip for a unit, picked from its category. */
-export function CategoryChip({ type, size, iconSize }: { type: string | null; size?: number; iconSize?: number }) {
-    return <IconChip icon={(type && categoryIcon[type]) || Package} size={size} iconSize={iconSize} />;
+/** The chip for a unit, drawn by whatever its category was given in the directory. */
+export function CategoryChip({ icon, size, iconSize }: { icon: string | null; size?: number; iconSize?: number }) {
+    return <IconChip icon={(icon && equipmentIcons[icon]) || fallbackIcon} size={size} iconSize={iconSize} />;
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Department;
 use App\Models\Equipment;
+use App\Models\EquipmentEvent;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Models\UserDetail;
 use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
 use App\Notifications\AccountCreated;
+use App\Support\EquipmentHistory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -294,6 +296,7 @@ class EmployeeController extends Controller
                     'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
                     'work_experiences' => $employee->workExperiences->map(fn (UserWorkExperience $w) => $this->workExperience($w))->all(),
                     'equipment' => $employee->equipment->map(fn (Equipment $e) => $this->equipment($e))->all(),
+                    'equipment_history' => $this->equipmentHistory($employee),
                 ] : null,
             ],
             'neighbours' => $this->neighbours($employee),
@@ -639,6 +642,57 @@ class EmployeeController extends Controller
             'inventory_number' => $unit->inventory_number,
             'type' => $unit->type?->name,
             'issued_at' => $unit->issued_at?->toDateString(),
+        ];
+    }
+
+    /**
+     * Everything that has passed through their hands, and what happened to it
+     * while they had it: the journal of the equipment section, narrowed to the
+     * spells when this colleague was the holder.
+     *
+     * @return array<string, mixed>
+     */
+    private function equipmentHistory(User $employee): array
+    {
+        $events = EquipmentHistory::of($employee)->events();
+
+        return [
+            'events' => $events->map(fn (EquipmentEvent $event) => [
+                'id' => $event->id,
+                'unit' => $this->historyUnit($event),
+                'kind' => $event->kind,
+                'changes' => $event->diff ?? [],
+                'note' => $event->note,
+                'at' => $event->created_at?->toIso8601String(),
+                'actor' => $event->user === null ? null : [
+                    'id' => $event->user->id,
+                    'name' => "{$event->user->surname} {$event->user->name}",
+                    'avatar' => $event->user->avatar,
+                ],
+                'photos' => $event->photos->map(fn ($photo) => [
+                    'id' => $photo->id,
+                    'url' => $photo->url,
+                    'preview' => $photo->preview_url,
+                ])->all(),
+            ])->all(),
+            // The ids the entries kept, read back as the names behind them.
+            'names' => EquipmentEvent::namesFor($events),
+        ];
+    }
+
+    /**
+     * The unit an entry is about, as the history lists it. Null when the unit
+     * itself has been struck off the books since.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function historyUnit(EquipmentEvent $event): ?array
+    {
+        return $event->equipment === null ? null : [
+            'id' => $event->equipment->id,
+            'name' => $event->equipment->name,
+            'inventory_number' => $event->equipment->inventory_number,
+            'type' => $event->equipment->type?->name,
         ];
     }
 
