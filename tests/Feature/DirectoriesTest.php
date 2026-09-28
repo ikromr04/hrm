@@ -30,7 +30,7 @@ class DirectoriesTest extends TestCase
     {
         $this->get('/directories/roles')->assertRedirect('/login');
 
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $this->actingAs($employee);
 
         $this->get('/directories/roles')->assertForbidden();
@@ -39,8 +39,9 @@ class DirectoriesTest extends TestCase
         $this->post('/directories/positions', ['name' => 'Хакер'])->assertForbidden();
         $this->assertSame(0, Position::count());
 
-        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can.manageDirectories', false));
-        $this->actingAs($this->admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can.manageDirectories', true));
+        // The rights travel with every page, keyed the way they are named.
+        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.manage'] === false));
+        $this->actingAs($this->admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.manage'] === true));
     }
 
     public function test_admin_sees_each_directory_with_employee_counts()
@@ -52,7 +53,7 @@ class DirectoriesTest extends TestCase
         $this->get('/directories')->assertRedirect('/directories/roles');
         $this->get('/directories/roles')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('directories/roles')
-            ->has('items', 24)
+            ->has('items', 25)
             ->where('items', fn ($items) => collect($items)->firstWhere('name', 'admin')['protected'] === true)
         );
         $this->get('/directories/positions')->assertInertia(fn (Assert $page) => $page
@@ -82,7 +83,7 @@ class DirectoriesTest extends TestCase
     {
         $this->actingAs($this->admin);
         $intern = Role::findByName('intern');
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $employee->assignRole($intern);
 
         $this->delete("/directories/roles/{$intern->id}")->assertSessionHasNoErrors();
@@ -99,7 +100,7 @@ class DirectoriesTest extends TestCase
 
         $this->post('/directories/positions', ['name' => 'Юрист'])->assertSessionHasNoErrors();
         $position = Position::firstWhere('name', 'Юрист');
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $employee->positions()->attach($position);
 
         $this->put("/directories/positions/{$position->id}", ['name' => 'Юрисконсульт'])->assertSessionHasNoErrors();
@@ -289,7 +290,7 @@ class DirectoriesTest extends TestCase
         $root = Department::create(['name' => 'Корень']);
         $middle = Department::create(['name' => 'Середина', 'parent_id' => $root->id]);
         $leaf = Department::create(['name' => 'Лист', 'parent_id' => $middle->id]);
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $employee->departments()->attach($middle);
 
         $this->delete("/directories/departments/{$middle->id}")->assertSessionHasNoErrors();

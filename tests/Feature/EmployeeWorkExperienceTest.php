@@ -44,7 +44,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_an_admin_adds_a_job_without_touching_the_others()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $kept = UserWorkExperience::factory()->for($employee)->create();
 
         $this->actingAs($this->admin())
@@ -58,7 +58,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_an_admin_changes_one_record()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $job = UserWorkExperience::factory()->for($employee)->create();
 
         $this->actingAs($this->admin())
@@ -70,7 +70,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_an_admin_deletes_one_record()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $job = UserWorkExperience::factory()->for($employee)->create();
         $kept = UserWorkExperience::factory()->for($employee)->create();
 
@@ -84,7 +84,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_a_job_the_person_still_holds_has_no_end()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())
             ->post("/employees/{$employee->id}/experiences", $this->payload(['ended_month' => '', 'ended_year' => '']))
@@ -97,7 +97,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_half_an_end_date_is_rejected()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         // A month without a year says nothing about when the job ended.
         $this->actingAs($this->admin())
@@ -107,7 +107,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_dates_must_make_sense()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $admin = $this->admin();
 
         // Left before joining.
@@ -151,7 +151,7 @@ class EmployeeWorkExperienceTest extends TestCase
 
     public function test_an_employee_cannot_touch_anyones_work_experience()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $job = UserWorkExperience::factory()->for($employee)->create();
 
         // Not even their own: the block is managed by HR.

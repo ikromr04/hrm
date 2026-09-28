@@ -141,7 +141,7 @@ class EmployeeContactsTest extends TestCase
             ->put("/employees/{$employee->id}/contacts", $this->payload())
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->put("/employees/{$employee->id}/contacts", $this->payload())
             ->assertForbidden();
     }

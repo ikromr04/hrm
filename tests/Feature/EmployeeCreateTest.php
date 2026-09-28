@@ -71,7 +71,7 @@ class EmployeeCreateTest extends TestCase
                 ->has('options.stock')
             );
 
-        $this->actingAs(User::factory()->create())->get('/employees/create')->assertForbidden();
+        $this->actingAs($this->colleague())->get('/employees/create')->assertForbidden();
     }
 
     public function test_an_admin_adds_a_colleague_and_lands_on_their_profile()
@@ -159,11 +159,17 @@ class EmployeeCreateTest extends TestCase
             ->assertSessionHas('employee', fn (array $employee) => $employee['name'] === 'Азимова Нилуфар');
     }
 
-    public function test_an_admin_can_add_another_admin()
+    public function test_only_a_system_administrator_appoints_an_administrator()
     {
-        // Only admins reach this route at all, and the request guards the role
-        // a second time, the way the profile's form does.
+        // An administrator can do everything else, but not hand out access:
+        // otherwise any of them could quietly appoint a colleague.
         $this->actingAs($this->admin())
+            ->post('/employees', $this->payload(['roles' => ['admin']]))
+            ->assertSessionHasErrors('roles.0');
+
+        $this->assertNull(User::firstWhere('email', 'nilufar@evolet.tj'));
+
+        $this->actingAs($this->colleague()->assignRole('sysadmin'))
             ->post('/employees', $this->payload(['roles' => ['admin']]))
             ->assertSessionHasNoErrors();
 
@@ -183,7 +189,7 @@ class EmployeeCreateTest extends TestCase
 
     public function test_an_ordinary_colleague_cannot_add_anybody()
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->post('/employees', $this->payload())
             ->assertForbidden();
 

@@ -41,7 +41,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_an_admin_uploads_a_photo_and_gets_a_square_thumbnail()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())
             ->post("/employees/{$employee->id}/avatar", [
@@ -62,7 +62,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_the_original_is_kept_beside_the_thumbnail()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())
             ->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg', 900, 600)]);
@@ -77,7 +77,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_replacing_a_photo_removes_the_files_it_replaces()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $admin = $this->admin();
 
         $this->actingAs($admin)->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('first.jpg')]);
@@ -92,7 +92,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_an_admin_deletes_the_photo_and_its_files()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $admin = $this->admin();
 
         $this->actingAs($admin)->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg')]);
@@ -108,7 +108,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_the_model_hands_out_urls_not_paths()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg')]);
 
@@ -118,7 +118,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_anything_that_is_not_an_image_is_rejected()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $admin = $this->admin();
 
         $this->actingAs($admin)
@@ -135,7 +135,7 @@ class EmployeeAvatarTest extends TestCase
 
     public function test_an_employee_cannot_change_anyones_photo()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         // Not even their own: the photo is managed by HR.
         $this->actingAs($employee);

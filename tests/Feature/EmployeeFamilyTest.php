@@ -168,7 +168,7 @@ class EmployeeFamilyTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('employee.private.spouse_name', 'Азимова Нигина'));
 
         // A colleague gets no private block at all, spouse included.
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->get("/employees/{$employee->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('employee.private', null));
     }
@@ -182,7 +182,7 @@ class EmployeeFamilyTest extends TestCase
             ->put("/employees/{$employee->id}/family", $this->payload())
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->put("/employees/{$employee->id}/family", $this->payload())
             ->assertForbidden();
     }

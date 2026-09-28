@@ -32,7 +32,7 @@ class LanguageTest extends TestCase
         $speaker->languages()->attach($english, ['level' => 'advanced']);
         User::factory()->create(['status' => 'fired'])->languages()->attach($english, ['level' => 'beginner']);
 
-        $this->actingAs(User::factory()->create())->post('/directories/languages', ['name' => 'Хинди'])->assertForbidden();
+        $this->actingAs($this->colleague())->post('/directories/languages', ['name' => 'Хинди'])->assertForbidden();
 
         $this->actingAs($this->admin);
         $this->get('/directories/languages')->assertInertia(fn (Assert $page) => $page
@@ -58,7 +58,7 @@ class LanguageTest extends TestCase
         $speaker->languages()->attach([$english->id => ['level' => 'beginner'], $tajik->id => ['level' => 'advanced']]);
         User::factory()->create()->languages()->attach($tajik, ['level' => 'advanced']);
 
-        $viewer = User::factory()->create();
+        $viewer = $this->colleague();
         $this->actingAs($viewer);
 
         // The best known first, for every colleague: languages are public.

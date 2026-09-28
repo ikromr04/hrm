@@ -20,6 +20,7 @@ export function MultiSelect<T extends string | number>({
     placeholder = 'Не выбрано',
     searchPlaceholder = 'Поиск',
     chipClassName,
+    disabled = false,
 }: {
     id?: string;
     options: MultiSelectOption<T>[];
@@ -28,6 +29,8 @@ export function MultiSelect<T extends string | number>({
     placeholder?: string;
     searchPlaceholder?: string;
     chipClassName?: string;
+    /** Read-only: what is chosen still shows, but nothing can be added or taken off. */
+    disabled?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -46,17 +49,23 @@ export function MultiSelect<T extends string | number>({
                     {selected.map((option) => (
                         <li
                             key={option.value}
-                            className={cn('bg-muted flex items-center gap-1 rounded-md py-0.5 pr-0.5 pl-2 text-sm', chipClassName)}
+                            className={cn(
+                                'bg-muted flex items-center gap-1 rounded-md py-0.5 pl-2 text-sm',
+                                disabled ? 'pr-2' : 'pr-0.5',
+                                chipClassName,
+                            )}
                         >
                             {option.label}
-                            <button
-                                type="button"
-                                onClick={() => toggle(option.value)}
-                                aria-label={`Убрать: ${option.label}`}
-                                className="rounded-sm p-0.5 opacity-60 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
-                            >
-                                <X className="size-3.5" />
-                            </button>
+                            {!disabled && (
+                                <button
+                                    type="button"
+                                    onClick={() => toggle(option.value)}
+                                    aria-label={`Убрать: ${option.label}`}
+                                    className="rounded-sm p-0.5 opacity-60 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+                                >
+                                    <X className="size-3.5" />
+                                </button>
+                            )}
                         </li>
                     ))}
                 </ul>
@@ -76,6 +85,7 @@ export function MultiSelect<T extends string | number>({
                         variant="outline"
                         role="combobox"
                         aria-expanded={open}
+                        disabled={disabled}
                         className="w-full justify-between font-normal"
                     >
                         <span className="text-muted-foreground">{selected.length ? 'Добавить ещё…' : placeholder}</span>

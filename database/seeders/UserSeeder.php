@@ -42,7 +42,7 @@ class UserSeeder extends Seeder
         $this->callOnce(LanguageSeeder::class);
 
         $admin = $this->account(['name' => 'Некруз', 'surname' => 'Абдуллоев', 'patronymic' => 'Саидович', 'sex' => 'male', 'email' => 'admin@evolet.test']);
-        $admin->assignRole('admin');
+        $admin->assignRole(['sysadmin', 'admin']);
 
         // Employees that are easy to remember when logging in.
         $fixed = [
@@ -57,7 +57,7 @@ class UserSeeder extends Seeder
             $this->account($attributes);
         }
 
-        $missing = self::EMPLOYEES - User::active()->whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'))->count();
+        $missing = self::EMPLOYEES - User::active()->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', ['sysadmin', 'admin']))->count();
 
         if ($missing > 0) {
             User::factory($missing)->has(UserDetail::factory(), 'details')->create();
@@ -430,7 +430,7 @@ class UserSeeder extends Seeder
         $all = $top->concat($units);
 
         User::doesntHave('departments')
-            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'admin'))
+            ->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', ['sysadmin', 'admin']))
             ->with('roles')
             ->orderBy('id')
             ->get()
@@ -456,7 +456,9 @@ class UserSeeder extends Seeder
      */
     private function assignRoles(): void
     {
-        $regular = array_keys(array_diff_key(RoleSeeder::ROLES, array_flip(['admin', 'department-head', 'division-head'])));
+        // Access roles are handed out by hand, not drawn at random; the heads
+        // are placed by the department pass above.
+        $regular = array_keys(array_diff_key(RoleSeeder::ROLES, array_flip(['sysadmin', 'admin', 'department-head', 'division-head'])));
         $pool = [...array_fill(0, 2, 'department-head'), ...array_fill(0, 6, 'division-head')];
 
         User::doesntHave('roles')->orderBy('id')->get()->each(function (User $user, int $index) use ($pool, $regular) {

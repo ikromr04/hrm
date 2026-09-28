@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { type ReactNode } from 'react';
 
@@ -12,9 +12,13 @@ const tabs = [
     { title: 'Категории техники', href: '/directories/equipment' },
 ];
 
+/** Who may do what. A system administrator's page: only they decide on access. */
+const accessTab = { title: 'Доступы', href: '/directories/access' };
+
 /** Shell for the admin directories: title, tabs, then the current list. */
 export default function DirectoriesLayout({ title, children }: { title: string; children: ReactNode }) {
-    const { url } = usePage();
+    const { url, props } = usePage<SharedData>();
+    const visible = props.auth.manageAccess ? [...tabs, accessTab] : tabs;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Справочники', href: '/directories' },
         { title, href: url },
@@ -28,7 +32,7 @@ export default function DirectoriesLayout({ title, children }: { title: string; 
                 <h1 className="text-xl font-semibold tracking-tight">Справочники</h1>
 
                 <nav aria-label="Справочники" className="flex gap-6 border-b">
-                    {tabs.map((tab) => {
+                    {visible.map((tab) => {
                         const active = url.startsWith(tab.href);
 
                         return (

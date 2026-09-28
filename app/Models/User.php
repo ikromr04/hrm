@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Access;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -13,12 +14,21 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Contracts\Permission;
+use Spatie\Permission\Contracts\Permission as PermissionContract;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable;
+    use HasFactory, Notifiable;
+
+    // The rights a person's positions carry, kept under a second name: the
+    // model's own hasPermissionTo() below shadows the trait's, and a trait
+    // method cannot be reached through parent::.
+    use HasRoles {
+        hasPermissionTo as hasPermissionViaPositions;
+    }
 
     /**
      * Mirrors the column default, so a freshly created user counts as working
@@ -166,6 +176,54 @@ class User extends Authenticatable
     public function workExperiences(): HasMany
     {
         return $this->hasMany(UserWorkExperience::class)->orderByDesc('started_year')->orderByDesc('started_month')->orderByDesc('id');
+    }
+
+    /**
+     * Rights given to, or taken from, this person in particular, whatever their
+     * positions carry.
+     */
+    public function permissionOverrides(): HasMany
+    {
+        return $this->hasMany(PermissionOverride::class);
+    }
+
+    /**
+     * A personal exception beats the positions, both ways.
+     *
+     * Every check in the application ends up here — the gate, the "can:"
+     * middleware and Spatie's own hook all ask the model — so there is one
+     * answer to "may this person do that", and it is this one.
+     *
+     * @param  string|int|Permission|\BackedEnum  $permission
+     */
+    public function hasPermissionTo($permission, ?string $guardName = null): bool
+    {
+        $key = match (true) {
+            is_string($permission) => $permission,
+            $permission instanceof PermissionContract => $permission->name,
+            default => null,
+        };
+
+        if ($key !== null) {
+            $own = $this->permissionOverrides->firstWhere('permission', $key);
+
+            if ($own !== null) {
+                return $own->allowed;
+            }
+        }
+
+        return $this->hasPermissionViaPositions($permission, $guardName);
+    }
+
+    /**
+     * Everything this person may do, as the pages read it: every right in the
+     * catalogue with a yes or a no, so the UI never has to guess.
+     *
+     * @return array<string, bool>
+     */
+    public function accessMap(): array
+    {
+        return collect(Access::keys())->mapWithKeys(fn (string $key) => [$key => $this->can($key)])->all();
     }
 
     /**

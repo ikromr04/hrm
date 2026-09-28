@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useCan } from '@/lib/access';
 import { cn } from '@/lib/utils';
 import { router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
@@ -30,6 +31,7 @@ const dangerItem = 'text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_s
  * Both share the same dialogs, so the confirmations stay in one place.
  */
 export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employee: ActionTarget; isSelf: boolean; variant?: 'menu' | 'group' }) {
+    const can = useCan();
     const [dialog, setDialog] = useState<OpenDialog>(null);
     const name = `${employee.surname} ${employee.name}`;
 
@@ -38,14 +40,23 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
     // A working employee can leave; one who already left can only come back.
     // `asks` marks the ones that open a dialog, which the menu spells with "…".
     const actions = [
-        ...(employee.status === 'active'
-            ? [
-                  { key: 'transfer', label: 'Перевести', Icon: ArrowRightLeft, disabled: isSelf, asks: true, run: () => setDialog('transfer') },
-                  { key: 'fire', label: 'Уволить', Icon: UserX, disabled: isSelf, asks: true, run: () => setDialog('fire') },
-              ]
-            : [{ key: 'restore', label: 'Восстановить', Icon: RotateCcw, disabled: false, asks: false, run: restore }]),
-        { key: 'delete', label: 'Удалить', Icon: Trash2, disabled: isSelf, asks: true, run: () => setDialog('delete') },
+        ...(can('employees.status')
+            ? employee.status === 'active'
+                ? [
+                      { key: 'transfer', label: 'Перевести', Icon: ArrowRightLeft, disabled: isSelf, asks: true, run: () => setDialog('transfer') },
+                      { key: 'fire', label: 'Уволить', Icon: UserX, disabled: isSelf, asks: true, run: () => setDialog('fire') },
+                  ]
+                : [{ key: 'restore', label: 'Восстановить', Icon: RotateCcw, disabled: false, asks: false, run: restore }]
+            : []),
+        ...(can('employees.delete')
+            ? [{ key: 'delete', label: 'Удалить', Icon: Trash2, disabled: isSelf, asks: true, run: () => setDialog('delete') }]
+            : []),
     ];
+
+    // Nothing this viewer may do to this card: no menu, no empty button group.
+    if (actions.length === 0) {
+        return null;
+    }
 
     return (
         <>

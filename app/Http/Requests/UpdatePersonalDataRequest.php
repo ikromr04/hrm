@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\GuardsPrivilegedRoles;
 use App\Models\User;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,8 +14,10 @@ use Illuminate\Validation\Rule;
  */
 class UpdatePersonalDataRequest extends FormRequest
 {
+    use GuardsPrivilegedRoles;
+
     /**
-     * The route already requires manage-employees.
+     * The route already requires the right to change employees.
      */
     public function authorize(): bool
     {
@@ -38,25 +41,12 @@ class UpdatePersonalDataRequest extends FormRequest
             'home_address' => ['nullable', 'string', 'max:255'],
 
             'roles' => ['present', 'array'],
-            'roles.*' => ['string', 'distinct', Rule::exists('roles', 'name'), $this->adminRoleGuard()],
+            'roles.*' => ['string', 'distinct', Rule::exists('roles', 'name'), $this->privilegedRoleGuard()],
             'positions' => ['present', 'array'],
             'positions.*' => ['integer', 'distinct', Rule::exists('positions', 'id')],
             'departments' => ['present', 'array'],
             'departments.*' => ['integer', 'distinct', Rule::exists('departments', 'id')],
         ];
-    }
-
-    /**
-     * Only an admin hands out or takes away admin rights, and an admin
-     * cannot take them from themselves and lock everyone out.
-     */
-    private function adminRoleGuard(): Closure
-    {
-        return function (string $attribute, mixed $value, Closure $fail) {
-            if ($value === 'admin' && ! $this->user()->hasRole('admin')) {
-                $fail('Назначать администратора может только администратор.');
-            }
-        };
     }
 
     /**
@@ -67,19 +57,7 @@ class UpdatePersonalDataRequest extends FormRequest
         /** @var User $employee */
         $employee = $this->route('employee');
 
-        return [function ($validator) use ($employee) {
-            $roles = (array) $this->input('roles', []);
-            $hadAdmin = $employee->hasRole('admin');
-            $keepsAdmin = in_array('admin', $roles, true);
-
-            if ($hadAdmin && ! $keepsAdmin && ! $this->user()->hasRole('admin')) {
-                $validator->errors()->add('roles', 'Снять администратора может только администратор.');
-            }
-
-            if ($hadAdmin && ! $keepsAdmin && $employee->is($this->user())) {
-                $validator->errors()->add('roles', 'Нельзя снять с себя роль администратора.');
-            }
-        }];
+        return [fn ($validator) => $this->guardPrivilegedChanges($validator, $employee)];
     }
 
     /**

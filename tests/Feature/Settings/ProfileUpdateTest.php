@@ -21,7 +21,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_profile_page_is_displayed()
     {
-        $user = User::factory()->create();
+        $user = $this->colleague();
 
         $this->actingAs($user)->get('/settings/profile')->assertOk();
     }
@@ -30,7 +30,7 @@ class ProfileUpdateTest extends TestCase
     {
         Notification::fake();
 
-        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $user = $this->colleague(['email' => 'old@evolet.tj']);
 
         $this->actingAs($user)
             ->patch('/settings/profile', ['email' => 'new@evolet.tj'])
@@ -47,7 +47,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_the_link_from_the_letter_changes_the_address()
     {
-        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $user = $this->colleague(['email' => 'old@evolet.tj']);
         $user->forceFill(['pending_email' => 'new@evolet.tj'])->save();
 
         $link = URL::temporarySignedRoute('email.confirm', now()->addHour(), [
@@ -65,7 +65,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_a_letter_cannot_confirm_an_address_asked_for_after_it()
     {
-        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $user = $this->colleague(['email' => 'old@evolet.tj']);
         $user->forceFill(['pending_email' => 'first@evolet.tj'])->save();
 
         $link = URL::temporarySignedRoute('email.confirm', now()->addHour(), [
@@ -82,7 +82,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_one_person_cannot_confirm_another_persons_address()
     {
-        $user = User::factory()->create();
+        $user = $this->colleague();
         $other = User::factory()->create(['email' => 'other@evolet.tj']);
         $other->forceFill(['pending_email' => 'taken@evolet.tj'])->save();
 
@@ -97,7 +97,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_an_unsigned_link_is_refused()
     {
-        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $user = $this->colleague(['email' => 'old@evolet.tj']);
         $user->forceFill(['pending_email' => 'new@evolet.tj'])->save();
 
         $this->actingAs($user)
@@ -111,7 +111,7 @@ class ProfileUpdateTest extends TestCase
     {
         Notification::fake();
 
-        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $user = $this->colleague(['email' => 'old@evolet.tj']);
         $user->forceFill(['pending_email' => 'new@evolet.tj'])->save();
 
         $this->actingAs($user)
@@ -124,7 +124,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_the_change_can_be_called_off()
     {
-        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $user = $this->colleague(['email' => 'old@evolet.tj']);
         $user->forceFill(['pending_email' => 'new@evolet.tj'])->save();
 
         $this->actingAs($user)->delete('/settings/email')->assertRedirect('/settings/profile');
@@ -135,7 +135,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_an_address_somebody_else_signs_in_with_is_refused()
     {
-        $user = User::factory()->create();
+        $user = $this->colleague();
         $other = User::factory()->create(['email' => 'taken@evolet.tj']);
 
         $this->actingAs($user)
@@ -147,7 +147,7 @@ class ProfileUpdateTest extends TestCase
 
     public function test_nobody_closes_their_own_account()
     {
-        $user = User::factory()->create();
+        $user = $this->colleague();
 
         $this->actingAs($user)->delete('/settings/profile')->assertStatus(405);
 

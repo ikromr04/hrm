@@ -44,7 +44,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_directory_lists_real_users_ten_per_page()
     {
         User::factory(12)->create();
-        $this->actingAs(User::first());
+        $this->actingAs($this->mayLookAround(User::first()));
 
         $this->get('/employees')
             ->assertOk()
@@ -66,7 +66,7 @@ class EmployeeDirectoryTest extends TestCase
         $colleague = User::factory()->has(UserDetail::factory(), 'details')->create(['surname' => 'Азимова']);
         $this->giveTitles($colleague, 'Переводчик');
         UserChild::factory()->for($colleague)->create();
-        $viewer = User::factory()->create(['surname' => 'Шарипов']);
+        $viewer = $this->colleague(['surname' => 'Шарипов']);
 
         $this->actingAs($viewer)
             ->get('/employees')
@@ -87,7 +87,7 @@ class EmployeeDirectoryTest extends TestCase
         $user = User::factory()->has(UserDetail::factory(), 'details')->create();
         UserChild::factory(2)->for($user)->create();
 
-        $this->actingAs($user)
+        $this->actingAs($this->mayLookAround($user))
             ->get('/employees')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('employees.data.0.private.phone', $user->details->phone)
@@ -100,7 +100,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_admin_sees_everyones_private_details()
     {
-        $admin = User::factory()->create(['surname' => 'Яхёев']);
+        $admin = $this->colleague(['surname' => 'Яхёев']);
         $admin->assignRole('admin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create(['surname' => 'Азимов']);
 
@@ -117,7 +117,7 @@ class EmployeeDirectoryTest extends TestCase
     {
         User::factory()->create(['surname' => 'Шарипов', 'name' => 'Алишер', 'email' => 'a.sharipov@evolet.test']);
         User::factory()->create(['surname' => 'Назарова', 'name' => 'Дилноза', 'email' => 'd.nazarova@evolet.test']);
-        $this->actingAs(User::first());
+        $this->actingAs($this->mayLookAround(User::first()));
 
         $this->get('/employees?search=Шарип')
             ->assertInertia(fn (Assert $page) => $page
@@ -137,7 +137,7 @@ class EmployeeDirectoryTest extends TestCase
         $target->assignRole('kpg');
         $target->departments()->attach($design);
         $this->giveTitles(User::factory()->create(['surname' => 'Шарипов', 'name' => 'Алишер', 'sex' => 'male']), 'Переводчик');
-        $this->actingAs(User::factory()->create(['surname' => 'Бобоев', 'sex' => 'male']));
+        $this->actingAs($this->colleague(['surname' => 'Бобоев', 'sex' => 'male']));
 
         $finds = fn (string $q) => $this->get('/employees?q='.urlencode($q))
             ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $target->id));
@@ -154,14 +154,14 @@ class EmployeeDirectoryTest extends TestCase
     public function test_toolbar_search_ignores_private_fields_without_access()
     {
         User::factory()->has(UserDetail::factory(['home_address' => 'г. Душанбе, ул. Уникальная 7']), 'details')->create();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
 
         $this->get('/employees?q=Уникальная')->assertInertia(fn (Assert $page) => $page->has('employees.data', 0));
     }
 
     public function test_admin_search_also_matches_private_fields()
     {
-        $admin = User::factory()->create();
+        $admin = $this->colleague();
         $admin->assignRole('admin');
         $target = User::factory()->has(UserDetail::factory([
             'home_address' => 'г. Душанбе, ул. Уникальная 7',
@@ -181,7 +181,7 @@ class EmployeeDirectoryTest extends TestCase
     {
         User::factory(3)->create()->each(fn (User $u) => $this->giveTitles($u, 'Стажер'));
         User::factory(2)->create()->each(fn (User $u) => $this->giveTitles($u, 'Аналитик'));
-        $this->actingAs(User::first());
+        $this->actingAs($this->mayLookAround(User::first()));
         [$intern, $analyst] = [$this->titleId('Стажер'), $this->titleId('Аналитик')];
 
         $this->get('/employees?position[]='.$intern)
@@ -197,7 +197,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_employee_with_several_positions_shows_all_and_matches_any()
     {
-        $viewer = User::factory()->create(['surname' => 'Бобоев']);
+        $viewer = $this->colleague(['surname' => 'Бобоев']);
         $both = User::factory()->create(['surname' => 'Азимов']);
         $this->giveTitles($both, 'Переводчик', 'Копирайтер');
         $this->actingAs($viewer);
@@ -215,7 +215,7 @@ class EmployeeDirectoryTest extends TestCase
     {
         $marketing = Department::create(['name' => 'Департамент маркетинга']);
         $design = Department::create(['name' => 'Отдел Дизайна', 'parent_id' => $marketing->id]);
-        $user = User::factory()->create();
+        $user = $this->colleague();
         $user->departments()->attach([$design->id, $marketing->id]);
 
         $this->actingAs($user)
@@ -241,7 +241,7 @@ class EmployeeDirectoryTest extends TestCase
         $designer = User::factory()->create();
         $designer->departments()->attach($design);
         User::factory()->create()->departments()->attach($finance);
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
 
         $this->get('/employees?department[]='.$marketing->id)
             ->assertInertia(fn (Assert $page) => $page->has('employees.data', 2)->where('filters.department', [$marketing->id]));
@@ -256,7 +256,7 @@ class EmployeeDirectoryTest extends TestCase
     {
         $a = Department::create(['name' => 'Архив']);
         $b = Department::create(['name' => 'Бухгалтерия']);
-        $viewer = User::factory()->create();
+        $viewer = $this->colleague();
         $inB = User::factory()->create();
         $inB->departments()->attach($b);
         $inA = User::factory()->create();
@@ -280,7 +280,7 @@ class EmployeeDirectoryTest extends TestCase
 
         $this->get('/employees')
             ->assertInertia(fn (Assert $page) => $page
-                ->has('options.roles', 24)
+                ->has('options.roles', 25)
                 ->where('employees.data', fn ($rows) => collect($rows)->firstWhere('id', $user->id)['roles'] === ['Аналитик', 'Переводчик'])
             );
 
@@ -300,7 +300,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_directory_sorts_by_public_columns()
     {
-        $viewer = User::factory()->create(['surname' => 'Бобоев']);
+        $viewer = $this->colleague(['surname' => 'Бобоев']);
         $this->giveTitles(User::factory()->create(['surname' => 'Азимов']), 'Переводчик');
         $this->giveTitles(User::factory()->create(['surname' => 'Юсупов']), 'Аналитик');
         $this->actingAs($viewer);
@@ -325,7 +325,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_employees_cannot_sort_by_private_columns()
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
 
         $this->get('/employees?sort=birth_date')->assertSessionHasErrors('sort');
         $this->get('/employees?sort=hired_at')->assertSessionHasErrors('sort');
@@ -355,7 +355,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_per_page_can_be_chosen_from_the_allowed_options()
     {
         User::factory(30)->create();
-        $this->actingAs(User::first());
+        $this->actingAs($this->mayLookAround(User::first()));
 
         $this->get('/employees?per_page=25')
             ->assertInertia(fn (Assert $page) => $page
@@ -371,7 +371,7 @@ class EmployeeDirectoryTest extends TestCase
     {
         User::factory(2)->create(['sex' => 'female']);
         User::factory(3)->create(['sex' => 'male']);
-        $this->actingAs(User::first());
+        $this->actingAs($this->mayLookAround(User::first()));
 
         $this->get('/employees?sex=female')
             ->assertInertia(fn (Assert $page) => $page->has('employees.data', 2)->where('filters.sex', 'female'));
@@ -379,7 +379,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_employees_cannot_filter_by_private_fields()
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
 
         $this->get('/employees?birth_from=1990-01-01')->assertSessionHasErrors('birth_from');
         $this->get('/employees?nationality[]=таджик')->assertSessionHasErrors('nationality');
@@ -427,7 +427,7 @@ class EmployeeDirectoryTest extends TestCase
 
     public function test_unknown_position_is_rejected()
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
 
         $this->get('/employees?position[]=999999')->assertSessionHasErrors('position.0');
     }

@@ -37,7 +37,7 @@ class EmployeeProfileTest extends TestCase
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
         $employee->positions()->attach(Position::firstWhere('name', 'Переводчик'));
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->get("/employees/{$employee->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -50,7 +50,7 @@ class EmployeeProfileTest extends TestCase
 
     public function test_the_profile_links_to_the_previous_and_next_colleague_in_the_same_list()
     {
-        $a = User::factory()->create(['surname' => 'Азимов', 'name' => 'Далер']);
+        $a = $this->colleague(['surname' => 'Азимов', 'name' => 'Далер']);
         $b = User::factory()->create(['surname' => 'Азимов', 'name' => 'Фаррух']);
         $c = User::factory()->create(['surname' => 'Бобоева', 'name' => 'Нигина']);
         User::factory()->create(['surname' => 'Абдуллоев', 'name' => 'Умед', 'status' => 'fired']);
@@ -89,7 +89,7 @@ class EmployeeProfileTest extends TestCase
 
     public function test_admin_sees_anyones_full_profile()
     {
-        $admin = User::factory()->create();
+        $admin = $this->colleague();
         $admin->assignRole('admin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
@@ -100,6 +100,6 @@ class EmployeeProfileTest extends TestCase
 
     public function test_unknown_employee_returns_404()
     {
-        $this->actingAs(User::factory()->create())->get('/employees/999999')->assertNotFound();
+        $this->actingAs($this->colleague())->get('/employees/999999')->assertNotFound();
     }
 }

@@ -27,7 +27,7 @@ class EmployeeStatusTest extends TestCase
     public function test_employees_cannot_act_on_colleagues_or_see_who_left()
     {
         $colleague = User::factory()->create();
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
 
         $this->post("/employees/{$colleague->id}/fire", ['date' => '2026-09-01'])->assertForbidden();
         $this->post("/employees/{$colleague->id}/transfer", ['date' => '2026-09-01', 'note' => 'X'])->assertForbidden();
@@ -37,13 +37,13 @@ class EmployeeStatusTest extends TestCase
         $this->get('/employees?status=fired')->assertSessionHasErrors('status');
         $this->get('/employees')->assertInertia(fn (Assert $page) => $page
             ->where('statusCounts', null)
-            ->where('auth.can.manageEmployees', false)
+            ->where('auth.can', fn ($can) => $can['employees.status'] === false)
         );
     }
 
     public function test_transfer_needs_a_destination_and_moves_the_person_to_their_list()
     {
-        $employee = User::factory()->create(['surname' => 'Азимов']);
+        $employee = $this->colleague(['surname' => 'Азимов']);
         $this->actingAs($this->admin);
 
         $this->post("/employees/{$employee->id}/transfer", ['date' => '2026-09-01'])->assertSessionHasErrors('note');
@@ -67,7 +67,7 @@ class EmployeeStatusTest extends TestCase
 
     public function test_firing_takes_an_optional_reason_and_can_be_undone()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $this->actingAs($this->admin);
 
         $this->post("/employees/{$employee->id}/fire", ['date' => '2026-08-15'])->assertSessionHasNoErrors();
@@ -96,7 +96,7 @@ class EmployeeStatusTest extends TestCase
 
     public function test_deleting_from_the_profile_lands_on_the_employee_list()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $this->actingAs($this->admin);
 
         // Going back would mean the profile of someone who no longer exists.
@@ -107,7 +107,7 @@ class EmployeeStatusTest extends TestCase
 
     public function test_deleting_from_the_list_goes_back_to_it_with_its_filters()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $this->actingAs($this->admin);
 
         $this->from('/employees?status=active&per_page=25')
@@ -137,7 +137,7 @@ class EmployeeStatusTest extends TestCase
 
     public function test_someone_fired_while_signed_in_is_signed_out()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $this->actingAs($employee)->get('/dashboard')->assertOk();
 
         $employee->update(['status' => 'fired']);

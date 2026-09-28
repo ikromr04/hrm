@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 class UpdateContactsRequest extends FormRequest
 {
     /**
-     * The route already requires manage-employees.
+     * The route already requires the right to change employees.
      */
     public function authorize(): bool
     {

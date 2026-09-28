@@ -44,10 +44,12 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
-                'can' => [
-                    'manageDirectories' => (bool) $request->user()?->can('manage-directories'),
-                    'manageEmployees' => (bool) $request->user()?->can('manage-employees'),
-                ],
+                // Every right in the catalogue with a yes or a no, so a page can
+                // hide what it must without asking a second question.
+                'can' => $request->user()?->accessMap() ?? [],
+                // Not a right that can be handed out: an administrator holds
+                // every one of those and still may not decide who else gets them.
+                'manageAccess' => (bool) $request->user()?->hasRole('sysadmin'),
             ],
             // What a form hands back to itself: the colleague the "new
             // employee" wizard has just created, or the unit of equipment the

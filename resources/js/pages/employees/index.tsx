@@ -26,6 +26,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
+import { useCan } from '@/lib/access';
 import { capitalize, formatDate, maritalLabels, sexLabels, type Marital, type PrivateDetails, type Sex, type SpokenLanguage } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
@@ -469,7 +470,10 @@ export default function Employees({
     canEdit,
 }: EmployeesProps) {
     const { auth } = usePage<SharedData>().props;
-    const canManage = auth.can.manageEmployees;
+    const can = useCan();
+    // The menu decides for itself which of its actions the viewer may take,
+    // and renders nothing when that is none of them.
+    const canManage = can('employees.status') || can('employees.delete');
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(() => defaultView(columns, privateAccess), [columns, privateAccess]);
     const { view, setView, pin, toggleHidden } = useTableView(

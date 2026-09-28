@@ -21,17 +21,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Admins pass every authorization check, including abilities added later.
-        Gate::before(fn (User $user) => $user->hasRole('admin') ? true : null);
+        // Administrators pass every authorization check, including rights added
+        // later. A system administrator is one too; what only they can do —
+        // appoint an administrator, or take the rights away — is guarded where
+        // roles are assigned, since it is a rule about roles, not an ability.
+        Gate::before(fn (User $user) => $user->hasAnyRole(['sysadmin', 'admin']) ? true : null);
 
-        // Editing positions, roles and departments. Admins only for now (via before); HR can be added here.
-        Gate::define('manage-directories', fn (User $user) => false);
-
-        // Transferring, firing, restoring and deleting employees; seeing who left.
-        Gate::define('manage-employees', fn (User $user) => false);
-
-        // Deciding on time off. A request goes to the head of the employee's
-        // department first and to HR — admins, for now — after that, so anyone
-        // who heads a department sees this side of the section at all.
+        // Every other right is a permission from App\Support\Access, carried by
+        // a position or given to one person on their card. Nothing to define
+        // here: Spatie answers "can" for those out of the permissions table, and
+        // a personal exception is applied in User::hasPermissionTo().
     }
 }

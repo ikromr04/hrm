@@ -15,7 +15,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
+import { accessNotice, grantableRoles, holdsAccess } from '@/lib/access';
 import {
     age,
     capitalize,
@@ -38,10 +40,18 @@ import {
 } from '@/lib/employee';
 import { eventLabel, eventTone, type EventChanges, type EventKind, type NameLookup } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Camera, ChevronLeft, ChevronRight, Construction, Laptop, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
+
+/** Every right, what the positions give and what was decided for this person. */
+interface AccessPicture {
+    /** An access role: they pass every check whatever the rights below say. */
+    everything: boolean;
+    sections: { key: string; title: string; rights: { key: string; title: string; hint: string }[] }[];
+    rights: { key: string; position: boolean; override: boolean | null }[];
+}
 
 /** One line of the equipment journal, narrowed to this colleague's spells. */
 interface HistoryEvent {
@@ -182,6 +192,141 @@ interface Assigned {
     departments: number[];
 }
 
+/**
+ * What this colleague may do, and why.
+ *
+ * Rights come with a position; an exception is for the person whose work does
+ * not fit their position — one who needs the journal, one who must not see
+ * private data. An exception beats the position either way, which is why it is
+ * spelled out here rather than hidden behind a tick.
+ */
+function AccessSection({ employee, access }: { employee: Employee; access: AccessPicture }) {
+    const [open, setOpen] = useState(false);
+
+    const titles = new Map(access.sections.flatMap((section) => section.rights.map((right) => [right.key, `${section.title}: ${right.title}`])));
+
+    const granted = access.rights.filter((right) => right.override === true);
+    const revoked = access.rights.filter((right) => right.override === false);
+    const effective = access.rights.filter((right) => right.override ?? right.position);
+
+    const set = (key: string, allowed: boolean | null) =>
+        router.put(route('employees.access', employee.id), { permission: key, allowed }, { preserveScroll: true, preserveState: true });
+
+    return (
+        <>
+            <Section
+                title="Доступы"
+                action={
+                    !access.everything && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground -mr-2 size-7"
+                            aria-label="Настроить доступы"
+                            onClick={() => setOpen(true)}
+                        >
+                            <Pencil className="size-4" />
+                        </Button>
+                    )
+                }
+            >
+                {access.everything ? (
+                    <p className="text-muted-foreground text-sm">
+                        Все доступы: сотрудник проходит любую проверку, потому что среди его позиций есть администратор.
+                    </p>
+                ) : (
+                    <Fields columns={1}>
+                        <Field label="Открыто">
+                            {effective.length > 0 ? (
+                                <span className="flex flex-col gap-0.5">
+                                    {effective.map((right) => (
+                                        <span key={right.key}>{titles.get(right.key)}</span>
+                                    ))}
+                                </span>
+                            ) : (
+                                <span className="text-muted-foreground">Ничего</span>
+                            )}
+                        </Field>
+                        {granted.length > 0 && (
+                            <Field label="Добавлено лично">
+                                <span className="flex flex-col gap-0.5">
+                                    {granted.map((right) => (
+                                        <span key={right.key}>{titles.get(right.key)}</span>
+                                    ))}
+                                </span>
+                            </Field>
+                        )}
+                        {revoked.length > 0 && (
+                            <Field label="Снято лично">
+                                <span className="flex flex-col gap-0.5">
+                                    {revoked.map((right) => (
+                                        <span key={right.key}>{titles.get(right.key)}</span>
+                                    ))}
+                                </span>
+                            </Field>
+                        )}
+                    </Fields>
+                )}
+            </Section>
+
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Доступы сотрудника</DialogTitle>
+                        <DialogDescription>
+                            По умолчанию доступ берётся из позиции. Здесь его можно выдать этому сотруднику отдельно или снять с него — решение
+                            сохраняется сразу.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="scroll-soft -mx-6 max-h-[60vh] overflow-y-auto px-6">
+                        {access.sections.map((section) => (
+                            <div key={section.key} className="border-t py-3 first:border-t-0 first:pt-0">
+                                <p className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">{section.title}</p>
+                                <ul className="grid gap-2">
+                                    {section.rights.map((right) => {
+                                        const state = access.rights.find((row) => row.key === right.key);
+                                        const value = state?.override === true ? 'yes' : state?.override === false ? 'no' : 'position';
+
+                                        return (
+                                            <li key={right.key} className="flex flex-wrap items-center justify-between gap-2">
+                                                <span className="min-w-0">
+                                                    <span className="text-sm">{right.title}</span>
+                                                    <span className="text-muted-foreground block text-xs">
+                                                        {state?.position ? 'Позиция даёт этот доступ' : 'Позиция этот доступ не даёт'}
+                                                    </span>
+                                                </span>
+                                                <ToggleGroup
+                                                    type="single"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    value={value}
+                                                    onValueChange={(next) => next && set(right.key, next === 'position' ? null : next === 'yes')}
+                                                    aria-label={right.title}
+                                                >
+                                                    <ToggleGroupItem value="position">По позиции</ToggleGroupItem>
+                                                    <ToggleGroupItem value="yes">Разрешить</ToggleGroupItem>
+                                                    <ToggleGroupItem value="no">Запретить</ToggleGroupItem>
+                                                </ToggleGroup>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setOpen(false)}>
+                            Готово
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
 /** The "Основные данные" card in a form; sex sits on the user, the rest on the details. */
 function PersonalDialog({
     employee,
@@ -196,6 +341,12 @@ function PersonalDialog({
     assigned: Assigned;
     onClose: () => void;
 }) {
+    const { auth } = usePage<SharedData>().props;
+
+    // A card that carries access is the system administrator's to re-file, roles
+    // and all: otherwise an administrator could strip the one who appointed them.
+    const rolesLocked = holdsAccess(assigned.roles) && !auth.manageAccess;
+
     const form = useForm({
         surname: employee.surname,
         name: employee.name,
@@ -358,10 +509,17 @@ function PersonalDialog({
                             <Label htmlFor="personal-roles">Позиция</Label>
                             <MultiSelect
                                 id="personal-roles"
-                                options={options.roles.map((role) => ({ value: role.name, label: role.title }))}
+                                // A locked field still shows what the person holds, so access
+                                // stays readable even where it is untouchable.
+                                options={(rolesLocked ? options.roles : grantableRoles(options.roles, auth.manageAccess)).map((role) => ({
+                                    value: role.name,
+                                    label: role.title,
+                                }))}
                                 value={form.data.roles}
                                 onChange={(value) => form.setData('roles', value)}
+                                disabled={rolesLocked}
                             />
+                            {rolesLocked && <p className="text-muted-foreground text-sm">{accessNotice}</p>}
                             <InputError message={listError('roles')} />
                         </div>
 
@@ -1535,7 +1693,7 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
                             {unit.name}
                         </Link>
                         <span className="text-muted-foreground text-[13px]">
-                            {[unit.type, unit.maker, unit.serial_number && `S/N ${unit.serial_number}`].filter(Boolean).join(' · ')}
+                            {[unit.type, unit.details].filter(Boolean).join(' · ')}
                         </span>
                         <span className="text-muted-foreground text-[13px] tabular-nums">
                             Инв. № {unit.inventory_number}
@@ -1696,6 +1854,7 @@ export default function EmployeeProfile({
     isSelf,
     options,
     assigned,
+    access,
 }: {
     employee: Employee;
     neighbours: { prev: Neighbour; next: Neighbour };
@@ -1704,6 +1863,8 @@ export default function EmployeeProfile({
     /** Choices for the edit dialogs; null for viewers who may not edit. */
     options: EditOptions | null;
     assigned: Assigned | null;
+    /** Rights and personal exceptions; only a system administrator is sent these. */
+    access: AccessPicture | null;
 }) {
     const [editing, setEditing] = useState<'personal' | 'passport' | 'contacts' | 'languages' | 'employment' | 'family' | null>(null);
     // Education is edited one record at a time, so these hold a record, not a card name.
@@ -2104,6 +2265,8 @@ export default function EmployeeProfile({
                                         </Field>
                                     </Fields>
                                 </Section>
+
+                                {access && <AccessSection employee={employee} access={access} />}
 
                                 {canEdit && (
                                     <EmployeeActions

@@ -32,7 +32,7 @@ class EmployeeLanguagesTest extends TestCase
         $russian = Language::create(['name' => 'Русский']);
         $german = Language::create(['name' => 'Немецкий']);
 
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $employee->languages()->attach($german, ['level' => 'beginner']);
 
         // The card is replaced wholesale, so German goes.
@@ -55,7 +55,7 @@ class EmployeeLanguagesTest extends TestCase
     public function test_the_card_may_be_emptied()
     {
         $admin = User::factory()->create()->assignRole('admin');
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $employee->languages()->attach(Language::create(['name' => 'Английский']), ['level' => 'beginner']);
 
         $this->actingAs($admin)
@@ -69,7 +69,7 @@ class EmployeeLanguagesTest extends TestCase
     {
         $admin = User::factory()->create()->assignRole('admin');
         $english = Language::create(['name' => 'Английский']);
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($admin)
             ->put("/employees/{$employee->id}/languages", [
@@ -86,25 +86,25 @@ class EmployeeLanguagesTest extends TestCase
     {
         $admin = User::factory()->create()->assignRole('admin');
         Language::create(['name' => 'Английский']);
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($admin)
             ->get("/employees/{$employee->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page->has('options.languages', 1));
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->get("/employees/{$employee->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('options', null));
     }
 
     public function test_an_employee_cannot_edit_anyones_languages()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $english = Language::create(['name' => 'Английский']);
         $payload = ['languages' => [['id' => $english->id, 'level' => 'advanced']]];
 
         // Not even their own: the card is managed by HR.
         $this->actingAs($employee)->put("/employees/{$employee->id}/languages", $payload)->assertForbidden();
-        $this->actingAs(User::factory()->create())->put("/employees/{$employee->id}/languages", $payload)->assertForbidden();
+        $this->actingAs($this->colleague())->put("/employees/{$employee->id}/languages", $payload)->assertForbidden();
     }
 }

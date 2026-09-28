@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use Closure;
+use App\Http\Requests\Concerns\GuardsPrivilegedRoles;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,8 +14,10 @@ use Illuminate\Validation\Rule;
  */
 class StoreEmployeeRequest extends FormRequest
 {
+    use GuardsPrivilegedRoles;
+
     /**
-     * The route already requires manage-employees.
+     * The route already requires the right to change employees.
      */
     public function authorize(): bool
     {
@@ -45,24 +47,12 @@ class StoreEmployeeRequest extends FormRequest
             'hired_at' => ['nullable', 'date', 'before_or_equal:today'],
 
             'roles' => ['present', 'array'],
-            'roles.*' => ['string', 'distinct', Rule::exists('roles', 'name'), $this->adminRoleGuard()],
+            'roles.*' => ['string', 'distinct', Rule::exists('roles', 'name'), $this->privilegedRoleGuard()],
             'positions' => ['present', 'array'],
             'positions.*' => ['integer', 'distinct', Rule::exists('positions', 'id')],
             'departments' => ['present', 'array'],
             'departments.*' => ['integer', 'distinct', Rule::exists('departments', 'id')],
         ];
-    }
-
-    /**
-     * Only an admin hands out admin rights.
-     */
-    private function adminRoleGuard(): Closure
-    {
-        return function (string $attribute, mixed $value, Closure $fail) {
-            if ($value === 'admin' && ! $this->user()->hasRole('admin')) {
-                $fail('Назначать администратора может только администратор.');
-            }
-        };
     }
 
     /**

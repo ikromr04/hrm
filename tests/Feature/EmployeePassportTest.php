@@ -54,7 +54,7 @@ class EmployeePassportTest extends TestCase
     public function test_the_details_row_is_created_when_the_employee_has_none()
     {
         $admin = User::factory()->create()->assignRole('admin');
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($admin)
             ->put("/employees/{$employee->id}/passport", $this->payload())
@@ -107,7 +107,7 @@ class EmployeePassportTest extends TestCase
             ->put("/employees/{$employee->id}/passport", $this->payload())
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->put("/employees/{$employee->id}/passport", $this->payload())
             ->assertForbidden();
     }

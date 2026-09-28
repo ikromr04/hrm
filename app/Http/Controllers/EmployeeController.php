@@ -6,6 +6,7 @@ use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Department;
 use App\Models\Equipment;
 use App\Models\EquipmentEvent;
+use App\Models\EquipmentField;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
@@ -14,6 +15,7 @@ use App\Models\UserDetail;
 use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
 use App\Notifications\AccountCreated;
+use App\Support\Access;
 use App\Support\EquipmentHistory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -58,14 +60,14 @@ class EmployeeController extends Controller
     {
         $viewer = $request->user();
         $privateAccess = $viewer->can('viewAnyPrivateDetails', User::class);
-        // Only people who manage employees see who was transferred or fired.
-        $canManage = $viewer->can('manage-employees');
+        // Who was transferred or fired belongs to whoever moves people about.
+        $canStatus = $viewer->can('employees.status');
         $sortable = $privateAccess ? [...self::PUBLIC_SORTS, ...self::PRIVATE_SORTS] : self::PUBLIC_SORTS;
         $private = fn (array $rules) => $privateAccess ? $rules : ['prohibited'];
 
         $input = $request->validate([
             'per_page' => ['nullable', 'integer', Rule::in(self::PER_PAGE_OPTIONS)],
-            'status' => ['nullable', Rule::in($canManage ? self::STATUSES : ['active'])],
+            'status' => ['nullable', Rule::in($canStatus ? self::STATUSES : ['active'])],
             'sort' => ['nullable', Rule::in($sortable)],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
 
@@ -148,7 +150,7 @@ class EmployeeController extends Controller
             'languages' => $this->languageList($user),
             'status' => $user->status,
             'status_changed_at' => $user->status_changed_at?->toDateString(),
-            'status_note' => $canManage ? $user->status_note : null,
+            'status_note' => $canStatus ? $user->status_note : null,
             'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
         ]);
 
@@ -169,8 +171,8 @@ class EmployeeController extends Controller
                 'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
             ],
             'status' => $status,
-            'statusCounts' => $canManage ? $this->statusCounts() : null,
-            'canEdit' => $canManage,
+            'statusCounts' => $canStatus ? $this->statusCounts() : null,
+            'canEdit' => $viewer->can('employees.manage'),
             'total' => User::count(),
         ]);
     }
@@ -260,10 +262,10 @@ class EmployeeController extends Controller
     {
         $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name']);
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
-        $canEdit = $request->user()->can('manage-employees');
+        $canEdit = $request->user()->can('employees.manage');
 
         if ($canSeePrivate) {
-            $employee->load(['details', 'children', 'educations', 'workExperiences', 'equipment.type:id,name']);
+            $employee->load(['details', 'children', 'educations', 'workExperiences', 'equipment.type.fields', 'equipment.fieldValues']);
         }
 
         return Inertia::render('employees/show', [
@@ -279,7 +281,8 @@ class EmployeeController extends Controller
                 'email' => $employee->email,
                 'status' => $employee->status,
                 'status_changed_at' => $employee->status_changed_at?->toDateString(),
-                'status_note' => $canEdit ? $employee->status_note : null,
+                // Why somebody was let go is for whoever handles that side of things.
+                'status_note' => $request->user()->can('employees.status') ? $employee->status_note : null,
                 'roles' => $this->roleTitles($employee),
                 'positions' => $this->positionNames($employee),
                 'departments' => $this->departmentList($employee),
@@ -321,7 +324,34 @@ class EmployeeController extends Controller
                 'positions' => $employee->positions->pluck('id'),
                 'departments' => $employee->departments->pluck('id'),
             ] : null,
+            // What this colleague may do, and why. Only a system administrator
+            // is shown it, because only they can change any of it.
+            'access' => $request->user()->hasRole('sysadmin') ? $this->access($employee) : null,
         ]);
+    }
+
+    /**
+     * Every right, what the colleague's positions give them, and the exceptions
+     * made for this person in particular.
+     *
+     * @return array{everything: bool, sections: list<array<string, mixed>>, rights: list<array{key: string, position: bool, override: bool|null}>}
+     */
+    private function access(User $employee): array
+    {
+        $viaPositions = $employee->getPermissionsViaRoles()->pluck('name')->all();
+        $overrides = $employee->permissionOverrides->pluck('allowed', 'permission');
+
+        return [
+            // An access role passes every check through Gate::before, so the
+            // rights below would only be telling half the story.
+            'everything' => $employee->hasAnyRole(['sysadmin', 'admin']),
+            'sections' => Access::tree(),
+            'rights' => collect(Access::keys())->map(fn (string $key) => [
+                'key' => $key,
+                'position' => in_array($key, $viaPositions, true),
+                'override' => $overrides[$key] ?? null,
+            ])->all(),
+        ];
     }
 
     /**
@@ -637,12 +667,29 @@ class EmployeeController extends Controller
         return [
             'id' => $unit->id,
             'name' => $unit->name,
-            'maker' => $unit->maker,
-            'serial_number' => $unit->serial_number,
+            // What its category says it is, as far as the line under the name
+            // needs: the first couple of answers the unit has on file.
+            'details' => $this->unitDetails($unit),
             'inventory_number' => $unit->inventory_number,
             'type' => $unit->type?->name,
             'issued_at' => $unit->issued_at?->toDateString(),
         ];
+    }
+
+    /**
+     * The first couple of things a unit's category asks about, as this unit
+     * answered them: "Dell · Latitude 5440" under the name of a laptop.
+     */
+    private function unitDetails(Equipment $unit): ?string
+    {
+        $held = $unit->fieldValues->keyBy('equipment_field_id');
+
+        $lines = collect($unit->type?->fields ?? [])
+            ->map(fn (EquipmentField $field) => $field->read($held->get($field->id)?->value))
+            ->filter()
+            ->take(2);
+
+        return $lines->isEmpty() ? null : $lines->join(' · ');
     }
 
     /**

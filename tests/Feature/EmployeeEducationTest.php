@@ -43,7 +43,7 @@ class EmployeeEducationTest extends TestCase
 
     public function test_an_admin_adds_a_place_of_study_without_touching_the_others()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $kept = UserEducation::factory()->for($employee)->create(['institution' => 'Курсы']);
 
         $this->actingAs($this->admin())
@@ -60,7 +60,7 @@ class EmployeeEducationTest extends TestCase
 
     public function test_an_admin_changes_one_record()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $education = UserEducation::factory()->for($employee)->create();
 
         $this->actingAs($this->admin())
@@ -72,7 +72,7 @@ class EmployeeEducationTest extends TestCase
 
     public function test_an_admin_deletes_one_record()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $education = UserEducation::factory()->for($employee)->create();
         $kept = UserEducation::factory()->for($employee)->create();
 
@@ -86,7 +86,7 @@ class EmployeeEducationTest extends TestCase
 
     public function test_a_record_may_be_left_unfinished()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         // Still studying: no graduation year and no diploma yet.
         $this->actingAs($this->admin())
@@ -100,7 +100,7 @@ class EmployeeEducationTest extends TestCase
 
     public function test_invalid_data_is_rejected()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())
             ->post("/employees/{$employee->id}/educations", $this->payload([
@@ -132,7 +132,7 @@ class EmployeeEducationTest extends TestCase
 
     public function test_an_employee_cannot_touch_anyones_education()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $education = UserEducation::factory()->for($employee)->create();
 
         // Not even their own: the block is managed by HR.

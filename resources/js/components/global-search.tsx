@@ -1,13 +1,18 @@
+import { CategoryChip } from '@/components/equipment-icon';
 import { PersonAvatar } from '@/components/person-avatar';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { useCan } from '@/lib/access';
+import { type EquipmentStatus, statusLabel } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
-import { type SharedData } from '@/types';
-import { router, usePage } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import {
     BookMarked,
     Briefcase,
     CornerDownLeft,
+    History,
     IdCard,
+    Languages,
+    Laptop,
     LayoutGrid,
     LoaderCircle,
     type LucideIcon,
@@ -20,9 +25,21 @@ import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useStat
 
 interface SearchResults {
     employees: { id: number; name: string; avatar: string | null; email: string; positions: string[] }[];
+    /** A unit of hardware, found by anything printed on it or by who has it. */
+    equipment: {
+        id: number;
+        name: string;
+        inventory_number: string;
+        type: string | null;
+        icon: string | null;
+        status: EquipmentStatus;
+        holder: string | null;
+    }[];
     departments: { id: number; name: string }[];
     positions: { id: number; name: string }[];
     roles: { name: string; title: string }[];
+    equipmentTypes: { id: number; name: string; icon: string | null }[];
+    languages: { id: number; name: string }[];
 }
 
 interface Item {
@@ -34,7 +51,7 @@ interface Item {
     icon: ReactNode;
 }
 
-const EMPTY: SearchResults = { employees: [], departments: [], positions: [], roles: [] };
+const EMPTY: SearchResults = { employees: [], equipment: [], departments: [], positions: [], roles: [], equipmentTypes: [], languages: [] };
 
 const iconBox = (Icon: LucideIcon) => (
     <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-md">
@@ -80,7 +97,7 @@ function useSearch(query: string): { results: SearchResults; loading: boolean } 
 
 /** The header search: employees, departments, positions, roles and pages; opens with Ctrl + K. */
 export function GlobalSearch() {
-    const { auth } = usePage<SharedData>().props;
+    const can = useCan();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(0);
@@ -102,12 +119,15 @@ export function GlobalSearch() {
         () =>
             [
                 { label: 'Главная', href: '/dashboard', icon: LayoutGrid },
-                { label: 'Сотрудники', href: '/employees', icon: Users },
-                { label: 'Структура компании', href: '/departments', icon: Network },
-                ...(auth.can.manageDirectories ? [{ label: 'Справочники', href: '/directories', icon: BookMarked }] : []),
+                ...(can('employees.view') ? [{ label: 'Сотрудники', href: '/employees', icon: Users }] : []),
+                ...(can('departments.view') ? [{ label: 'Структура компании', href: '/departments', icon: Network }] : []),
+                ...(can('equipment.view') ? [{ label: 'Оборудование', href: '/equipment', icon: Laptop }] : []),
+                // The journal keeps to whoever manages the fleet, as the page does.
+                ...(can('equipment.journal') ? [{ label: 'Журнал операций', href: '/equipment/journal', icon: History }] : []),
+                ...(can('directories.view') ? [{ label: 'Справочники', href: '/directories', icon: BookMarked }] : []),
                 { label: 'Настройки', href: '/settings', icon: Settings },
             ] as const,
-        [auth.can.manageDirectories],
+        [can],
     );
 
     const items = useMemo<Item[]>(() => {
@@ -125,6 +145,14 @@ export function GlobalSearch() {
                 ) : (
                     <PersonAvatar name={person.name} className="size-8 text-[11px]" />
                 ),
+            })),
+            ...results.equipment.map((unit) => ({
+                key: `equipment-${unit.id}`,
+                group: 'Оборудование',
+                label: unit.name,
+                hint: [`инв. № ${unit.inventory_number}`, unit.holder ?? statusLabel[unit.status]].join(' · '),
+                href: route('equipment.show', unit.id),
+                icon: <CategoryChip icon={unit.icon} size={32} iconSize={16} />,
             })),
             ...results.departments.map((department) => ({
                 key: `department-${department.id}`,
@@ -148,6 +176,22 @@ export function GlobalSearch() {
                 hint: 'Сотрудники с этой позицией',
                 href: route('employees.index', { role: [role.name] }),
                 icon: iconBox(IdCard),
+            })),
+            ...results.equipmentTypes.map((type) => ({
+                key: `equipment-type-${type.id}`,
+                group: 'Категории техники',
+                label: type.name,
+                hint: 'Техника этой категории',
+                href: route('equipment.index', { tab: 'all', type: [type.id] }),
+                icon: <CategoryChip icon={type.icon} size={32} iconSize={16} />,
+            })),
+            ...results.languages.map((language) => ({
+                key: `language-${language.id}`,
+                group: 'Языки',
+                label: language.name,
+                hint: 'Сотрудники, которые им владеют',
+                href: route('employees.index', { language: [language.id] }),
+                icon: iconBox(Languages),
             })),
             // With nothing typed, the pages work as quick navigation.
             ...pages
@@ -208,7 +252,9 @@ export function GlobalSearch() {
             <Dialog open={open} onOpenChange={changeOpen}>
                 <DialogContent className="top-[12vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:last-child]:top-3.5">
                     <DialogTitle className="sr-only">Поиск</DialogTitle>
-                    <DialogDescription className="sr-only">Сотрудники, отделы, должности, позиции и разделы.</DialogDescription>
+                    <DialogDescription className="sr-only">
+                        Сотрудники, оборудование, отделы, должности, позиции, категории техники, языки и разделы.
+                    </DialogDescription>
 
                     <label className="flex items-center gap-2 border-b px-4 pr-12">
                         {loading ? (
@@ -222,7 +268,7 @@ export function GlobalSearch() {
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             onKeyDown={onKeyDown}
-                            placeholder="Сотрудник, отдел, должность…"
+                            placeholder="Сотрудник, инв. номер, отдел, должность…"
                             role="combobox"
                             aria-expanded="true"
                             aria-controls="global-search-results"

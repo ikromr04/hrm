@@ -2,11 +2,13 @@ import { LucideIcon } from 'lucide-react';
 
 export interface Auth {
     user: User;
-    /** What the current user may do; mirrors server-side gates. */
-    can: {
-        manageDirectories: boolean;
-        manageEmployees: boolean;
-    };
+    /** Every right in the catalogue with a yes or a no; see lib/access.ts. */
+    can: Record<string, boolean>;
+    /**
+     * Whether they may hand access out. Not a right: an administrator holds
+     * every right there is and still may not decide who else gets them.
+     */
+    manageAccess: boolean;
 }
 
 export interface BreadcrumbItem {

@@ -29,7 +29,7 @@ class DepartmentPagesTest extends TestCase
         $top->users()->attach($head, ['is_head' => true]);
         $unit->users()->attach([$a->id => ['is_head' => false], $b->id => ['is_head' => false], $fired->id => ['is_head' => false]]);
 
-        $this->actingAs($a)->get('/departments')->assertOk()->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->mayLookAround($a))->get('/departments')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('departments/index')
             ->where('employees_count', 3)
             ->where('departments.0.name', 'Департамент')
@@ -56,7 +56,7 @@ class DepartmentPagesTest extends TestCase
         $unit->users()->attach($head, ['is_head' => true]);
         $unit->users()->attach([$member->id => ['is_head' => false], $fired->id => ['is_head' => false]]);
 
-        $this->actingAs(User::factory()->create())->get("/departments/{$unit->id}")->assertOk()->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->colleague())->get("/departments/{$unit->id}")->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('departments/show')
             // Its own branch for the chart: itself and what is below, not its parent.
             ->where('chart', fn ($chart) => collect($chart)->pluck('id')->all() === [$sub->id, $unit->id])

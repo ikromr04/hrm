@@ -156,7 +156,7 @@ class EmployeeWizardStepsTest extends TestCase
     {
         $employee = $this->employee();
 
-        $this->actingAs(User::factory()->create());
+        $this->actingAs($this->colleague());
         $this->post("/employees/{$employee->id}/educations/many", ['records' => []])->assertForbidden();
         $this->post("/employees/{$employee->id}/experiences/many", ['records' => []])->assertForbidden();
         $this->post("/employees/{$employee->id}/equipment", ['equipment' => []])->assertForbidden();

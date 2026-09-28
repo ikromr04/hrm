@@ -42,14 +42,16 @@ class UserSeederTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $this->assertSame(24, Role::count());
+        $this->assertSame(25, Role::count());
         $this->assertSame('Администратор', Role::findByName('admin')->title);
         $this->assertSame('Руководитель Департамента', Role::findByName('department-head')->title);
 
         $this->assertSame(0, User::doesntHave('roles')->count());
         // Many-to-many: some employees hold a second position, never more.
         $this->assertSame(0, User::has('roles', '>', 2)->count());
-        $this->assertSame(['admin'], User::role('admin')->first()->getRoleNames()->all());
+        // The demo superuser is both: an administrator, and the one who says
+        // who else may be one.
+        $this->assertSame(['sysadmin', 'admin'], User::role('sysadmin')->sole()->getRoleNames()->all());
         $this->assertSame(2, User::role('department-head')->count());
         $this->assertSame(6, User::role('division-head')->count());
     }
