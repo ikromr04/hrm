@@ -39,13 +39,18 @@ interface Department {
 
 type View = 'chart' | 'list';
 
-const VIEW_KEY = 'department.view';
+/** Bumped with the default below, or a saved 'chart' would still win. */
+const VIEW_KEY = 'department.view.v2';
 
+/**
+ * The list opens the page: it is what a department is usually opened for — who
+ * works here — and the chart is a step aside from that.
+ */
 function savedView(): View {
     try {
-        return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'chart';
+        return localStorage.getItem(VIEW_KEY) === 'chart' ? 'chart' : 'list';
     } catch {
-        return 'chart';
+        return 'list';
     }
 }
 
