@@ -17,8 +17,8 @@ class ProfileUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-
+            // The name is what HR files on a colleague's card, not something
+            // they set here; this page settles the address they sign in with.
             'email' => [
                 'required',
                 'string',

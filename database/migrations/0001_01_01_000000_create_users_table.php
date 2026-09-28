@@ -33,6 +33,10 @@ return new class extends Migration
 
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
+            // An address asked for but not yet confirmed. It becomes the real
+            // one only when the letter sent to it is answered, so a typo in
+            // settings cannot lock anybody out.
+            $table->string('pending_email')->nullable();
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();

@@ -1,5 +1,4 @@
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Transition } from '@headlessui/react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -18,16 +17,23 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: boolean; status?: string }) {
+/**
+ * The address a person signs in with, and the only thing about themselves they
+ * settle here: the name, the position and the rest of the card are filed by HR.
+ *
+ * A new address is asked for rather than set. A letter goes to the address
+ * asked for, and the account keeps the one it has until that letter is
+ * answered — a typo would otherwise lock somebody out of the system.
+ */
+export default function Profile({ pendingEmail, status }: { pendingEmail: string | null; status?: string }) {
     const { auth } = usePage<SharedData>().props;
 
-    const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
-        name: auth.user.name,
-        email: auth.user.email,
+    const { data, setData, patch, errors, processing } = useForm({
+        email: pendingEmail ?? auth.user.email,
     });
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
 
         patch(route('profile.update'));
     };
@@ -38,76 +44,63 @@ export default function Profile({ mustVerifyEmail, status }: { mustVerifyEmail: 
 
             <SettingsLayout>
                 <div className="space-y-6">
-                    <HeadingSmall title="Учётная запись" description="Имя и адрес, с которым вы входите в систему" />
+                    <HeadingSmall title="Учётная запись" description="Адрес, с которым вы входите в систему" />
 
                     <form onSubmit={submit} className="space-y-6">
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="name">Имя</Label>
-
-                            <Input
-                                id="name"
-                                className="mt-1 block w-full"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                required
-                                autoComplete="name"
-                                placeholder="Имя"
-                            />
-
-                            <InputError className="mt-2" message={errors.name} />
-                        </div>
-
-                        <div className="grid content-start gap-2">
+                        <div className="grid max-w-md content-start gap-2">
                             <Label htmlFor="email">Электронная почта</Label>
 
                             <Input
                                 id="email"
                                 type="email"
-                                className="mt-1 block w-full"
                                 value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
+                                onChange={(event) => setData('email', event.target.value)}
                                 required
                                 autoComplete="username"
                                 placeholder="name@evolet.tj"
+                                aria-invalid={!!errors.email}
                             />
 
-                            <InputError className="mt-2" message={errors.email} />
+                            <InputError message={errors.email} />
+
+                            <p className="text-muted-foreground text-[13px]">
+                                Сейчас вход по адресу <span className="font-medium">{auth.user.email}</span>.
+                            </p>
                         </div>
 
-                        {mustVerifyEmail && auth.user.email_verified_at === null && (
-                            <div>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Адрес не подтверждён.{' '}
-                                    <Link
-                                        href={route('verification.send')}
-                                        method="post"
-                                        as="button"
-                                        className="text-foreground rounded-md text-sm underline focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
-                                    >
-                                        Отправить письмо ещё раз.
-                                    </Link>
+                        {status === 'email-changed' && (
+                            <p className="text-brand-strong text-sm font-medium dark:text-[#C5E27A]">Адрес подтверждён — теперь входите по нему.</p>
+                        )}
+
+                        {pendingEmail !== null && (
+                            <div className="max-w-md space-y-2 rounded-lg border p-4">
+                                <p className="text-sm">
+                                    Ждём подтверждения адреса <span className="font-medium">{pendingEmail}</span>.
+                                </p>
+                                <p className="text-muted-foreground text-[13px]">
+                                    {status === 'email-confirmation-sent'
+                                        ? 'Письмо отправлено. Перейдите по ссылке из него — до этого вход по прежнему адресу.'
+                                        : 'Перейдите по ссылке из письма — до этого вход по прежнему адресу. Ссылка действует час.'}
                                 </p>
 
-                                {status === 'verification-link-sent' && (
-                                    <div className="text-brand-strong mt-2 text-sm font-medium dark:text-[#C5E27A]">
-                                        Новое письмо отправлено на вашу почту.
-                                    </div>
-                                )}
+                                <div className="flex items-center gap-3 pt-1">
+                                    <Button type="submit" variant="outline" size="sm" disabled={processing}>
+                                        Отправить письмо ещё раз
+                                    </Button>
+                                    <Link
+                                        href={route('email.cancel')}
+                                        method="delete"
+                                        as="button"
+                                        className="text-muted-foreground text-[13px] underline"
+                                    >
+                                        Отменить смену
+                                    </Link>
+                                </div>
                             </div>
                         )}
 
                         <div className="flex items-center gap-4">
                             <Button disabled={processing}>Сохранить</Button>
-
-                            <Transition
-                                show={recentlySuccessful}
-                                enter="transition ease-in-out"
-                                enterFrom="opacity-0"
-                                leave="transition ease-in-out"
-                                leaveTo="opacity-0"
-                            >
-                                <p className="text-muted-foreground text-sm">Сохранено</p>
-                            </Transition>
                         </div>
                     </form>
                 </div>
