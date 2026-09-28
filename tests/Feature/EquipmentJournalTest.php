@@ -78,7 +78,7 @@ class EquipmentJournalTest extends TestCase
 
     public function test_a_correction_is_named_by_the_block_it_was_made_in()
     {
-        $unit = Equipment::factory()->ofType($this->type())->create(['condition' => 'Новое, в упаковке', 'memory' => '8 ГБ / SSD 256 ГБ']);
+        $unit = Equipment::factory()->ofType($this->type())->create(['condition' => 'Новое, в упаковке', 'name' => 'Ноутбук Dell']);
         $admin = $this->admin();
 
         $this->actingAs($admin)->put("/equipment/{$unit->id}/state", [
@@ -90,7 +90,7 @@ class EquipmentJournalTest extends TestCase
         $event = $unit->events()->where('kind', 'condition')->sole();
         $this->assertSame(['Новое, в упаковке', 'Рабочее, следы эксплуатации'], $event->diff['condition']);
         // Untouched fields stay out of it.
-        $this->assertArrayNotHasKey('memory', $event->diff);
+        $this->assertArrayNotHasKey('name', $event->diff);
 
         // So is the box it comes in, and so is everything else, together.
         $this->actingAs($admin)->put("/equipment/{$unit->id}/accessories", ['accessories' => ['Сумка']]);
@@ -362,7 +362,7 @@ class EquipmentJournalTest extends TestCase
 
     public function test_the_journal_keeps_to_whoever_manages_the_fleet()
     {
-        $this->actingAs(User::factory()->create())->get('/equipment/journal')->assertForbidden();
+        $this->actingAs($this->colleague())->get('/equipment/journal')->assertForbidden();
         $this->actingAs($this->admin())->get('/equipment/journal')->assertOk();
     }
 

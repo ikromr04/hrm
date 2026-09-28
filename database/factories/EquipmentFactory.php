@@ -63,8 +63,6 @@ class EquipmentFactory extends Factory
         return [
             'equipment_type_id' => EquipmentType::factory(),
             'name' => fake()->words(2, true),
-            'maker' => null,
-            'serial_number' => strtoupper(fake()->bothify('#?#?#?#')),
             'inventory_number' => 'EV-'.fake()->unique()->numerify('####'),
             'condition' => fake()->randomElement(['Рабочее, без повреждений', 'Рабочее, следы эксплуатации', 'Новое, в упаковке']),
             'checked_at' => fake()->dateTimeBetween('-8 months', 'now'),
@@ -86,14 +84,69 @@ class EquipmentFactory extends Factory
             return [
                 'equipment_type_id' => $type->id,
                 'name' => trim("{$kind} {$maker} {$model}"),
-                'maker' => $maker,
-                'model' => $model,
-                // Only computers have any of this worth writing down.
-                'processor' => $type->name === 'Ноутбуки' ? fake()->randomElement(self::PROCESSORS) : null,
-                'memory' => $type->name === 'Ноутбуки' ? fake()->randomElement(self::MEMORY) : null,
-                'accessories' => self::ACCESSORIES[$type->name] ?? [],
+                // Kept for afterCreating, which writes them where they belong now.
+                'accessories' => ($type->has_accessories ?? true) ? self::ACCESSORIES[$type->name] ?? [] : null,
             ];
+        })->afterCreating(function (Equipment $unit) use ($type) {
+            [$maker, $model] = self::modelOf($type, $unit->name);
+
+            $this->fillFields($unit, ['Производитель' => $maker, 'Модель' => $model]);
         });
+    }
+
+    /**
+     * The maker and the model behind a name the factory made up, so the fields
+     * agree with what the unit is called.
+     *
+     * @return array{?string, ?string}
+     */
+    private static function modelOf(EquipmentType $type, string $name): array
+    {
+        foreach (self::MODELS[$type->name] ?? [] as [$kind, $maker, $model]) {
+            if (trim("{$kind} {$maker} {$model}") === $name) {
+                return [$maker, $model];
+            }
+        }
+
+        return [null, null];
+    }
+
+    /**
+     * Something plausible in each of the category's fields, so a demo card is
+     * not a page of blanks. A list picks one of its own choices; everything else
+     * is made up in the shape the field asks for.
+     *
+     * @param  array<string, string|null>  $known  Values the caller already has.
+     */
+    private function fillFields(Equipment $unit, array $known = []): void
+    {
+        foreach ($unit->type?->fields ?? [] as $field) {
+            $value = match (true) {
+                array_key_exists($field->name, $known) => $known[$field->name],
+                $field->name === 'Серийный номер' => strtoupper(fake()->bothify('#?#?#?#')),
+                $field->type === 'select' => fake()->randomElement($field->choices()),
+                $field->type === 'boolean' => fake()->boolean() ? '1' : '0',
+                $field->type === 'date' => fake()->dateTimeBetween('+2 months', '+3 years')->format('Y-m-d'),
+                $field->name === 'Процессор' => fake()->randomElement(self::PROCESSORS),
+                $field->name === 'Память / диск' => fake()->randomElement(self::MEMORY),
+                $field->name === 'IMEI' => (string) fake()->numerify('###############'),
+                $field->name === 'Номер' => '+992 '.fake()->numerify('## ### ####'),
+                // A number field is a number field, but a year and a diagonal
+                // look silly in each other's place.
+                $field->type === 'number' => (string) match (true) {
+                    str_contains($field->name, 'Год') => fake()->numberBetween(2019, 2026),
+                    str_contains($field->name, 'Диагональ') => fake()->randomElement([21.5, 23.8, 24, 27, 32]),
+                    default => fake()->numberBetween(1, 100),
+                },
+                default => null,
+            };
+
+            if ($value === null) {
+                continue;
+            }
+
+            $unit->fieldValues()->updateOrCreate(['equipment_field_id' => $field->id], ['value' => $value]);
+        }
     }
 
     /** Handed to someone, on a date since they joined. */

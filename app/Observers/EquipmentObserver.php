@@ -46,7 +46,9 @@ class EquipmentObserver
         // list is a list on either side of the arrow. What `getChanges` holds
         // is on its way to the database — for the accessories that is raw
         // JSON, which nobody wants to read.
-        $changes = EquipmentEvent::diffOf($equipment, self::IGNORED);
+        $own = EquipmentEvent::diffOf($equipment, self::IGNORED);
+        // What the category's own fields did travels with the same entry.
+        $changes = [...$own, ...$equipment->journalExtra];
 
         if ($changes === []) {
             return;
@@ -54,8 +56,9 @@ class EquipmentObserver
 
         // A move is named by where it went. A correction is named by the block
         // of the card it was made in, so the journal reads as the card does;
-        // a save that spans blocks is just a change.
-        $fields = array_keys($changes);
+        // a save that spans blocks is just a change. Only the row's own fields
+        // name an operation: a category field moving is a plain change.
+        $fields = array_keys($own);
 
         $kind = match (true) {
             array_key_exists('status', $changes) => match ($equipment->status) {
@@ -63,7 +66,7 @@ class EquipmentObserver
                 'stock' => 'stocked',
                 default => 'written_off',
             },
-            array_diff($fields, self::STATE) === [] => 'condition',
+            $fields !== [] && array_diff($fields, self::STATE) === [] => 'condition',
             // Handing a unit to somebody else is a handover like any other, so
             // it is recorded as one. A date on its own is not: that is a
             // correction to the date, and it stays a plain change.
@@ -81,5 +84,6 @@ class EquipmentObserver
 
         // Said once, for the save that asked for it.
         $equipment->journalNote = null;
+        $equipment->journalExtra = [];
     }
 }

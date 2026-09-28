@@ -30,6 +30,16 @@ class Equipment extends Model
      */
     public ?string $journalNote = null;
 
+    /**
+     * Changes to fold into the journal entry the next save writes: what moved
+     * in the fields of the unit's category, which live in a table of their own
+     * and so are invisible to the row's own diff. Like the note, it lives only
+     * as long as the request that sets it.
+     *
+     * @var array<string, array{mixed, mixed}>
+     */
+    public array $journalExtra = [];
+
     /** In the order the list's tabs show them. */
     public const STATUSES = ['issued', 'stock', 'written_off'];
 
@@ -41,12 +51,7 @@ class Equipment extends Model
     protected $fillable = [
         'equipment_type_id',
         'name',
-        'maker',
-        'model',
-        'serial_number',
         'inventory_number',
-        'processor',
-        'memory',
         'condition',
         'checked_at',
         'next_inventory_at',
@@ -71,6 +76,15 @@ class Equipment extends Model
             'next_inventory_at' => 'date',
             'accessories' => 'array',
         ];
+    }
+
+    /**
+     * What this unit has in the fields of its category. Keyed by field id, so a
+     * form and a card can look a value up without walking the list.
+     */
+    public function fieldValues(): HasMany
+    {
+        return $this->hasMany(EquipmentFieldValue::class);
     }
 
     public function repairs(): HasMany

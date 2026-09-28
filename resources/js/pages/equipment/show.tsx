@@ -1,3 +1,4 @@
+import { CategoryFieldInputs } from '@/components/category-field-inputs';
 import { countActiveFilters, DataTable, useTableView, type ColumnDef, type ViewState } from '@/components/data-table';
 import { ChangeLines } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
@@ -14,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useCan } from '@/lib/access';
 import { formatDate } from '@/lib/employee';
 import {
     eventLabel,
@@ -27,6 +29,7 @@ import {
     type EventKind,
     type NameLookup,
 } from '@/lib/equipment';
+import { blankValues, readFieldValue, type CategoryField, type CategoryOption, type FieldValues } from '@/lib/equipment-fields';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -59,16 +62,14 @@ interface Unit {
     equipment_type_id: number;
     type: string | null;
     type_icon: string | null;
-    maker: string | null;
-    model: string | null;
-    serial_number: string | null;
     inventory_number: string;
-    processor: string | null;
-    memory: string | null;
+    /** What this category asks about, and what this unit answers. */
+    fields: (CategoryField & { value: string | null })[];
     condition: string | null;
     checked_at: string | null;
     next_inventory_at: string | null;
-    accessories: string[];
+    /** Null where the category says its units come with nothing. */
+    accessories: string[] | null;
     status: EquipmentStatus;
     issued_at: string | null;
     written_off_at: string | null;
@@ -104,7 +105,8 @@ interface Props {
     names: NameLookup;
     holders: { id: number; name: string }[];
     /** The categories the «Характеристики» form offers; empty for a viewer. */
-    types: { id: number; name: string }[];
+    /** Every category with its own fields, for the specs form. */
+    types: CategoryOption[];
     neighbours: { prev: Neighbour; next: Neighbour };
     canEdit: boolean;
 }
@@ -292,25 +294,40 @@ function Table({ head, children }: { head: string[]; children: ReactNode }) {
 /* --------------------------------------------------------------------- dialogs */
 
 /** The "Характеристики" block in a form: what the unit is and what it cost. */
-function SpecsDialog({ unit, types, onClose }: { unit: Unit; types: { id: number; name: string }[]; onClose: () => void }) {
+function SpecsDialog({ unit, types, onClose }: { unit: Unit; types: CategoryOption[]; onClose: () => void }) {
     const form = useForm({
         equipment_type_id: String(unit.equipment_type_id),
         name: unit.name,
-        maker: unit.maker ?? '',
-        model: unit.model ?? '',
-        serial_number: unit.serial_number ?? '',
         inventory_number: unit.inventory_number,
-        processor: unit.processor ?? '',
-        memory: unit.memory ?? '',
     });
+
+    // Kept beside the form, because they are keyed by field id rather than by a
+    // name the form knows about.
+    const [values, setValues] = useState<FieldValues>(
+        Object.fromEntries(unit.fields.map((field) => [field.id!, field.type === 'boolean' ? field.value === '1' : (field.value ?? '')])),
+    );
+
+    const fields = types.find((type) => String(type.id) === form.data.equipment_type_id)?.fields ?? [];
+
+    // Another category asks other things, so the answers start blank rather than
+    // being written into fields nobody chose.
+    const pickType = (id: string) => {
+        form.setData('equipment_type_id', id);
+        setValues(
+            id === String(unit.equipment_type_id)
+                ? Object.fromEntries(unit.fields.map((field) => [field.id!, field.type === 'boolean' ? field.value === '1' : (field.value ?? '')]))
+                : blankValues(types.find((type) => String(type.id) === id)?.fields ?? []),
+        );
+    };
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
+        form.transform((data) => ({ ...data, fields: values }));
         form.put(route('equipment.specs', unit.id), { preserveScroll: true, onSuccess: onClose });
     };
 
     /** Every field here is a label over an input; only the value differs. */
-    const text = (key: 'name' | 'maker' | 'model' | 'serial_number' | 'inventory_number' | 'processor' | 'memory', label: string, hint: string) => (
+    const text = (key: 'name' | 'inventory_number', label: string, hint: string) => (
         <div className="grid content-start gap-2">
             <Label htmlFor={`specs-${key}`}>{label}</Label>
             <Input
@@ -341,7 +358,7 @@ function SpecsDialog({ unit, types, onClose }: { unit: Unit; types: { id: number
                         <SearchableSelect
                             id="specs-type"
                             value={form.data.equipment_type_id}
-                            onChange={(value) => form.setData('equipment_type_id', value)}
+                            onChange={pickType}
                             options={types.map((type) => ({ value: String(type.id), label: type.name }))}
                             placeholder="Выберите категорию"
                             searchPlaceholder="Поиск категории"
@@ -351,20 +368,20 @@ function SpecsDialog({ unit, types, onClose }: { unit: Unit; types: { id: number
                         <InputError message={form.errors.equipment_type_id} />
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        {text('maker', 'Производитель', 'Dell')}
-                        {text('model', 'Модель', 'Latitude 5440')}
-                    </div>
+                    {text('inventory_number', 'Инвентарный номер', 'EV-0421')}
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        {text('serial_number', 'Серийный номер', '7K2L9P3')}
-                        {text('inventory_number', 'Инвентарный номер', 'EV-0421')}
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        {text('processor', 'Процессор', 'Intel Core i5-1335U')}
-                        {text('memory', 'Память / диск', '16 ГБ / SSD 512 ГБ')}
-                    </div>
+                    {/* Whatever this category asks about; nothing at all for a
+                        category with no fields of its own. */}
+                    {fields.length > 0 && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <CategoryFieldInputs
+                                fields={fields}
+                                values={values}
+                                onChange={(id, value) => setValues((held) => ({ ...held, [id]: value }))}
+                                error={(key) => (form.errors as Record<string, string | undefined>)[key]}
+                            />
+                        </div>
+                    )}
 
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose}>
@@ -479,8 +496,10 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
 
 /** What comes with the unit, one line each; an empty line drops out on save. */
 function AccessoriesDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
-    const [items, setItems] = useState<string[]>(unit.accessories.length > 0 ? unit.accessories : ['']);
-    const form = useForm<{ accessories: string[] }>({ accessories: unit.accessories });
+    // The dialog only opens for a category that has a list at all.
+    const held = unit.accessories ?? [];
+    const [items, setItems] = useState<string[]>(held.length > 0 ? held : ['']);
+    const form = useForm<{ accessories: string[] }>({ accessories: held });
 
     const change = (index: number, value: string) => setItems(items.map((item, at) => (at === index ? value : item)));
 
@@ -839,6 +858,7 @@ function narrowJournal(events: JournalEvent[], filters: JournalFilters): Journal
 /* ------------------------------------------------------------------------ page */
 
 export default function EquipmentShow({ unit, repairs, events, names, holders, types, neighbours, canEdit }: Props) {
+    const can = useCan();
     const [tab, setTab] = useTab();
     const [asking, setAsking] = useState<AskedMove | null>(null);
     const [repairing, setRepairing] = useState(false);
@@ -929,13 +949,10 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                         </div>
 
                         <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
+                            {/* The two things every unit has, whatever it is. What
+                                else it is made of depends on the category, and is
+                                read in "Характеристики" below. */}
                             <span>Инв. № {unit.inventory_number}</span>
-                            {unit.serial_number && (
-                                <>
-                                    <span aria-hidden="true">·</span>
-                                    <span>S/N {unit.serial_number}</span>
-                                </>
-                            )}
                             {unit.type && (
                                 <>
                                     <span aria-hidden="true">·</span>
@@ -993,31 +1010,33 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                             </Link>
                                         )}
                                     </Field>
-                                    <Field label="Производитель">{unit.maker}</Field>
-                                    <Field label="Модель">{unit.model}</Field>
-                                    <Field label="Серийный номер">{unit.serial_number}</Field>
                                     <Field label="Инвентарный номер">{unit.inventory_number}</Field>
-                                    <Field label="Процессор">{unit.processor}</Field>
-                                    <Field label="Память / диск">{unit.memory}</Field>
+                                    {unit.fields.map((field) => (
+                                        <Field key={field.id} label={field.name}>
+                                            {readFieldValue(field)}
+                                        </Field>
+                                    ))}
                                 </Fields>
                             </Section>
 
-                            <Section
-                                title="Комплектация"
-                                action={canEdit && <EditButton what="комплектацию" onClick={() => setEditing('accessories')} />}
-                            >
-                                {unit.accessories.length === 0 ? (
-                                    <p className="text-muted-foreground text-sm">Ничего не записано</p>
-                                ) : (
-                                    <div className="flex flex-wrap gap-2">
-                                        {unit.accessories.map((item) => (
-                                            <StatusBadge key={item} tone="neutral">
-                                                {item}
-                                            </StatusBadge>
-                                        ))}
-                                    </div>
-                                )}
-                            </Section>
+                            {unit.accessories !== null && (
+                                <Section
+                                    title="Комплектация"
+                                    action={canEdit && <EditButton what="комплектацию" onClick={() => setEditing('accessories')} />}
+                                >
+                                    {unit.accessories.length === 0 ? (
+                                        <p className="text-muted-foreground text-sm">Ничего не записано</p>
+                                    ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                            {unit.accessories.map((item) => (
+                                                <StatusBadge key={item} tone="neutral">
+                                                    {item}
+                                                </StatusBadge>
+                                            ))}
+                                        </div>
+                                    )}
+                                </Section>
+                            )}
                         </div>
 
                         <div className="flex flex-col gap-4">
@@ -1075,7 +1094,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             {canEdit && moves.length > 0 && <MoveGroup moves={moves} onPick={setAsking} />}
 
                             {/* Written off and nowhere left to go: only striking it off remains. */}
-                            {canEdit && unit.status === 'written_off' && (
+                            {can('equipment.delete') && unit.status === 'written_off' && (
                                 <Button
                                     variant="outline"
                                     className="border-[#F5C9C4] text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"

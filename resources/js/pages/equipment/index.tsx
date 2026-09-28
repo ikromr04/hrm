@@ -27,6 +27,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
+import { useCan } from '@/lib/access';
 import { formatDate } from '@/lib/employee';
 import { statusLabel, statusTone, type EquipmentStatus as Status } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
@@ -54,8 +55,8 @@ import { useEffect, useMemo, useState } from 'react';
 interface Unit {
     id: number;
     name: string;
-    maker: string | null;
-    serial_number: string | null;
+    /** The first couple of things its category asks about, as it answered them. */
+    details: string | null;
     inventory_number: string;
     type: string | null;
     type_icon: string | null;
@@ -123,10 +124,15 @@ function RowActions({
 }: {
     unit: Unit;
     onAsk: (move: { unit: Unit; kind: AskedMove }) => void;
-    onDelete: (unit: Unit) => void;
+    /** Missing for a viewer who may not strike a record out. */
+    onDelete?: (unit: Unit) => void;
 }) {
+    const can = useCan();
+
+    // A unit that has been written off has nowhere left to move: the only thing
+    // to do with the record is to strike it out.
     if (unit.status === 'written_off') {
-        return (
+        return onDelete ? (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="text-muted-foreground size-8" aria-label={`Действия: ${unit.name}`}>
@@ -140,7 +146,11 @@ function RowActions({
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-        );
+        ) : null;
+    }
+
+    if (!can('equipment.manage')) {
+        return null;
     }
 
     const moves: { kind: AskedMove; icon: LucideIcon }[] = [
@@ -279,6 +289,9 @@ function buildColumns(options: Options): ColumnDef[] {
 const defaultView = (): ViewState => ({ hidden: [], pinned: { left: ['holder'], right: [] } });
 
 export default function EquipmentIndex({ equipment, filters, tab, sort, sortable, perPage, perPageOptions, counts, options, canEdit }: Props) {
+    const can = useCan();
+    const canJournal = can('equipment.journal');
+    const canDelete = can('equipment.delete');
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(defaultView, []);
     const { view, setView, pin, toggleHidden } = useTableView(
@@ -345,9 +358,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                         <div className="flex min-w-0 flex-col gap-0.5">
                             {/* Brand colour and an underline on hover: the app's mark of a link. */}
                             <span className="text-brand-strong truncate font-medium group-hover:underline dark:text-[#C5E27A]">{unit.name}</span>
-                            <span className="text-muted-foreground truncate text-[13px]">
-                                {[unit.maker, unit.serial_number && `S/N ${unit.serial_number}`].filter(Boolean).join(' · ')}
-                            </span>
+                            <span className="text-muted-foreground truncate text-[13px]">{unit.details}</span>
                         </div>
                     </Link>
                 );
@@ -467,21 +478,25 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    {canEdit && (
+                    {(canJournal || canEdit) && (
                         <>
-                            <Button variant="outline" className="h-8" asChild>
-                                <Link href={route('equipment.journal')}>
-                                    <History />
-                                    Журнал
-                                </Link>
-                            </Button>
+                            {canJournal && (
+                                <Button variant="outline" className="h-8" asChild>
+                                    <Link href={route('equipment.journal')}>
+                                        <History />
+                                        Журнал
+                                    </Link>
+                                </Button>
+                            )}
 
-                            <Button className="h-8" asChild>
-                                <Link href={route('equipment.create')}>
-                                    <Plus />
-                                    Добавить оборудование
-                                </Link>
-                            </Button>
+                            {canEdit && (
+                                <Button className="h-8" asChild>
+                                    <Link href={route('equipment.create')}>
+                                        <Plus />
+                                        Добавить оборудование
+                                    </Link>
+                                </Button>
+                            )}
                         </>
                     )}
                 </div>
@@ -502,7 +517,11 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                     onPin={pin}
                     onHide={(key) => toggleHidden(key, true)}
                     lockedKey="holder"
-                    actions={canEdit ? (unit) => <RowActions unit={unit} onAsk={setAsking} onDelete={setDeleting} /> : undefined}
+                    actions={
+                        canEdit || canDelete
+                            ? (unit) => <RowActions unit={unit} onAsk={setAsking} onDelete={canDelete ? setDeleting : undefined} />
+                            : undefined
+                    }
                     empty="Ничего не найдено."
                     footer={
                         <>

@@ -23,7 +23,22 @@ class EquipmentType extends Model
     protected $fillable = [
         'name',
         'icon',
+        'has_accessories',
     ];
+
+    protected function casts(): array
+    {
+        return ['has_accessories' => 'boolean'];
+    }
+
+    /**
+     * What units of this category are described by, in the order the card and
+     * the form put them in.
+     */
+    public function fields(): HasMany
+    {
+        return $this->hasMany(EquipmentField::class)->orderBy('position')->orderBy('id');
+    }
 
     /**
      * Every unit in this category, whoever holds it.

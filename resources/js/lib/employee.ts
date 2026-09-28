@@ -101,8 +101,8 @@ export interface WorkExperience {
 export interface Equipment {
     id: number;
     name: string;
-    maker: string | null;
-    serial_number: string | null;
+    /** The first couple of things its category asks about, as it answered them. */
+    details: string | null;
     inventory_number: string;
     /** Category from the directory, e.g. "Ноутбуки". */
     type: string | null;

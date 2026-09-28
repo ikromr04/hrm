@@ -1,18 +1,22 @@
+import { CategoryFieldsEditor } from '@/components/category-fields-editor';
 import { IconChip } from '@/components/equipment-icon';
 import InputError from '@/components/input-error';
 import { PeoplePicker, type PickablePerson } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { accessDefaults, useCan, type AccessSection } from '@/lib/access';
+import { type CategoryField, type FieldTypeOption } from '@/lib/equipment-fields';
 import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { Link, router, useForm } from '@inertiajs/react';
 import { LoaderCircle, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { type FormEventHandler, useMemo, useState } from 'react';
+import { useMemo, useState, type FormEventHandler } from 'react';
 
 export interface DirectoryItem {
     id: number;
@@ -31,6 +35,12 @@ export interface DirectoryItem {
     member_ids?: number[];
     /** Equipment categories only: which drawing stands for it. */
     icon?: string | null;
+    /** Positions only: the rights the position carries, by key. */
+    permissions?: string[];
+    /** Equipment categories only: what units of this category are described by. */
+    fields?: CategoryField[];
+    /** Equipment categories only: whether its units come with anything at all. */
+    has_accessories?: boolean;
 }
 
 interface Labels {
@@ -61,6 +71,19 @@ interface DirectoryManagerProps {
     people?: PickablePerson[];
     /** When given, each record is drawn by one of these (equipment categories). */
     icons?: string[];
+    /**
+     * When given, the dialog also ticks off what the record opens (positions).
+     * Absent for anybody who may not decide on access, and the rights are then
+     * left exactly as they are.
+     */
+    rights?: AccessSection[];
+    /**
+     * When given, the dialog also edits what units of the record are described
+     * by (equipment categories), choosing from these types of field.
+     */
+    fieldTypes?: FieldTypeOption[];
+    /** What a new record's fields start off as (equipment categories). */
+    defaultFields?: CategoryField[];
 }
 
 type Row = DirectoryItem & { depth: number };
@@ -104,7 +127,13 @@ export function DirectoryManager({
     tree = false,
     people,
     icons,
+    rights,
+    fieldTypes,
+    defaultFields,
 }: DirectoryManagerProps) {
+    // Looking at a directory and changing it are two different rights, so the
+    // same list serves both: without the second one it simply has no controls.
+    const canEdit = useCan()('directories.manage');
     const [query, setQuery] = useState('');
     const [editing, setEditing] = useState<DirectoryItem | 'new' | null>(null);
     const [deleting, setDeleting] = useState<DirectoryItem | null>(null);
@@ -126,10 +155,12 @@ export function DirectoryManager({
                         className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
                     />
                 </label>
-                <Button className="h-8" onClick={() => setEditing('new')}>
-                    <Plus />
-                    {labels.add}
-                </Button>
+                {canEdit && (
+                    <Button className="h-8" onClick={() => setEditing('new')}>
+                        <Plus />
+                        {labels.add}
+                    </Button>
+                )}
             </div>
 
             <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
@@ -148,9 +179,11 @@ export function DirectoryManager({
                                 <th scope="col" className="w-40 px-4 py-3 font-semibold">
                                     {countLabel}
                                 </th>
-                                <th scope="col" className="w-28 py-3 pr-6 pl-4">
-                                    <span className="sr-only">Действия</span>
-                                </th>
+                                {canEdit && (
+                                    <th scope="col" className="w-28 py-3 pr-6 pl-4">
+                                        <span className="sr-only">Действия</span>
+                                    </th>
+                                )}
                             </tr>
                         </thead>
                         <tbody>
@@ -206,35 +239,37 @@ export function DirectoryManager({
                                             </span>
                                         )}
                                     </td>
-                                    <td className="py-1.5 pr-6 pl-4">
-                                        <div className="flex justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-8"
-                                                aria-label={`Изменить: ${row.label}`}
-                                                onClick={() => setEditing(row)}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-8 text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
-                                                aria-label={`Удалить: ${row.label}`}
-                                                disabled={row.protected}
-                                                onClick={() => setDeleting(row)}
-                                            >
-                                                <Trash2 className="size-4" />
-                                            </Button>
-                                        </div>
-                                    </td>
+                                    {canEdit && (
+                                        <td className="py-1.5 pr-6 pl-4">
+                                            <div className="flex justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-8"
+                                                    aria-label={`Изменить: ${row.label}`}
+                                                    onClick={() => setEditing(row)}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="size-8 text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
+                                                    aria-label={`Удалить: ${row.label}`}
+                                                    disabled={row.protected}
+                                                    onClick={() => setDeleting(row)}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
 
                             {visible.length === 0 && (
                                 <tr className="border-t">
-                                    <td colSpan={people ? 4 : 3} className="text-muted-foreground px-6 py-12 text-center">
+                                    <td colSpan={(people ? 3 : 2) + (canEdit ? 1 : 0)} className="text-muted-foreground px-6 py-12 text-center">
                                         {items.length === 0 ? 'Пока пусто.' : 'Ничего не найдено.'}
                                     </td>
                                 </tr>
@@ -255,6 +290,9 @@ export function DirectoryManager({
                     tree={tree}
                     people={people}
                     icons={icons}
+                    rights={rights}
+                    fieldTypes={fieldTypes}
+                    defaultFields={defaultFields}
                     onClose={() => setEditing(null)}
                 />
             )}
@@ -273,6 +311,9 @@ function EditorDialog({
     tree,
     people,
     icons,
+    rights,
+    fieldTypes,
+    defaultFields,
     onClose,
 }: {
     item: DirectoryItem | null;
@@ -283,15 +324,39 @@ function EditorDialog({
     tree: boolean;
     people?: PickablePerson[];
     icons?: string[];
+    rights?: AccessSection[];
+    fieldTypes?: FieldTypeOption[];
+    defaultFields?: CategoryField[];
     onClose: () => void;
 }) {
-    const form = useForm<{ label: string; parent_id: number | null; head_ids: number[]; member_ids: number[]; icon: string | null }>({
+    // A position that is new to the system may look around, like every other
+    // one; what it opens beyond that is ticked here.
+    const form = useForm<{
+        label: string;
+        parent_id: number | null;
+        head_ids: number[];
+        member_ids: number[];
+        icon: string | null;
+        permissions: string[];
+    }>({
         label: item?.label ?? '',
         parent_id: item?.parent_id ?? null,
         head_ids: item?.heads?.map((head) => head.id) ?? [],
         member_ids: item?.member_ids ?? [],
         icon: item?.icon ?? null,
+        permissions: item?.permissions ?? [...accessDefaults],
     });
+
+    const [fields, setFields] = useState<CategoryField[]>(item?.fields ?? defaultFields ?? []);
+    // Most hardware comes with something, so a new category says it does until
+    // told otherwise.
+    const [hasAccessories, setHasAccessories] = useState(item?.has_accessories ?? true);
+
+    const togglePermission = (key: string) =>
+        form.setData(
+            'permissions',
+            form.data.permissions.includes(key) ? form.data.permissions.filter((held) => held !== key) : [...form.data.permissions, key],
+        );
 
     // A head is a member too, listed once: new heads leave the member list,
     // former heads stay in the department as ordinary members.
@@ -313,6 +378,21 @@ function EditorDialog({
             ...(tree ? { parent_id: data.parent_id } : {}),
             ...(people ? { head_ids: data.head_ids, member_ids: data.member_ids } : {}),
             ...(icons ? { icon: data.icon } : {}),
+            ...(rights && !item?.protected ? { permissions: data.permissions } : {}),
+            ...(fieldTypes
+                ? {
+                      has_accessories: hasAccessories,
+                      // A line left blank is a line somebody started and thought
+                      // better of, so it drops out rather than failing the save.
+                      fields: fields
+                          .filter((field) => field.name.trim() !== '')
+                          .map((field) => ({
+                              ...field,
+                              name: field.name.trim(),
+                              options: field.type === 'select' ? field.options.map((option) => option.trim()).filter(Boolean) : [],
+                          })),
+                  }
+                : {}),
         }));
         const options = { preserveScroll: true, onSuccess: onClose };
 
@@ -326,7 +406,7 @@ function EditorDialog({
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+            <DialogContent className={cn('max-h-[90vh] overflow-y-auto sm:max-w-md', fieldTypes && 'sm:max-w-2xl')}>
                 <form onSubmit={submit} className="flex flex-col gap-5">
                     <DialogHeader>
                         <DialogTitle>{item ? labels.edit : labels.create}</DialogTitle>
@@ -343,6 +423,41 @@ function EditorDialog({
                         />
                         <InputError message={errors[field]} />
                     </div>
+
+                    {rights && (
+                        <div className="grid content-start gap-2">
+                            <Label>Доступы</Label>
+                            {item?.protected ? (
+                                <p className="text-muted-foreground text-[13px]">
+                                    У этой позиции есть все доступы: она проходит любую проверку, и список здесь ничего не решает.
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="grid gap-3">
+                                        {rights.map((section) => (
+                                            <div key={section.key} className="grid gap-1.5">
+                                                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{section.title}</p>
+                                                {section.rights.map((right) => (
+                                                    <label key={right.key} className="flex items-start gap-2 text-sm">
+                                                        <Checkbox
+                                                            checked={form.data.permissions.includes(right.key)}
+                                                            onCheckedChange={() => togglePermission(right.key)}
+                                                            className="mt-0.5"
+                                                        />
+                                                        <span className="min-w-0">
+                                                            <span>{right.title}</span>
+                                                            <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <InputError message={listError('permissions')} />
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     {icons && (
                         <div className="grid content-start gap-2">
@@ -375,6 +490,31 @@ function EditorDialog({
                             <InputError message={errors.icon} />
                             <p className="text-muted-foreground text-[13px]">Без выбора — обычная коробка.</p>
                         </div>
+                    )}
+
+                    {fieldTypes && (
+                        <div className="grid content-start gap-2">
+                            <Label>Комплектация</Label>
+                            <label className="flex items-start gap-2 text-sm">
+                                <Checkbox checked={hasAccessories} onCheckedChange={() => setHasAccessories(!hasAccessories)} className="mt-0.5" />
+                                <span className="min-w-0">
+                                    Единицы этой категории идут в комплекте
+                                    <span className="text-muted-foreground block text-[13px]">
+                                        У ноутбука есть блок питания и сумка, у мыши — ничего. Без галочки поля «Комплектация» не будет ни в форме, ни
+                                        на карточке.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                    )}
+
+                    {fieldTypes && (
+                        <CategoryFieldsEditor
+                            fields={fields}
+                            types={fieldTypes}
+                            onChange={setFields}
+                            error={(key) => errors[key] ?? listError(key)}
+                        />
                     )}
 
                     {tree && (

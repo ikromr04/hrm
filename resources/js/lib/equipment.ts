@@ -76,8 +76,6 @@ export const fieldLabel: Record<string, string> = {
     model: 'Модель',
     serial_number: 'Серийный номер',
     inventory_number: 'Инвентарный номер',
-    processor: 'Процессор',
-    memory: 'Память / диск',
     condition: 'Состояние',
     checked_at: 'Последняя проверка',
     next_inventory_at: 'След. инвентаризация',
@@ -123,6 +121,9 @@ export function readValue(field: string, value: ChangeValue, names?: NameLookup)
     if (value === null || value === '') return '—';
     if (field === 'status') return statusLabel[String(value) as EquipmentStatus] ?? String(value);
     if (dateFields.includes(field)) return formatDate(String(value)) ?? String(value);
+    // A category's own field is recorded under its name, so the journal has no
+    // list to look it up in; a value that is plainly a date still reads as one.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return formatDate(String(value)) ?? String(value);
     // Holders and categories are kept by id; the name is looked up when the
     // entry is read, and an id nobody answers to falls back to the number.
     if (field.endsWith('_id')) return names?.[field]?.[String(value)] ?? `#${value}`;

@@ -1,5 +1,6 @@
 import { DirectoryManager } from '@/components/directory-manager';
 import DirectoriesLayout from '@/layouts/directories-layout';
+import { type CategoryField, type FieldTypeOption } from '@/lib/equipment-fields';
 
 interface EquipmentTypeItem {
     id: number;
@@ -7,15 +8,34 @@ interface EquipmentTypeItem {
     users_count: number;
     /** Which drawing stands for the category; null is the plain box. */
     icon: string | null;
+    /** Whether a unit of this category comes with anything at all. */
+    has_accessories: boolean;
+    /** What units of this category are described by. */
+    fields: CategoryField[];
 }
 
 /** Categories of hardware; the units themselves live in the equipment section. */
-export default function Equipment({ items, icons }: { items: EquipmentTypeItem[]; icons: string[] }) {
+export default function Equipment({
+    items,
+    icons,
+    fieldTypes,
+    defaultFields,
+}: {
+    items: EquipmentTypeItem[];
+    icons: string[];
+    fieldTypes: FieldTypeOption[];
+    /** What a new category starts off with, so nobody types these out again. */
+    defaultFields: CategoryField[];
+}) {
     return (
         <DirectoriesLayout title="Категории техники">
             <DirectoryManager
-                items={items.map((item) => ({ id: item.id, label: item.name, users_count: item.users_count, icon: item.icon }))}
+                items={items.map((item) => ({ ...item, label: item.name }))}
                 icons={icons}
+                // A monitor has a diagonal and no processor: what the units of a
+                // category are described by is decided here, category by category.
+                fieldTypes={fieldTypes}
+                defaultFields={defaultFields}
                 field="name"
                 route="directories.equipment"
                 labels={{

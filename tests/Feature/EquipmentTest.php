@@ -46,7 +46,7 @@ class EquipmentTest extends TestCase
     public function test_the_list_is_open_to_every_signed_in_colleague()
     {
         $this->get('/equipment')->assertRedirect('/login');
-        $this->actingAs(User::factory()->create())->get('/equipment')->assertOk();
+        $this->actingAs($this->colleague())->get('/equipment')->assertOk();
     }
 
     public function test_the_tabs_count_every_status()
@@ -186,14 +186,19 @@ class EquipmentTest extends TestCase
         $this->actingAs($admin)->get('/equipment?sort=serial_number')->assertSessionHasErrors('sort');
     }
 
-    public function test_search_covers_the_name_and_both_numbers()
+    public function test_search_covers_the_name_the_sticker_and_the_categorys_own_fields()
     {
-        Equipment::factory()->ofType($this->type())->create([
+        $type = $this->type();
+        $serial = $type->fields()->firstWhere('name', 'Серийный номер');
+
+        $unit = Equipment::factory()->ofType($type)->create([
             'name' => 'Ноутбук Dell Latitude 5440',
             'inventory_number' => 'EV-0421',
-            'serial_number' => '7K2L9P3',
         ]);
-        Equipment::factory()->ofType($this->type())->create(['name' => 'Монитор', 'inventory_number' => 'EV-9999', 'serial_number' => 'ZZZ']);
+        $unit->fieldValues()->updateOrCreate(['equipment_field_id' => $serial->id], ['value' => '7K2L9P3']);
+
+        $other = Equipment::factory()->ofType($type)->create(['name' => 'Монитор', 'inventory_number' => 'EV-9999']);
+        $other->fieldValues()->updateOrCreate(['equipment_field_id' => $serial->id], ['value' => 'ZZZ']);
 
         $admin = $this->admin();
 
@@ -212,8 +217,6 @@ class EquipmentTest extends TestCase
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
                 'name' => 'Ноутбук Dell Latitude 5440',
-                'maker' => 'Dell',
-                'serial_number' => '7K2L9P3',
                 'inventory_number' => 'EV-0421',
             ])
             ->assertSessionHasNoErrors();
@@ -228,7 +231,7 @@ class EquipmentTest extends TestCase
 
     public function test_a_new_unit_can_be_handed_over_as_it_is_entered()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())
             ->post('/equipment', [
@@ -278,7 +281,7 @@ class EquipmentTest extends TestCase
             );
 
         // A colleague who does not manage the fleet has no business there.
-        $this->actingAs(User::factory()->create())->get('/equipment/create')->assertForbidden();
+        $this->actingAs($this->colleague())->get('/equipment/create')->assertForbidden();
     }
 
     public function test_a_unit_can_be_photographed_as_it_is_entered()
@@ -310,7 +313,7 @@ class EquipmentTest extends TestCase
 
     public function test_a_handover_made_while_entering_a_unit_still_needs_its_date()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
 
         $this->actingAs($this->admin())
             ->post('/equipment', [
@@ -356,7 +359,7 @@ class EquipmentTest extends TestCase
 
     public function test_only_a_written_off_unit_may_be_struck_off_and_only_by_a_manager()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $inService = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
         $written = Equipment::factory()->ofType($this->type())->writtenOff()->create();
 
@@ -371,7 +374,7 @@ class EquipmentTest extends TestCase
 
     public function test_only_managers_add_equipment()
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
                 'name' => 'Ноутбук',
@@ -384,7 +387,7 @@ class EquipmentTest extends TestCase
 
     public function test_an_admin_hands_a_unit_to_an_employee()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->create();
 
         $this->actingAs($this->admin())
@@ -433,12 +436,16 @@ class EquipmentTest extends TestCase
 
     public function test_the_card_shows_the_unit_its_history_and_its_repairs()
     {
-        $employee = User::factory()->create(['surname' => 'Рахимов']);
+        $employee = $this->colleague(['surname' => 'Рахимов']);
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create([
             'name' => 'Ноутбук Dell Latitude 5440',
-            'processor' => 'Intel Core i5-1335U',
             'accessories' => ['Блок питания 65 Вт', 'Сумка'],
         ]);
+
+        // What this category asks about, as the directory set it up.
+        $field = $unit->type->fields()->firstWhere('name', 'Процессор');
+        $unit->fieldValues()->updateOrCreate(['equipment_field_id' => $field->id], ['value' => 'Intel Core i5-1335U']);
+        $at = $unit->type->fields->search(fn ($row) => $row->id === $field->id);
         $unit->repairs()->create(['kind' => 'Замена аккумулятора', 'started_at' => '2024-11-02', 'ended_at' => '2024-11-06']);
 
         $this->actingAs($this->admin())
@@ -446,7 +453,8 @@ class EquipmentTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('equipment/show')
                 ->where('unit.name', 'Ноутбук Dell Latitude 5440')
-                ->where('unit.processor', 'Intel Core i5-1335U')
+                ->where("unit.fields.{$at}.name", 'Процессор')
+                ->where("unit.fields.{$at}.value", 'Intel Core i5-1335U')
                 ->where('unit.accessories.1', 'Сумка')
                 ->has('repairs', 1)
             );
@@ -501,20 +509,23 @@ class EquipmentTest extends TestCase
         $taken = Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0999']);
         $admin = $this->admin();
 
+        $monitors = $this->type('Мониторы');
+        $model = $monitors->fields()->firstWhere('name', 'Модель');
+
         $this->actingAs($admin)
             ->put("/equipment/{$unit->id}/specs", [
-                'equipment_type_id' => $this->type('Мониторы')->id,
+                'equipment_type_id' => $monitors->id,
                 'name' => 'Монитор Dell P2422H',
-                'maker' => 'Dell',
-                'model' => 'P2422H',
+                // The model is a field of the category the unit lands in.
+                'fields' => [$model->id => 'P2422H'],
                 'inventory_number' => 'EV-0421',
             ])
             ->assertSessionHasNoErrors();
 
         $unit->refresh();
         $this->assertSame('Монитор Dell P2422H', $unit->name);
-        $this->assertSame('P2422H', $unit->model);
-        $this->assertSame($this->type('Мониторы')->id, $unit->equipment_type_id);
+        $this->assertSame('P2422H', $unit->fieldValues()->where('equipment_field_id', $model->id)->sole()->value);
+        $this->assertSame($monitors->id, $unit->equipment_type_id);
         // Its own number is not a clash with itself.
         $this->assertSame('EV-0421', $unit->inventory_number);
 
@@ -533,14 +544,14 @@ class EquipmentTest extends TestCase
             ->assertSessionHasNoErrors();
         $this->assertSame(['Кабель HDMI', 'Подставка'], $unit->fresh()->accessories);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->put("/equipment/{$unit->id}/accessories", ['accessories' => []])
             ->assertForbidden();
     }
 
     public function test_the_inventory_block_is_filled_in_by_hand()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
         // Somebody checks a unit where it stands, without moving it.
@@ -561,7 +572,7 @@ class EquipmentTest extends TestCase
 
     public function test_service_is_recorded_without_moving_the_unit()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
         $this->actingAs($this->admin())
@@ -584,7 +595,7 @@ class EquipmentTest extends TestCase
     {
         $unit = Equipment::factory()->ofType($this->type())->create();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($this->colleague())
             ->post("/equipment/{$unit->id}/repairs", ['kind' => 'Диагностика', 'started_at' => '2026-09-01'])
             ->assertForbidden();
     }
@@ -603,7 +614,7 @@ class EquipmentTest extends TestCase
 
     public function test_taking_a_unit_back_clears_who_had_it()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
         $this->actingAs($this->admin())
@@ -639,7 +650,7 @@ class EquipmentTest extends TestCase
 
     public function test_a_written_off_unit_cannot_be_moved_again()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->create();
         $admin = $this->admin();
 
@@ -657,7 +668,7 @@ class EquipmentTest extends TestCase
 
     public function test_only_managers_move_equipment()
     {
-        $employee = User::factory()->create();
+        $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->create();
 
         $this->actingAs($employee);

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\SavesEquipmentFields;
 use App\Models\Equipment;
 use App\Models\EquipmentEvent;
+use App\Models\EquipmentField;
 use App\Models\EquipmentPhoto;
 use App\Models\EquipmentType;
 use App\Models\User;
@@ -23,6 +25,8 @@ use Inertia\Response;
  */
 class EquipmentController extends Controller
 {
+    use SavesEquipmentFields;
+
     public const PER_PAGE_OPTIONS = [25, 50, 100];
 
     /** Columns the list can be ordered by, named as the table names them. */
@@ -77,7 +81,7 @@ class EquipmentController extends Controller
         $direction = $input['direction'] ?? 'asc';
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
-        $query = Equipment::query()->with(['type:id,name,icon', 'holder:id,name,surname,avatar']);
+        $query = Equipment::query()->with(['type:id,name,icon', 'type.fields', 'fieldValues', 'holder:id,name,surname,avatar']);
         $query->withExists(['repairs as repairs_exists' => fn (Builder $q) => $q->whereNull('ended_at')]);
         $query->when($tab === 'service', fn (Builder $q) => $q->underService())
             ->when(! in_array($tab, ['all', 'service'], true), fn (Builder $q) => $q->where('status', $tab));
@@ -91,8 +95,7 @@ class EquipmentController extends Controller
                 'id' => $unit->id,
                 'name' => $unit->name,
                 // "Dell · S/N 7K2L9P3" under the name.
-                'maker' => $unit->maker,
-                'serial_number' => $unit->serial_number,
+                'details' => self::details($unit),
                 'inventory_number' => $unit->inventory_number,
                 'type' => $unit->type?->name,
                 'type_icon' => $unit->type?->icon,
@@ -130,7 +133,7 @@ class EquipmentController extends Controller
                     ->get(['id', 'name', 'surname'])
                     ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
             ],
-            'canEdit' => $request->user()->can('manage-employees'),
+            'canEdit' => $request->user()->can('equipment.manage'),
         ]);
     }
 
@@ -139,7 +142,8 @@ class EquipmentController extends Controller
     {
         return Inertia::render('equipment/create', [
             'options' => [
-                'types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
+                'types' => EquipmentType::query()->with('fields')->orderBy('name')->get(['id', 'name', 'has_accessories'])
+                    ->map(fn (EquipmentType $type) => self::categoryOption($type)),
                 'holders' => User::query()
                     ->active()
                     ->orderBy('surname')
@@ -160,14 +164,13 @@ class EquipmentController extends Controller
         $data = $request->validate([
             'equipment_type_id' => ['required', 'integer', Rule::exists('equipment_types', 'id')],
             'name' => ['required', 'string', 'max:150'],
-            'maker' => ['nullable', 'string', 'max:100'],
-            'model' => ['nullable', 'string', 'max:100'],
-            'serial_number' => ['nullable', 'string', 'max:100'],
             // The number on the sticker: one unit, one number.
             'inventory_number' => ['required', 'string', 'max:50', Rule::unique('equipment', 'inventory_number')],
 
-            'processor' => ['nullable', 'string', 'max:100'],
-            'memory' => ['nullable', 'string', 'max:100'],
+            // Whatever the chosen category asks about: a processor for a laptop,
+            // a diagonal for a monitor, an IMEI for a phone.
+            ...$this->fieldRules(EquipmentType::with('fields')->find($request->integer('equipment_type_id'))),
+
             'condition' => ['nullable', 'string', 'max:200'],
             'checked_at' => ['nullable', 'date', 'before_or_equal:today'],
             'next_inventory_at' => ['nullable', 'date'],
@@ -187,12 +190,7 @@ class EquipmentController extends Controller
         ], attributes: [
             'equipment_type_id' => 'категория',
             'name' => 'наименование',
-            'maker' => 'производитель',
-            'model' => 'модель',
-            'serial_number' => 'серийный номер',
             'inventory_number' => 'инвентарный номер',
-            'processor' => 'процессор',
-            'memory' => 'память / диск',
             'condition' => 'состояние',
             'checked_at' => 'последняя проверка',
             'next_inventory_at' => 'следующая инвентаризация',
@@ -200,14 +198,19 @@ class EquipmentController extends Controller
             'photos' => 'фотографии',
             'holder_user_id' => 'сотрудник',
             'issued_at' => 'дата выдачи',
+            ...$this->fieldAttributes(EquipmentType::with('fields')->find($request->integer('equipment_type_id'))),
         ]);
 
         $holder = $data['holder_user_id'] ?? null;
 
         $equipment = Equipment::create([
-            ...Arr::except($data, ['holder_user_id', 'issued_at', 'photos', 'another']),
+            ...Arr::except($data, ['holder_user_id', 'issued_at', 'photos', 'another', 'fields']),
             'status' => 'stock',
         ]);
+
+        // Part of the unit from the day it arrives, so the entry that records
+        // the arrival says all there is to say; no separate change is written.
+        $this->saveFields($equipment, $data['fields'] ?? []);
 
         $photos = $request->file('photos') ?? [];
 
@@ -264,7 +267,8 @@ class EquipmentController extends Controller
     public function show(Request $request, Equipment $equipment): Response
     {
         $equipment->load([
-            'type:id,name,icon',
+            'type.fields',
+            'fieldValues',
             'holder:id,name,surname,avatar',
             'repairs.photos',
             'events.user:id,name,surname,avatar',
@@ -280,16 +284,15 @@ class EquipmentController extends Controller
                 'equipment_type_id' => $equipment->equipment_type_id,
                 'type' => $equipment->type?->name,
                 'type_icon' => $equipment->type?->icon,
-                'maker' => $equipment->maker,
-                'model' => $equipment->model,
-                'serial_number' => $equipment->serial_number,
                 'inventory_number' => $equipment->inventory_number,
-                'processor' => $equipment->processor,
-                'memory' => $equipment->memory,
+                // What this category asks about, and what this unit answers.
+                'fields' => self::fieldList($equipment->type, $equipment),
                 'condition' => $equipment->condition,
                 'checked_at' => $equipment->checked_at?->toDateString(),
                 'next_inventory_at' => $equipment->next_inventory_at?->toDateString(),
-                'accessories' => $equipment->accessories ?? [],
+                // A category whose units come with nothing has no list here,
+                // and the card leaves the block out rather than showing a blank.
+                'accessories' => $equipment->type?->has_accessories ? ($equipment->accessories ?? []) : null,
                 'status' => $equipment->status,
                 'issued_at' => $equipment->issued_at?->toDateString(),
                 'written_off_at' => $equipment->written_off_at?->toDateString(),
@@ -339,11 +342,12 @@ class EquipmentController extends Controller
                 ->get(['id', 'name', 'surname'])
                 ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
             // What the card's forms offer; only an editor needs any of it.
-            'types' => $request->user()->can('manage-employees')
-                ? EquipmentType::query()->orderBy('name')->get(['id', 'name'])
+            'types' => $request->user()->can('equipment.manage')
+                ? EquipmentType::query()->with('fields')->orderBy('name')->get(['id', 'name', 'has_accessories'])
+                    ->map(fn (EquipmentType $type) => self::categoryOption($type))
                 : [],
             'neighbours' => $this->neighbours($equipment),
-            'canEdit' => $request->user()->can('manage-employees'),
+            'canEdit' => $request->user()->can('equipment.manage'),
         ]);
     }
 
@@ -364,6 +368,68 @@ class EquipmentController extends Controller
         $equipment->delete();
 
         return to_route('equipment.index');
+    }
+
+    /**
+     * A category as a form offers it: its name, whether its units come with
+     * anything, and what they are described by.
+     *
+     * @return array<string, mixed>
+     */
+    private static function categoryOption(EquipmentType $type): array
+    {
+        return [
+            'id' => $type->id,
+            'name' => $type->name,
+            'has_accessories' => $type->has_accessories,
+            'fields' => self::fieldList($type),
+        ];
+    }
+
+    /**
+     * The line under a unit's name in the list: the first couple of things its
+     * category asks about, as this unit answered them. For a laptop that reads
+     * "Dell · Latitude 5440", for a phone the IMEI — whatever the category
+     * happens to put first, which is the order the directory set.
+     */
+    private static function details(Equipment $unit): ?string
+    {
+        $held = $unit->fieldValues->keyBy('equipment_field_id');
+
+        $lines = collect($unit->type?->fields ?? [])
+            ->map(fn (EquipmentField $field) => $field->read($held->get($field->id)?->value))
+            ->filter()
+            ->take(2);
+
+        return $lines->isEmpty() ? null : $lines->join(' · ');
+    }
+
+    /**
+     * What a category asks about: its fields in their own order, each with what
+     * the given unit has written in it when there is one.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function fieldList(?EquipmentType $type, ?Equipment $unit = null): array
+    {
+        if ($type === null) {
+            return [];
+        }
+
+        $held = $unit?->fieldValues->keyBy('equipment_field_id');
+
+        return $type->fields->map(fn (EquipmentField $field) => [
+            'id' => $field->id,
+            'name' => $field->name,
+            'type' => $field->type,
+            'options' => $field->choices(),
+            'required' => $field->required,
+            ...($unit === null ? [] : [
+                // As it is kept, for a form to put back into its input; the card
+                // spells a yes or a no out for itself.
+                'value' => $held?->get($field->id)?->value,
+            ]),
+        ])->all();
     }
 
     /**
@@ -430,11 +496,12 @@ class EquipmentController extends Controller
         $query->when($filters['issued_from'], fn (Builder $q, string $date) => $q->whereDate('issued_at', '>=', $date));
         $query->when($filters['issued_to'], fn (Builder $q, string $date) => $q->whereDate('issued_at', '<=', $date));
 
-        // One box over the three things printed on a unit.
+        // One box over everything printed on a unit: its name, its sticker, and
+        // whatever its category asks about — a serial number, an IMEI, a model.
         $query->when($filters['q'], fn (Builder $q, string $term) => $q->where(fn (Builder $q) => $q
             ->where('name', 'like', "%{$term}%")
             ->orWhere('inventory_number', 'like', "%{$term}%")
-            ->orWhere('serial_number', 'like', "%{$term}%")));
+            ->orWhereHas('fieldValues', fn (Builder $q) => $q->where('value', 'like', "%{$term}%"))));
     }
 
     private function applySort(Builder $query, string $sort, string $direction): void

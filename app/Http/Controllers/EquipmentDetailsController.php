@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
+use App\Http\Controllers\Concerns\SavesEquipmentFields;
 use App\Models\Equipment;
+use App\Models\EquipmentType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -16,35 +18,51 @@ use Illuminate\Validation\Rule;
  */
 class EquipmentDetailsController extends Controller
 {
-    use KeepsEquipmentPhotos;
+    use KeepsEquipmentPhotos, SavesEquipmentFields;
 
     /**
      * "Характеристики": what the unit is.
      */
     public function specs(Request $request, Equipment $equipment): RedirectResponse
     {
+        // The fields asked about are those of the category the form was filled
+        // in for, which is not necessarily the one the unit is filed under now.
+        $type = EquipmentType::with('fields')->find($request->integer('equipment_type_id'));
+
         $data = $request->validate([
             'equipment_type_id' => ['required', 'integer', Rule::exists('equipment_types', 'id')],
             'name' => ['required', 'string', 'max:150'],
-            'maker' => ['nullable', 'string', 'max:100'],
-            'model' => ['nullable', 'string', 'max:100'],
-            'serial_number' => ['nullable', 'string', 'max:100'],
             // Still one unit, one number — this one's own does not clash with it.
             'inventory_number' => ['required', 'string', 'max:50', Rule::unique('equipment', 'inventory_number')->ignore($equipment)],
-            'processor' => ['nullable', 'string', 'max:100'],
-            'memory' => ['nullable', 'string', 'max:100'],
+            ...$this->fieldRules($type),
         ], attributes: [
             'equipment_type_id' => 'категория',
             'name' => 'наименование',
-            'maker' => 'производитель',
-            'model' => 'модель',
-            'serial_number' => 'серийный номер',
             'inventory_number' => 'инвентарный номер',
-            'processor' => 'процессор',
-            'memory' => 'память / диск',
+            ...$this->fieldAttributes($type),
         ]);
 
-        $equipment->update($data);
+        // Which entries were there before, so a save that moved nothing but the
+        // category's own fields can still be told it left a mark.
+        $before = (int) $equipment->events()->max('id');
+
+        // The category is set first: the values belong to the fields of the
+        // category the unit ends up in.
+        $equipment->equipment_type_id = $data['equipment_type_id'];
+        $equipment->setRelation('type', $type);
+
+        $equipment->journalExtra = $this->saveFields($equipment, $data['fields'] ?? []);
+        $equipment->update(Arr::except($data, 'fields'));
+
+        // Nothing but the fields moved, so the row's own save wrote no entry and
+        // the journal would otherwise have nothing to say about the change.
+        if ($equipment->journalExtra !== [] && (int) $equipment->events()->max('id') === $before) {
+            $equipment->events()->create([
+                'user_id' => $request->user()->id,
+                'kind' => 'updated',
+                'diff' => $equipment->journalExtra,
+            ]);
+        }
 
         return back();
     }
@@ -87,6 +105,8 @@ class EquipmentDetailsController extends Controller
      */
     public function accessories(Request $request, Equipment $equipment): RedirectResponse
     {
+        abort_unless($equipment->type?->has_accessories ?? false, 403, 'У этой категории нет комплектации.');
+
         $data = $request->validate([
             'accessories' => ['present', 'array', 'max:30'],
             // A line left blank in the form arrives as null; it simply drops out.

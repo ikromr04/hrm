@@ -1,3 +1,4 @@
+import { CategoryFieldInputs } from '@/components/category-field-inputs';
 import InputError from '@/components/input-error';
 import { PhotoInput } from '@/components/photo-input';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -7,15 +8,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { blankValues, type CategoryOption, type FieldValues } from '@/lib/equipment-fields';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { LoaderCircle, Plus } from 'lucide-react';
-import { useRef, useState, type FormEventHandler, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
 
 interface Props {
     options: {
-        types: { id: number; name: string }[];
+        /** Each category with what its units are described by, and whether they come with anything. */
+        types: CategoryOption[];
         holders: { id: number; name: string }[];
     };
 }
@@ -65,6 +68,8 @@ export default function CreateEquipment({ options }: Props) {
     /** What has been filed without leaving the page, newest last. */
     const [filed, setFiled] = useState<{ id: number; name: string; inventory_number: string }[]>([]);
     const [photos, setPhotos] = useState<File[]>([]);
+    /** What is written in the chosen category's fields, by field id. */
+    const [values, setValues] = useState<FieldValues>({});
 
     // Hardware is usually bought for somebody, so it can be handed over here
     // rather than added first and issued in a second window.
@@ -73,12 +78,7 @@ export default function CreateEquipment({ options }: Props) {
     const form = useForm({
         name: '',
         equipment_type_id: '',
-        maker: '',
-        model: '',
-        serial_number: '',
         inventory_number: '',
-        processor: '',
-        memory: '',
         accessories: '',
         condition: '',
         checked_at: today,
@@ -87,6 +87,19 @@ export default function CreateEquipment({ options }: Props) {
         issued_at: today,
     });
 
+    const category = useMemo(
+        () => options.types.find((type) => String(type.id) === form.data.equipment_type_id),
+        [options.types, form.data.equipment_type_id],
+    );
+    const fields = category?.fields ?? [];
+
+    // Another category asks other things, so what was typed for the last one is
+    // not carried over — it would only be saved into fields nobody chose.
+    const pickType = (id: string) => {
+        form.setData('equipment_type_id', id);
+        setValues(blankValues(options.types.find((type) => String(type.id) === id)?.fields ?? []));
+    };
+
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
@@ -94,11 +107,15 @@ export default function CreateEquipment({ options }: Props) {
 
         form.transform((data) => ({
             ...data,
-            // One box, comma by comma: "Блок питания 65 Вт, Сумка".
-            accessories: data.accessories
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean),
+            fields: values,
+            // One box, comma by comma: "Блок питания 65 Вт, Сумка". A category
+            // whose units come with nothing sends nothing.
+            accessories: category?.has_accessories
+                ? data.accessories
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean)
+                : [],
             photos,
             holder_user_id: issuing ? data.holder_user_id : null,
             issued_at: issuing ? data.issued_at : null,
@@ -177,42 +194,12 @@ export default function CreateEquipment({ options }: Props) {
                                 <SearchableSelect
                                     id="equipment_type_id"
                                     value={form.data.equipment_type_id}
-                                    onChange={(value) => form.setData('equipment_type_id', value)}
+                                    onChange={pickType}
                                     options={options.types.map((type) => ({ value: String(type.id), label: type.name }))}
                                     placeholder="Выберите категорию"
                                     searchPlaceholder="Поиск категории"
                                     empty="Категория не найдена"
                                     invalid={!!form.errors.equipment_type_id}
-                                />
-                            </Field>
-
-                            <Field label="Производитель" htmlFor="maker" error={form.errors.maker}>
-                                <Input
-                                    id="maker"
-                                    value={form.data.maker}
-                                    onChange={(event) => form.setData('maker', event.target.value)}
-                                    placeholder="Dell"
-                                    aria-invalid={!!form.errors.maker}
-                                />
-                            </Field>
-
-                            <Field label="Модель" htmlFor="model" error={form.errors.model}>
-                                <Input
-                                    id="model"
-                                    value={form.data.model}
-                                    onChange={(event) => form.setData('model', event.target.value)}
-                                    placeholder="Latitude 5440"
-                                    aria-invalid={!!form.errors.model}
-                                />
-                            </Field>
-
-                            <Field label="Серийный номер" htmlFor="serial_number" error={form.errors.serial_number}>
-                                <Input
-                                    id="serial_number"
-                                    value={form.data.serial_number}
-                                    onChange={(event) => form.setData('serial_number', event.target.value)}
-                                    placeholder="7K2L9P3"
-                                    aria-invalid={!!form.errors.serial_number}
                                 />
                             </Field>
 
@@ -227,25 +214,15 @@ export default function CreateEquipment({ options }: Props) {
                                 />
                             </Field>
 
-                            <Field label="Процессор" htmlFor="processor" error={form.errors.processor}>
-                                <Input
-                                    id="processor"
-                                    value={form.data.processor}
-                                    onChange={(event) => form.setData('processor', event.target.value)}
-                                    placeholder="Intel Core i5-1335U"
-                                    aria-invalid={!!form.errors.processor}
-                                />
-                            </Field>
-
-                            <Field label="Память / диск" htmlFor="memory" error={form.errors.memory}>
-                                <Input
-                                    id="memory"
-                                    value={form.data.memory}
-                                    onChange={(event) => form.setData('memory', event.target.value)}
-                                    placeholder="16 ГБ / SSD 512 ГБ"
-                                    aria-invalid={!!form.errors.memory}
-                                />
-                            </Field>
+                            {/* Whatever this category asks about: a processor for
+                                a laptop, a diagonal for a monitor, nothing at all
+                                for a category that has no fields of its own. */}
+                            <CategoryFieldInputs
+                                fields={fields}
+                                values={values}
+                                onChange={(id, value) => setValues((held) => ({ ...held, [id]: value }))}
+                                error={(key) => at(form.errors as Record<string, string | undefined>, key)}
+                            />
 
                             {/* Two dates in the space of one field: a date box needs no more. */}
                             <div className={half}>
@@ -271,16 +248,18 @@ export default function CreateEquipment({ options }: Props) {
                                 </Field>
                             </div>
 
-                            <Field label="Комплектация" htmlFor="accessories" error={form.errors.accessories} full>
-                                <Input
-                                    id="accessories"
-                                    value={form.data.accessories}
-                                    onChange={(event) => form.setData('accessories', event.target.value)}
-                                    placeholder="Блок питания 65 Вт, Сумка, Мышь Logitech M185"
-                                    aria-invalid={!!form.errors.accessories}
-                                />
-                                <p className="text-muted-foreground text-[13px]">Через запятую.</p>
-                            </Field>
+                            {category?.has_accessories && (
+                                <Field label="Комплектация" htmlFor="accessories" error={form.errors.accessories} full>
+                                    <Input
+                                        id="accessories"
+                                        value={form.data.accessories}
+                                        onChange={(event) => form.setData('accessories', event.target.value)}
+                                        placeholder="Блок питания 65 Вт, Сумка, Мышь Logitech M185"
+                                        aria-invalid={!!form.errors.accessories}
+                                    />
+                                    <p className="text-muted-foreground text-[13px]">Через запятую.</p>
+                                </Field>
+                            )}
 
                             <Field label="Текущее состояние" htmlFor="condition" error={form.errors.condition} full>
                                 <Input
