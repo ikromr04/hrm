@@ -45,6 +45,13 @@ foreach (["DB_HOST", "DB_PORT", "DB_USERNAME", "DB_PASSWORD"] as $key) {
 if (getenv("CODESPACE_NAME")) {
     $url = "https://".getenv("CODESPACE_NAME")."-8000.".getenv("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN");
     $env = preg_replace("/^APP_URL=.*$/m", "APP_URL=".$url, $env);
+
+    // artisan serve listens on 127.0.0.1 by default, which is reachable from
+    // nothing but the container itself; the forwarded port needs it to answer
+    // on every interface.
+    if (! str_contains($env, "SERVER_HOST=")) {
+        $env .= "\nSERVER_HOST=0.0.0.0\n";
+    }
 }
 
 file_put_contents($path, $env);
