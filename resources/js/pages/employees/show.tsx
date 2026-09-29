@@ -2060,8 +2060,17 @@ export default function EmployeeProfile({
                                 )}
                             </div>
 
-                            {(employee.positions ?? []).length > 0 && (
+                            {/* The position a person holds and the job they do are two different
+                                things — "Аналитик" and "Ведущий специалист" — and the header
+                                said only the second. Told apart by colour, in the order the
+                                card and the table read them. */}
+                            {((employee.roles ?? []).length > 0 || (employee.positions ?? []).length > 0) && (
                                 <div className="flex flex-wrap gap-2">
+                                    {(employee.roles ?? []).map((title) => (
+                                        <StatusBadge key={title} tone="info">
+                                            {title}
+                                        </StatusBadge>
+                                    ))}
                                     {(employee.positions ?? []).map((title) => (
                                         <StatusBadge key={title} tone="success">
                                             {title}
@@ -2071,10 +2080,12 @@ export default function EmployeeProfile({
                             )}
 
                             <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                                <a href={`mailto:${employee.email}`} className={contactLink}>
-                                    <Mail className="size-4" />
-                                    {employee.email}
-                                </a>
+                                {employee.email && (
+                                    <a href={`mailto:${employee.email}`} className={contactLink}>
+                                        <Mail className="size-4" />
+                                        {employee.email}
+                                    </a>
+                                )}
                                 {details?.phone && (
                                     <a href={`tel:${details.phone}`} className={cn(contactLink, 'tabular-nums')}>
                                         <Phone className="size-4" />
