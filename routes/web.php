@@ -67,20 +67,20 @@ Route::post('employees', [EmployeeController::class, 'store'])
 // whoever may change a passport is not thereby allowed to rewrite a family.
 Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')->group(function () {
     // Multipart, so the upload is a POST rather than a PUT.
-    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->middleware('can:employees.edit.any')->name('avatar.update');
-    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->middleware('can:employees.edit.any')->name('avatar.destroy');
+    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->middleware('can:employees.edit.any,employee')->name('avatar.update');
+    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->middleware('can:employees.edit.any,employee')->name('avatar.destroy');
 
-    Route::put('personal', [EmployeeDetailsController::class, 'personal'])->middleware('can:employees.edit.block.main')->name('personal');
-    Route::put('passport', [EmployeeDetailsController::class, 'passport'])->middleware('can:employees.edit.block.passport')->name('passport');
-    Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->middleware('can:employees.edit.block.contacts')->name('contacts');
-    Route::put('languages', [EmployeeDetailsController::class, 'languages'])->middleware('can:employees.edit.block.languages')->name('languages');
-    Route::put('employment', [EmployeeDetailsController::class, 'employment'])->middleware('can:employees.edit.block.employment')->name('employment');
+    Route::put('personal', [EmployeeDetailsController::class, 'personal'])->middleware('can:employees.edit.block.main,employee')->name('personal');
+    Route::put('passport', [EmployeeDetailsController::class, 'passport'])->middleware('can:employees.edit.block.passport,employee')->name('passport');
+    Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->middleware('can:employees.edit.block.contacts,employee')->name('contacts');
+    Route::put('languages', [EmployeeDetailsController::class, 'languages'])->middleware('can:employees.edit.block.languages,employee')->name('languages');
+    Route::put('employment', [EmployeeDetailsController::class, 'employment'])->middleware('can:employees.edit.block.employment,employee')->name('employment');
 
     // Education is kept record by record. The controller checks that the record
     // belongs to the employee in the URL, so one person's id cannot reach
     // another's; scoped bindings would not, as "education" has no plural form
     // for Laravel to find the relation by.
-    Route::middleware('can:employees.edit.block.education')->group(function () {
+    Route::middleware('can:employees.edit.block.education,employee')->group(function () {
         Route::post('educations', [EmployeeEducationController::class, 'store'])->name('educations.store');
         // Several records in one request: the steps of the "new colleague" wizard.
         Route::post('educations/many', [EmployeeEducationController::class, 'storeMany'])->name('educations.many');
@@ -88,7 +88,7 @@ Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')-
         Route::delete('educations/{education}', [EmployeeEducationController::class, 'destroy'])->name('educations.destroy');
     });
 
-    Route::middleware('can:employees.edit.block.experience')->group(function () {
+    Route::middleware('can:employees.edit.block.experience,employee')->group(function () {
         Route::post('experiences', [EmployeeWorkExperienceController::class, 'store'])->name('experiences.store');
         Route::post('experiences/many', [EmployeeWorkExperienceController::class, 'storeMany'])->name('experiences.many');
         Route::put('experiences/{experience}', [EmployeeWorkExperienceController::class, 'update'])->name('experiences.update');
@@ -96,10 +96,10 @@ Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')-
     });
 
     Route::post('equipment', [EmployeeEquipmentController::class, 'store'])
-        ->middleware('can:employees.edit.block.equipment')
+        ->middleware('can:employees.edit.block.equipment,employee')
         ->name('equipment.store');
 
-    Route::put('family', [EmployeeDetailsController::class, 'family'])->middleware('can:employees.edit.block.family')->name('family');
+    Route::put('family', [EmployeeDetailsController::class, 'family'])->middleware('can:employees.edit.block.family,employee')->name('family');
 });
 
 // What is done to a colleague rather than to a line of their card. Moving

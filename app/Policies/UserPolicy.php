@@ -26,7 +26,7 @@ class UserPolicy
      */
     public function viewPrivateDetails(User $viewer, User $employee): bool
     {
-        return $viewer->is($employee) || $this->viewAnyPrivateDetails($viewer);
+        return EmployeeFields::anyPrivateVisibleTo($viewer, $employee);
     }
 
     /**

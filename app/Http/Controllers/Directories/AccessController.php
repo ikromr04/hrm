@@ -38,6 +38,9 @@ class AccessController extends Controller
             // The fields of a card are two dozen rights; the table shows how many
             // of them a position reads and opens a dialog for the list itself.
             'fields' => EmployeeFields::tree(),
+            // The same lines asked about one's own card, which is a different set
+            // of rights and a column of its own.
+            'profileFields' => EmployeeFields::tree(EmployeeFields::OWN),
             'roles' => $roles->map(fn (Role $role) => [
                 'id' => $role->id,
                 'name' => $role->name,

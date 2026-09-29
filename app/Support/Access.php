@@ -18,6 +18,11 @@ final class Access
 {
     /** The sections, in the order the table shows them. */
     public const SECTIONS = [
+        // Its own card comes first: everybody has one, and a position is read from
+        // what it does for the person holding it before what it does to others.
+        // No rights of the plain kind at all — what is on a card is decided line
+        // by line.
+        'profile' => 'Профиль',
         'employees' => 'Сотрудники',
         'equipment' => 'Оборудование',
         'directories' => 'Справочники',

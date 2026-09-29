@@ -31,6 +31,7 @@ class RoleController extends Controller
             'sections' => Access::tree(),
             // Which fields of a card the position reads, chosen in the same dialog.
             'fields' => EmployeeFields::tree(),
+            'profileFields' => EmployeeFields::tree(EmployeeFields::OWN),
             // What a new position starts with, so the dialog offers the same set a
             // seeded position gets rather than a copy of it kept in the client.
             'defaults' => Access::defaults(),

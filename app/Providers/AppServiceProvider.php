@@ -48,15 +48,20 @@ class AppServiceProvider extends ServiceProvider
         foreach (array_keys(EmployeeFields::GROUPS) as $group) {
             Gate::define(
                 EmployeeFields::blockGate($group),
-                // editableBy() answers both halves of the question: nobody retypes
-                // what they cannot read, so the right to change one line counts
-                // only where the right to read it is there too.
-                fn (User $user) => array_intersect(EmployeeFields::ofGroup($group), EmployeeFields::editableBy($user)) !== [],
+                // editableBy() answers every part of the question: whose card this
+                // is, which of its lines are readable — nobody retypes what they
+                // cannot see — and which of those are theirs to change.
+                fn (User $user, ?User $employee = null) => array_intersect(
+                    EmployeeFields::ofGroup($group),
+                    EmployeeFields::editableBy($user, $employee),
+                ) !== [],
             );
         }
 
-        // Adding a colleague, and their photograph, which belongs to no block:
-        // whoever may change a card may start one.
-        Gate::define('employees.edit.any', fn (User $user) => EmployeeFields::editableBy($user) !== []);
+        // A photograph belongs to no block of the card, and adding a colleague is
+        // editing a card that does not exist yet. Both ask the same question:
+        // whoever may change something here may do this. Given the card, the
+        // question is asked of that card — a person's own photograph is theirs.
+        Gate::define('employees.edit.any', fn (User $user, ?User $employee = null) => EmployeeFields::editableBy($user, $employee) !== []);
     }
 }

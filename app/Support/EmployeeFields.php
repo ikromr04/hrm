@@ -17,6 +17,13 @@ use App\Models\User;
  * unchanged: a position carries them, a personal exception overrules them, and
  * an administrator passes every check.
  *
+ * The same lines are asked about twice over, because the two questions are not
+ * the same one: what a position may read on a colleague's card, and what it may
+ * read on its own. Somebody who has no business in anybody else's passport still
+ * has a passport of their own, and a company may well let nobody correct their
+ * own hire date. So each line is four rights — read and change, somebody else's
+ * card and one's own — and the scope says which pair is meant.
+ *
  * The surname and the name are not on the list. A list of colleagues whose names
  * are hidden is a list of blank rows, and a card with no name on it answers
  * nothing; so those two are always readable and the rest is decided.
@@ -116,16 +123,26 @@ final class EmployeeFields
         return array_keys(self::FIELDS);
     }
 
+    /**
+     * Whose card is being asked about: anybody else's, or the person's own.
+     */
+    public const OTHERS = 'employees';
+
+    public const OWN = 'profile';
+
+    /** @var list<string> */
+    public const SCOPES = [self::OTHERS, self::OWN];
+
     /** The right to read a line: "birth_date" => "employees.field.birth_date". */
-    public static function permission(string $field): string
+    public static function permission(string $field, string $scope = self::OTHERS): string
     {
-        return "employees.field.{$field}";
+        return "{$scope}.field.{$field}";
     }
 
     /** The right to change it: "birth_date" => "employees.edit.birth_date". */
-    public static function editPermission(string $field): string
+    public static function editPermission(string $field, string $scope = self::OTHERS): string
     {
-        return "employees.edit.{$field}";
+        return "{$scope}.edit.{$field}";
     }
 
     /**
@@ -138,28 +155,41 @@ final class EmployeeFields
     }
 
     /**
-     * Every line as a right, both ways round, for the catalogue the seeder and
-     * the pages read.
+     * Every line as a right: read and change, for somebody else's card and for
+     * one's own. What the seeder creates and the pages count.
      *
      * @return list<string>
      */
     public static function permissions(): array
     {
-        return [
-            ...array_map(self::permission(...), self::keys()),
-            ...array_map(self::editPermission(...), self::keys()),
-        ];
+        $rights = [];
+
+        foreach (self::SCOPES as $scope) {
+            foreach (self::keys() as $field) {
+                $rights[] = self::permission($field, $scope);
+                $rights[] = self::editPermission($field, $scope);
+            }
+        }
+
+        return $rights;
     }
 
     /**
      * The fields of a position's default set, as rights. Reading only: what a
      * position may change is decided deliberately.
      *
+     * On a colleague's card that is what was never private. On one's own it is
+     * the whole card — a person has always been able to read their own, and
+     * taking that away is a decision somebody should make on purpose.
+     *
      * @return list<string>
      */
     public static function defaultPermissions(): array
     {
-        return array_map(self::permission(...), self::PUBLIC_FIELDS);
+        return [
+            ...array_map(fn (string $field) => self::permission($field), self::PUBLIC_FIELDS),
+            ...array_map(fn (string $field) => self::permission($field, self::OWN), self::keys()),
+        ];
     }
 
     /** The fields of one block, in the order the card shows them. */
@@ -170,11 +200,12 @@ final class EmployeeFields
 
     /**
      * The catalogue as a dialog reads it: the blocks in order, each with its
-     * lines and both rights behind them.
+     * lines and the two rights behind them. Built per scope, so a dialog need
+     * never know whose card it is choosing for.
      *
      * @return list<array{key: string, title: string, expandable: bool, fields: list<array{key: string, title: string, permission: string, editPermission: string}>}>
      */
-    public static function tree(): array
+    public static function tree(string $scope = self::OTHERS): array
     {
         $tree = [];
 
@@ -186,8 +217,8 @@ final class EmployeeFields
                     $fields[] = [
                         'key' => $key,
                         'title' => $label,
-                        'permission' => self::permission($key),
-                        'editPermission' => self::editPermission($key),
+                        'permission' => self::permission($key, $scope),
+                        'editPermission' => self::editPermission($key, $scope),
                     ];
                 }
             }
@@ -198,21 +229,23 @@ final class EmployeeFields
         return $tree;
     }
 
+    /** Whose card this is, from the point of view of whoever is looking at it. */
+    public static function scopeFor(User $viewer, ?User $employee): string
+    {
+        return $employee !== null && $viewer->is($employee) ? self::OWN : self::OTHERS;
+    }
+
     /**
-     * Which lines this viewer may read on that person's card.
-     *
-     * Everybody reads their own card whole: it is their passport and their own
-     * telephone number. Beyond that it is line by line.
+     * Which lines this viewer may read on that person's card — their own or
+     * anybody else's, which are two different sets of rights.
      *
      * @return list<string>
      */
     public static function visibleTo(User $viewer, ?User $employee = null): array
     {
-        if ($employee !== null && $viewer->is($employee)) {
-            return self::keys();
-        }
+        $scope = self::scopeFor($viewer, $employee);
 
-        return array_values(array_filter(self::keys(), fn (string $field) => $viewer->can(self::permission($field))));
+        return array_values(array_filter(self::keys(), fn (string $field) => $viewer->can(self::permission($field, $scope))));
     }
 
     /**
@@ -224,19 +257,25 @@ final class EmployeeFields
      */
     public static function editableBy(User $viewer, ?User $employee = null): array
     {
+        $scope = self::scopeFor($viewer, $employee);
         $visible = self::visibleTo($viewer, $employee);
 
         return array_values(array_filter(
             self::keys(),
-            fn (string $field) => in_array($field, $visible, true) && $viewer->can(self::editPermission($field)),
+            fn (string $field) => in_array($field, $visible, true) && $viewer->can(self::editPermission($field, $scope)),
         ));
     }
 
-    /** Whether anything kept beside the account is readable at all. */
-    public static function anyPrivateVisibleTo(User $viewer): bool
+    /**
+     * Whether anything kept beside the account is readable at all, which decides
+     * whether the row behind it is worth loading.
+     */
+    public static function anyPrivateVisibleTo(User $viewer, ?User $employee = null): bool
     {
+        $scope = self::scopeFor($viewer, $employee);
+
         foreach (self::PRIVATE_FIELDS as $field) {
-            if ($viewer->can(self::permission($field))) {
+            if ($viewer->can(self::permission($field, $scope))) {
                 return true;
             }
         }

@@ -176,9 +176,10 @@ class EmployeeController extends Controller
             'status' => $user->status,
             'status_changed_at' => $user->status_changed_at?->toDateString(),
             'status_note' => $canStatus ? $user->status_note : null,
-            // Their own row reads whole, as their own card does.
+            // Their own row reads the way their own card does, which is not the
+            // same set of lines as a colleague's.
             'private' => $loaded->contains($user)
-                ? $this->privateDetails($user, $user->is($viewer) ? EmployeeFields::keys() : $visible)
+                ? $this->privateDetails($user, $user->is($viewer) ? EmployeeFields::visibleTo($viewer, $user) : $visible)
                 : null,
         ]);
 
