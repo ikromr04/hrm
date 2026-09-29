@@ -13,7 +13,7 @@ const navGroups = (can: (permission: Permission) => boolean): SidebarNavGroup[] 
         items: [
             { title: 'Главная', url: '/dashboard', icon: LayoutGrid },
             ...(can('employees.view') ? [{ title: 'Сотрудники', url: '/employees', icon: Users }] : []),
-            ...(can('departments.view') ? [{ title: 'Структура компании', url: '/departments', icon: Network }] : []),
+            { title: 'Структура компании', url: '/departments', icon: Network },
             ...(can('equipment.view') ? [{ title: 'Оборудование', url: '/equipment', icon: Laptop }] : []),
             { title: 'Отпуска', icon: CalendarDays },
         ],

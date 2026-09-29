@@ -40,14 +40,29 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
     // A working employee can leave; one who already left can only come back.
     // `asks` marks the ones that open a dialog, which the menu spells with "…".
     const actions = [
-        ...(can('employees.status')
-            ? employee.status === 'active'
-                ? [
-                      { key: 'transfer', label: 'Перевести', Icon: ArrowRightLeft, disabled: isSelf, asks: true, run: () => setDialog('transfer') },
-                      { key: 'fire', label: 'Уволить', Icon: UserX, disabled: isSelf, asks: true, run: () => setDialog('fire') },
-                  ]
-                : [{ key: 'restore', label: 'Восстановить', Icon: RotateCcw, disabled: false, asks: false, run: restore }]
-            : []),
+        // Moving somebody about and ending an employment are asked separately;
+        // taking somebody back is the counterpart of the latter.
+        ...(employee.status === 'active'
+            ? [
+                  ...(can('employees.transfer')
+                      ? [
+                            {
+                                key: 'transfer',
+                                label: 'Перевести',
+                                Icon: ArrowRightLeft,
+                                disabled: isSelf,
+                                asks: true,
+                                run: () => setDialog('transfer'),
+                            },
+                        ]
+                      : []),
+                  ...(can('employees.fire')
+                      ? [{ key: 'fire', label: 'Уволить', Icon: UserX, disabled: isSelf, asks: true, run: () => setDialog('fire') }]
+                      : []),
+              ]
+            : can('employees.fire')
+              ? [{ key: 'restore', label: 'Восстановить', Icon: RotateCcw, disabled: false, asks: false, run: restore }]
+              : []),
         ...(can('employees.delete')
             ? [{ key: 'delete', label: 'Удалить', Icon: Trash2, disabled: isSelf, asks: true, run: () => setDialog('delete') }]
             : []),

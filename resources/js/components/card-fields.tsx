@@ -1,0 +1,337 @@
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { ChevronDown, Info } from 'lucide-react';
+import { useState } from 'react';
+
+/** One line of an employee card, with the right to read it and the right to change it. */
+export interface CardField {
+    key: string;
+    title: string;
+    /** "employees.field.phone" */
+    permission: string;
+    /** "employees.edit.phone" */
+    editPermission: string;
+}
+
+/** A block of the card. An expandable one is chosen line by line. */
+export interface CardFieldGroup {
+    key: string;
+    title: string;
+    /** Half a passport is no use, so a passport is one answer; contacts are not. */
+    expandable: boolean;
+    fields: CardField[];
+}
+
+export type CardFieldsMode = 'view' | 'edit';
+
+const rightOf = (field: CardField, mode: CardFieldsMode) => (mode === 'view' ? field.permission : field.editPermission);
+
+/** Every right of that kind, for counting and for toggling everything at once. */
+export const cardFieldRights = (groups: CardFieldGroup[], mode: CardFieldsMode): string[] =>
+    groups.flatMap((group) => group.fields.map((field) => rightOf(field, mode)));
+
+/** How much of a card a position reads or may change: for the button in the table. */
+export function countCardFields(groups: CardFieldGroup[], held: string[], mode: CardFieldsMode): { chosen: number; total: number } {
+    const rights = cardFieldRights(groups, mode);
+
+    return { chosen: rights.filter((right) => held.includes(right)).length, total: rights.length };
+}
+
+const HINTS: Record<CardFieldsMode, { title: string; description: string }> = {
+    view: {
+        title: 'Что видно в карточке',
+        description:
+            'Отмеченные строки эта позиция видит в карточке сотрудника, в колонках таблицы, в фильтрах и в поиске. Что не отмечено — не показывается нигде и не находится поиском. Фамилия и имя видны всегда, иначе список стал бы набором пустых строк. Свою карточку сотрудник всегда читает целиком.',
+    },
+    edit: {
+        title: 'Что можно менять',
+        description:
+            'Отмеченные строки эта позиция может править в карточке. Менять можно только то, что видно: строки, не отмеченные в «Просмотре», здесь недоступны — сначала откройте их для просмотра. Блок без единой разрешённой строки в карточке вообще не предлагает карандаш.',
+    },
+};
+
+/**
+ * Which lines of an employee card a position reads, or may change.
+ *
+ * The blocks are the ones a card is actually read in, so the answer here looks
+ * like the page it governs. A block such as a passport is one answer; the two
+ * blocks people pick apart — the main data and the contacts — open up.
+ */
+export function CardFields({
+    mode,
+    groups,
+    held,
+    onChange,
+}: {
+    mode: CardFieldsMode;
+    groups: CardFieldGroup[];
+    /** Every right the position holds; only those of this mode are touched. */
+    held: string[];
+    onChange: (permissions: string[]) => void;
+}) {
+    const [open, setOpen] = useState<string[]>([]);
+
+    // Changing is allowed only where reading is: the right to read is what makes
+    // a line available here at all.
+    const locked = (field: CardField) => mode === 'edit' && !held.includes(field.permission);
+
+    const set = (rights: string[], on: boolean) =>
+        onChange(on ? [...held, ...rights.filter((right) => !held.includes(right))] : held.filter((right) => !rights.includes(right)));
+
+    const toggleField = (field: CardField) => {
+        const right = rightOf(field, mode);
+
+        set([right], !held.includes(right));
+    };
+
+    const toggleGroup = (group: CardFieldGroup) => {
+        const rights = group.fields.filter((field) => !locked(field)).map((field) => rightOf(field, mode));
+        const all = rights.length > 0 && rights.every((right) => held.includes(right));
+
+        set(rights, !all);
+    };
+
+    const chosenIn = (group: CardFieldGroup) => group.fields.filter((field) => held.includes(rightOf(field, mode))).length;
+
+    return (
+        <div className="grid gap-3">
+            <p className="text-muted-foreground text-[13px]">{HINTS[mode].description}</p>
+
+            <ul className="grid gap-2">
+                {groups.map((group) => {
+                    const chosen = chosenIn(group);
+                    const all = chosen === group.fields.length;
+                    const available = group.fields.filter((field) => !locked(field)).length;
+                    const expanded = open.includes(group.key);
+
+                    return (
+                        <li key={group.key} className="border-border rounded-lg border">
+                            <div className="flex items-center gap-2 px-3 py-2.5">
+                                <Checkbox
+                                    checked={all ? true : chosen > 0 ? 'indeterminate' : false}
+                                    disabled={available === 0}
+                                    onCheckedChange={() => toggleGroup(group)}
+                                    aria-label={group.title}
+                                />
+
+                                {group.expandable ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpen(expanded ? open.filter((key) => key !== group.key) : [...open, group.key])}
+                                        aria-expanded={expanded}
+                                        className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm"
+                                    >
+                                        <span>{group.title}</span>
+                                        <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-[13px] tabular-nums">
+                                            {chosen} из {group.fields.length}
+                                            <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <span className="flex-1 text-sm">{group.title}</span>
+                                )}
+
+                                {available === 0 && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Info className="text-muted-foreground size-4 shrink-0" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-64">
+                                            Блок закрыт для просмотра, поэтому менять его нечего. Откройте его в «Просмотре».
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
+                            </div>
+
+                            {group.expandable && (
+                                <Collapsible open={expanded}>
+                                    <CollapsibleContent>
+                                        <ul className="grid gap-1.5 border-t px-3 py-2.5 pl-10">
+                                            {group.fields.map((field) => (
+                                                <li key={field.key}>
+                                                    <label
+                                                        className={cn('flex items-center gap-2 text-sm', locked(field) && 'text-muted-foreground')}
+                                                    >
+                                                        <Checkbox
+                                                            checked={held.includes(rightOf(field, mode))}
+                                                            disabled={locked(field)}
+                                                            onCheckedChange={() => toggleField(field)}
+                                                        />
+                                                        {field.title}
+                                                        {locked(field) && (
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Info className="size-3.5 shrink-0" />
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="max-w-64">
+                                                                    Эта строка закрыта для просмотра, поэтому её нельзя разрешить менять. Сначала
+                                                                    отметьте её в «Просмотре».
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        )}
+                                                    </label>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </CollapsibleContent>
+                                </Collapsible>
+                            )}
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}
+
+/** The same list in a window of its own, for the table of positions against rights. */
+export function CardFieldsDialog({
+    mode,
+    subject,
+    groups,
+    held,
+    onChange,
+    onClose,
+}: {
+    mode: CardFieldsMode;
+    /** Whose card fields these are, e.g. the name of a position. */
+    subject: string;
+    groups: CardFieldGroup[];
+    held: string[];
+    onChange: (permissions: string[]) => void;
+    onClose: () => void;
+}) {
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>
+                        {HINTS[mode].title}: {subject}
+                    </DialogTitle>
+                    <DialogDescription>Изменения сохраняются сразу.</DialogDescription>
+                </DialogHeader>
+
+                <CardFields mode={mode} groups={groups} held={held} onChange={onChange} />
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>
+                        Готово
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
+ * A cell of the table: how much of something a position holds, as a bar with a
+ * count on it, and a click opens the list itself. The same face for every column
+ * that keeps a list behind it, so a row of the table reads as answers of one kind.
+ */
+export function RightsButton({ chosen, total, title, onOpen }: { chosen: number; total: number; title: string; onOpen: () => void }) {
+    const share = total === 0 ? 0 : Math.round((chosen / total) * 100);
+
+    return (
+        <button
+            type="button"
+            onClick={onOpen}
+            title={`${title}: выбрано ${chosen} из ${total}`}
+            className="hover:border-brand focus-visible:ring-ring mx-auto flex w-32 flex-col gap-1 rounded-md border px-2 py-1.5 outline-hidden transition-colors focus-visible:ring-2"
+        >
+            <span className="flex items-baseline justify-between gap-1 text-[13px]">
+                <span className="tabular-nums">
+                    {chosen} из {total}
+                </span>
+                <span className="text-muted-foreground tabular-nums">{share}%</span>
+            </span>
+            <span aria-hidden className="bg-muted h-1.5 overflow-hidden rounded-full">
+                <span className="bg-brand block h-full rounded-full transition-[width]" style={{ width: `${share}%` }} />
+            </span>
+        </button>
+    );
+}
+
+/** The same, counting the lines of a card a position reads or may change. */
+export function CardFieldsButton({
+    mode,
+    groups,
+    held,
+    onOpen,
+}: {
+    mode: CardFieldsMode;
+    groups: CardFieldGroup[];
+    held: string[];
+    onOpen: () => void;
+}) {
+    const { chosen, total } = countCardFields(groups, held, mode);
+
+    return <RightsButton chosen={chosen} total={total} title={HINTS[mode].title} onOpen={onOpen} />;
+}
+
+/** One right of a plain list, as the server describes it. */
+export interface PlainRight {
+    key: string;
+    title: string;
+    hint: string;
+}
+
+/**
+ * A short list of rights in a window of its own — what one does to a colleague
+ * rather than to a line of their card. Kept behind the same counter as the
+ * fields, so the row of a position reads as three answers of one kind instead of
+ * two counters and a handful of loose boxes.
+ */
+export function RightsDialog({
+    title,
+    description,
+    rights,
+    held,
+    onChange,
+    onClose,
+}: {
+    title: string;
+    description: string;
+    rights: PlainRight[];
+    held: string[];
+    onChange: (permissions: string[]) => void;
+    onClose: () => void;
+}) {
+    const toggle = (key: string) => onChange(held.includes(key) ? held.filter((right) => right !== key) : [...held, key]);
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>Изменения сохраняются сразу.</DialogDescription>
+                </DialogHeader>
+
+                <p className="text-muted-foreground text-[13px]">{description}</p>
+
+                <ul className="grid gap-2">
+                    {rights.map((right) => (
+                        <li key={right.key}>
+                            <label className="flex items-start gap-2 text-sm">
+                                <Checkbox checked={held.includes(right.key)} onCheckedChange={() => toggle(right.key)} className="mt-0.5" />
+                                <span className="min-w-0">
+                                    {right.title}
+                                    <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
+                                </span>
+                            </label>
+                        </li>
+                    ))}
+                </ul>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>
+                        Готово
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}

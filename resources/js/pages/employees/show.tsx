@@ -43,7 +43,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Camera, ChevronLeft, ChevronRight, Construction, Laptop, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
 
 /** Every right, what the positions give and what was decided for this person. */
 interface AccessPicture {
@@ -77,28 +77,33 @@ interface ProfilePrivate extends PrivateDetails {
     passport: { series: string | null; number: string | null; issued_at: string | null; issued_by: string | null };
 }
 
+/**
+ * A card. Only the name and the photograph are certain: every other line is a
+ * field the viewer may or may not read, and what they may not read does not
+ * travel at all.
+ */
 interface Employee {
     id: number;
     name: string;
     surname: string;
-    patronymic: string | null;
     /** Square thumbnail for the interface. */
     avatar: string | null;
     /** The upload itself, opened at full size. */
     avatar_original: string | null;
-    sex: Sex;
-    email: string;
     status: 'active' | 'transferred' | 'fired';
     status_changed_at: string | null;
     /** Where they were transferred or why they were let go; managers only. */
     status_note: string | null;
+    patronymic?: string | null;
+    sex?: Sex;
+    email?: string;
     /** Access roles, shown as "Позиция". */
-    roles: string[];
+    roles?: string[];
     /** Positions, shown as "Должность"; an employee can hold several. */
-    positions: string[];
-    departments: { id: number; name: string; path: string; is_head: boolean }[];
+    positions?: string[];
+    departments?: { id: number; name: string; path: string; is_head: boolean }[];
     /** The best known first. */
-    languages: SpokenLanguage[];
+    languages?: SpokenLanguage[];
     /** Null when the viewer may not see this person's private data. */
     private: ProfilePrivate | null;
 }
@@ -110,9 +115,9 @@ interface Employee {
  */
 const TABS = [
     { key: 'profile', title: 'Профиль' },
-    { key: 'education', title: 'Образование', private: true },
-    { key: 'experience', title: 'Трудовая деятельность', private: true },
-    { key: 'equipment', title: 'Оборудование', private: true },
+    { key: 'education', title: 'Образование', private: true, field: 'educations' },
+    { key: 'experience', title: 'Трудовая деятельность', private: true, field: 'work_experiences' },
+    { key: 'equipment', title: 'Оборудование', private: true, field: 'equipment' },
     { key: 'pir', title: 'ПИР', soon: true },
     { key: 'kpi', title: 'KPI', soon: true },
     { key: 'attendance', title: 'Посещаемость', soon: true },
@@ -347,6 +352,10 @@ function PersonalDialog({
     // and all: otherwise an administrator could strip the one who appointed them.
     const rolesLocked = holdsAccess(assigned.roles) && !auth.manageAccess;
 
+    // This card is made of lines that are allowed one by one, so the form shows
+    // only the ones this viewer may actually save.
+    const canEdit = useCanEdit();
+
     const form = useForm({
         surname: employee.surname,
         name: employee.name,
@@ -421,133 +430,153 @@ function PersonalDialog({
                             <InputError message={form.errors.name} />
                         </div>
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-patronymic">Отчество</Label>
-                            <Input
-                                id="personal-patronymic"
-                                value={form.data.patronymic}
-                                onChange={(e) => form.setData('patronymic', e.target.value)}
-                                aria-invalid={!!form.errors.patronymic}
-                            />
-                            <InputError message={form.errors.patronymic} />
-                        </div>
+                        {canEdit('patronymic') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-patronymic">Отчество</Label>
+                                <Input
+                                    id="personal-patronymic"
+                                    value={form.data.patronymic}
+                                    onChange={(e) => form.setData('patronymic', e.target.value)}
+                                    aria-invalid={!!form.errors.patronymic}
+                                />
+                                <InputError message={form.errors.patronymic} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-birth-date">Дата рождения</Label>
-                            <Input
-                                id="personal-birth-date"
-                                type="date"
-                                max={new Date().toISOString().slice(0, 10)}
-                                value={form.data.birth_date}
-                                onChange={(e) => form.setData('birth_date', e.target.value)}
-                                aria-invalid={!!form.errors.birth_date}
-                            />
-                            <InputError message={form.errors.birth_date} />
-                        </div>
+                        {canEdit('birth_date') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-birth-date">Дата рождения</Label>
+                                <Input
+                                    id="personal-birth-date"
+                                    type="date"
+                                    max={new Date().toISOString().slice(0, 10)}
+                                    value={form.data.birth_date}
+                                    onChange={(e) => form.setData('birth_date', e.target.value)}
+                                    aria-invalid={!!form.errors.birth_date}
+                                />
+                                <InputError message={form.errors.birth_date} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-sex">Пол</Label>
-                            <Select value={form.data.sex} onValueChange={(value) => form.setData('sex', value as Sex)}>
-                                <SelectTrigger id="personal-sex">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="male">{sexLabels.male}</SelectItem>
-                                    <SelectItem value="female">{sexLabels.female}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError message={form.errors.sex} />
-                        </div>
+                        {canEdit('sex') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-sex">Пол</Label>
+                                <Select value={form.data.sex} onValueChange={(value) => form.setData('sex', value as Sex)}>
+                                    <SelectTrigger id="personal-sex">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="male">{sexLabels.male}</SelectItem>
+                                        <SelectItem value="female">{sexLabels.female}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <InputError message={form.errors.sex} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="personal-birth-place">Место рождения</Label>
-                            <Input
-                                id="personal-birth-place"
-                                value={form.data.birth_place}
-                                onChange={(e) => form.setData('birth_place', e.target.value)}
-                                aria-invalid={!!form.errors.birth_place}
-                            />
-                            <InputError message={form.errors.birth_place} />
-                        </div>
+                        {canEdit('birth_place') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="personal-birth-place">Место рождения</Label>
+                                <Input
+                                    id="personal-birth-place"
+                                    value={form.data.birth_place}
+                                    onChange={(e) => form.setData('birth_place', e.target.value)}
+                                    aria-invalid={!!form.errors.birth_place}
+                                />
+                                <InputError message={form.errors.birth_place} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-nationality">Национальность</Label>
-                            <Input
-                                id="personal-nationality"
-                                list="personal-nationalities"
-                                value={form.data.nationality}
-                                onChange={(e) => form.setData('nationality', e.target.value)}
-                                aria-invalid={!!form.errors.nationality}
-                            />
-                            <InputError message={form.errors.nationality} />
-                        </div>
+                        {canEdit('nationality') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-nationality">Национальность</Label>
+                                <Input
+                                    id="personal-nationality"
+                                    list="personal-nationalities"
+                                    value={form.data.nationality}
+                                    onChange={(e) => form.setData('nationality', e.target.value)}
+                                    aria-invalid={!!form.errors.nationality}
+                                />
+                                <InputError message={form.errors.nationality} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-citizenship">Гражданство</Label>
-                            <Input
-                                id="personal-citizenship"
-                                list="personal-citizenships"
-                                value={form.data.citizenship}
-                                onChange={(e) => form.setData('citizenship', e.target.value)}
-                                aria-invalid={!!form.errors.citizenship}
-                            />
-                            <InputError message={form.errors.citizenship} />
-                        </div>
+                        {canEdit('citizenship') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-citizenship">Гражданство</Label>
+                                <Input
+                                    id="personal-citizenship"
+                                    list="personal-citizenships"
+                                    value={form.data.citizenship}
+                                    onChange={(e) => form.setData('citizenship', e.target.value)}
+                                    aria-invalid={!!form.errors.citizenship}
+                                />
+                                <InputError message={form.errors.citizenship} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="personal-home-address">Домашний адрес</Label>
-                            <Input
-                                id="personal-home-address"
-                                value={form.data.home_address}
-                                onChange={(e) => form.setData('home_address', e.target.value)}
-                                aria-invalid={!!form.errors.home_address}
-                            />
-                            <InputError message={form.errors.home_address} />
-                        </div>
+                        {canEdit('home_address') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="personal-home-address">Домашний адрес</Label>
+                                <Input
+                                    id="personal-home-address"
+                                    value={form.data.home_address}
+                                    onChange={(e) => form.setData('home_address', e.target.value)}
+                                    aria-invalid={!!form.errors.home_address}
+                                />
+                                <InputError message={form.errors.home_address} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="personal-roles">Позиция</Label>
-                            <MultiSelect
-                                id="personal-roles"
-                                // A locked field still shows what the person holds, so access
-                                // stays readable even where it is untouchable.
-                                options={(rolesLocked ? options.roles : grantableRoles(options.roles, auth.manageAccess)).map((role) => ({
-                                    value: role.name,
-                                    label: role.title,
-                                }))}
-                                value={form.data.roles}
-                                onChange={(value) => form.setData('roles', value)}
-                                disabled={rolesLocked}
-                            />
-                            {rolesLocked && <p className="text-muted-foreground text-sm">{accessNotice}</p>}
-                            <InputError message={listError('roles')} />
-                        </div>
+                        {canEdit('roles') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="personal-roles">Позиция</Label>
+                                <MultiSelect
+                                    id="personal-roles"
+                                    // A locked field still shows what the person holds, so access
+                                    // stays readable even where it is untouchable.
+                                    options={(rolesLocked ? options.roles : grantableRoles(options.roles, auth.manageAccess)).map((role) => ({
+                                        value: role.name,
+                                        label: role.title,
+                                    }))}
+                                    value={form.data.roles}
+                                    onChange={(value) => form.setData('roles', value)}
+                                    disabled={rolesLocked}
+                                />
+                                {rolesLocked && <p className="text-muted-foreground text-sm">{accessNotice}</p>}
+                                <InputError message={listError('roles')} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="personal-positions">Должность</Label>
-                            <MultiSelect
-                                id="personal-positions"
-                                options={options.positions.map((position) => ({ value: position.id, label: position.name }))}
-                                value={form.data.positions}
-                                onChange={(value) => form.setData('positions', value)}
-                            />
-                            <InputError message={listError('positions')} />
-                        </div>
+                        {canEdit('positions') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="personal-positions">Должность</Label>
+                                <MultiSelect
+                                    id="personal-positions"
+                                    options={options.positions.map((position) => ({ value: position.id, label: position.name }))}
+                                    value={form.data.positions}
+                                    onChange={(value) => form.setData('positions', value)}
+                                />
+                                <InputError message={listError('positions')} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="personal-departments">Отдел</Label>
-                            <MultiSelect
-                                id="personal-departments"
-                                options={options.departments.map((department) => ({
-                                    value: department.id,
-                                    label: department.name,
-                                    depth: department.depth,
-                                }))}
-                                value={form.data.departments}
-                                onChange={(value) => form.setData('departments', value)}
-                            />
-                            <InputError message={listError('departments')} />
-                        </div>
+                        {canEdit('departments') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="personal-departments">Отдел</Label>
+                                <MultiSelect
+                                    id="personal-departments"
+                                    options={options.departments.map((department) => ({
+                                        value: department.id,
+                                        label: department.name,
+                                        depth: department.depth,
+                                    }))}
+                                    value={form.data.departments}
+                                    onChange={(value) => form.setData('departments', value)}
+                                />
+                                <InputError message={listError('departments')} />
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter className="gap-2">
@@ -676,6 +705,10 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
         sos_contact: details.sos_contact ?? '',
     });
 
+    // Contacts are allowed line by line too; whose number the SOS one is goes
+    // with the number itself.
+    const canEdit = useCanEdit();
+
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
         form.put(route('employees.contacts', employee.id), { preserveScroll: true, onSuccess: onClose });
@@ -692,60 +725,68 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
                     </DialogHeader>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="contacts-email">Электронная почта</Label>
-                            <Input
-                                id="contacts-email"
-                                type="email"
-                                autoComplete="off"
-                                placeholder="name@evolet.tj"
-                                value={form.data.email}
-                                onChange={(e) => form.setData('email', e.target.value)}
-                                aria-invalid={!!form.errors.email}
-                            />
-                            <InputError message={form.errors.email} />
-                            <p className="text-muted-foreground text-[13px]">С этим адресом сотрудник входит в систему.</p>
-                        </div>
+                        {canEdit('email') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="contacts-email">Электронная почта</Label>
+                                <Input
+                                    id="contacts-email"
+                                    type="email"
+                                    autoComplete="off"
+                                    placeholder="name@evolet.tj"
+                                    value={form.data.email}
+                                    onChange={(e) => form.setData('email', e.target.value)}
+                                    aria-invalid={!!form.errors.email}
+                                />
+                                <InputError message={form.errors.email} />
+                                <p className="text-muted-foreground text-[13px]">С этим адресом сотрудник входит в систему.</p>
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="contacts-phone">Телефон</Label>
-                            <Input
-                                id="contacts-phone"
-                                type="tel"
-                                inputMode="tel"
-                                placeholder="90 123 45 67"
-                                value={form.data.phone}
-                                onChange={(e) => form.setData('phone', e.target.value)}
-                                aria-invalid={!!form.errors.phone}
-                            />
-                            <InputError message={form.errors.phone} />
-                        </div>
+                        {canEdit('phone') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="contacts-phone">Телефон</Label>
+                                <Input
+                                    id="contacts-phone"
+                                    type="tel"
+                                    inputMode="tel"
+                                    placeholder="90 123 45 67"
+                                    value={form.data.phone}
+                                    onChange={(e) => form.setData('phone', e.target.value)}
+                                    aria-invalid={!!form.errors.phone}
+                                />
+                                <InputError message={form.errors.phone} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="contacts-sos-phone">Телефон SOS</Label>
-                            <Input
-                                id="contacts-sos-phone"
-                                type="tel"
-                                inputMode="tel"
-                                placeholder="90 123 45 67"
-                                value={form.data.sos_phone}
-                                onChange={(e) => form.setData('sos_phone', e.target.value)}
-                                aria-invalid={!!form.errors.sos_phone}
-                            />
-                            <InputError message={form.errors.sos_phone} />
-                        </div>
+                        {canEdit('sos_phone') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="contacts-sos-phone">Телефон SOS</Label>
+                                <Input
+                                    id="contacts-sos-phone"
+                                    type="tel"
+                                    inputMode="tel"
+                                    placeholder="90 123 45 67"
+                                    value={form.data.sos_phone}
+                                    onChange={(e) => form.setData('sos_phone', e.target.value)}
+                                    aria-invalid={!!form.errors.sos_phone}
+                                />
+                                <InputError message={form.errors.sos_phone} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="contacts-sos-contact">Чей это номер</Label>
-                            <Input
-                                id="contacts-sos-contact"
-                                placeholder="Мама — Дилором"
-                                value={form.data.sos_contact}
-                                onChange={(e) => form.setData('sos_contact', e.target.value)}
-                                aria-invalid={!!form.errors.sos_contact}
-                            />
-                            <InputError message={form.errors.sos_contact} />
-                        </div>
+                        {canEdit('sos_phone') && (
+                            <div className="grid content-start gap-2 sm:col-span-2">
+                                <Label htmlFor="contacts-sos-contact">Чей это номер</Label>
+                                <Input
+                                    id="contacts-sos-contact"
+                                    placeholder="Мама — Дилором"
+                                    value={form.data.sos_contact}
+                                    onChange={(e) => form.setData('sos_contact', e.target.value)}
+                                    aria-invalid={!!form.errors.sos_contact}
+                                />
+                                <InputError message={form.errors.sos_contact} />
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter className="gap-2">
@@ -814,7 +855,7 @@ function EmploymentDialog({ employee, details, onClose }: { employee: Employee; 
 /** The "Знание языков" card in a form: a level per language, each language once. */
 function LanguagesDialog({ employee, options, onClose }: { employee: Employee; options: EditOptions; onClose: () => void }) {
     const form = useForm({
-        languages: employee.languages.map((language) => ({ id: language.id, level: language.level })),
+        languages: (employee.languages ?? []).map((language) => ({ id: language.id, level: language.level })),
     });
 
     const errors = form.errors as Record<string, string | undefined>;
@@ -982,15 +1023,15 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Не указано</SelectItem>
-                                    <SelectItem value="single">{maritalLabels[employee.sex].single}</SelectItem>
-                                    <SelectItem value="married">{maritalLabels[employee.sex].married}</SelectItem>
+                                    <SelectItem value="single">{maritalLabels[employee.sex ?? 'male'].single}</SelectItem>
+                                    <SelectItem value="married">{maritalLabels[employee.sex ?? 'male'].married}</SelectItem>
                                 </SelectContent>
                             </Select>
                             <InputError message={form.errors.marital_status} />
                         </div>
 
                         <div className="grid content-start gap-2">
-                            <Label htmlFor="family-spouse-name">{spouseLabel(employee.sex)}</Label>
+                            <Label htmlFor="family-spouse-name">{spouseLabel(employee.sex ?? 'male')}</Label>
                             <Input
                                 id="family-spouse-name"
                                 placeholder="ФИО"
@@ -1479,7 +1520,26 @@ function Soon({ title }: { title: string }) {
  * height either way, so blocks with a pencil and blocks without still read as
  * one set. A card that fills a whole tab passes no title: the tab names it.
  */
-function Section({ title, children, className, action }: { title?: string; children: ReactNode; className?: string; action?: ReactNode }) {
+function Section({
+    title,
+    children,
+    className,
+    action,
+    fields,
+}: {
+    title?: string;
+    children: ReactNode;
+    className?: string;
+    action?: ReactNode;
+    /** The fields this block is made of; without any of them there is no block. */
+    fields?: string[];
+}) {
+    const shows = useShows();
+
+    if (fields !== undefined && !fields.some(shows)) {
+        return null;
+    }
+
     return (
         <Card className={cn('flex flex-col gap-4 rounded-xl px-6 py-5', className)}>
             {title && (
@@ -1503,13 +1563,84 @@ function Section({ title, children, className, action }: { title?: string; child
  * Columns end at different heights, so the gap below stays on the last one
  * too — trimming it would leave the card lopsided.
  */
+/**
+ * Which fields of this card the viewer reads. A position is given the lines it
+ * needs, so a card is drawn from the answer rather than from one flag: whatever
+ * is not on the list is not shown, and a block with nothing left on it is not
+ * shown either.
+ */
+const VisibleFields = createContext<string[] | null>(null);
+
+function useShows(): (field?: string) => boolean {
+    const visible = useContext(VisibleFields);
+
+    // No list means nothing to hide — a form that renders outside the card.
+    return (field) => field === undefined || visible === null || visible.includes(field);
+}
+
+/**
+ * Which of those lines the viewer may change. Asked apart from reading, because
+ * they are not the same question: plenty of people should read a passport and
+ * nobody but HR should ever retype one.
+ */
+const EditableFields = createContext<string[] | null>(null);
+
+/**
+ * The blocks a card is edited in, each with the lines behind it. One pencil
+ * opens one dialog for a whole block, so it is worth drawing as soon as any one
+ * of that block's lines can be changed.
+ */
+const BLOCK_FIELDS = {
+    personal: ['patronymic', 'sex', 'birth_date', 'birth_place', 'citizenship', 'nationality', 'home_address', 'roles', 'positions', 'departments'],
+    passport: ['passport_number', 'passport_issued_at', 'passport_issued_by'],
+    contacts: ['email', 'phone', 'sos_phone'],
+    family: ['marital_status', 'spouse', 'children'],
+    languages: ['languages'],
+    employment: ['hired_at'],
+    education: ['educations'],
+    experience: ['work_experiences'],
+    equipment: ['equipment'],
+};
+
+type Block = keyof typeof BLOCK_FIELDS;
+
+/**
+ * Whether one line may be changed, for the dialogs that save their lines one by
+ * one: they offer only what they are allowed to save, so nobody is asked to
+ * retype a field the server would drop.
+ */
+function useCanEdit(): (field: string) => boolean {
+    const editable = useContext(EditableFields);
+
+    // No list means nothing is locked — as with useShows(), for a form outside the card.
+    return (field) => editable === null || editable.includes(field);
+}
+
+/**
+ * Both lists, handed down from one place: a block asks what it may show and what
+ * it may change where it is drawn, instead of either being threaded through
+ * every level as a prop.
+ */
+function ProfileFields({ visible, editable, children }: { visible: string[]; editable: string[]; children: ReactNode }) {
+    return (
+        <VisibleFields.Provider value={visible}>
+            <EditableFields.Provider value={editable}>{children}</EditableFields.Provider>
+        </VisibleFields.Provider>
+    );
+}
+
 function Fields({ children, columns }: { children: ReactNode; columns?: 1 | 2 }) {
     const fixed = { 1: 'columns-1', 2: 'columns-2' } as const;
 
     return <dl className={cn('gap-x-6', columns ? fixed[columns] : 'columns-1 sm:columns-2 lg:columns-3')}>{children}</dl>;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** One line of a card. Named after a field, it disappears when that is hidden. */
+function Field({ label, field, children }: { label: string; field?: string; children: ReactNode }) {
+    if (!useShows()(field)) {
+        return null;
+    }
+
     return (
         <div className="mb-4 flex min-w-0 break-inside-avoid flex-col gap-1">
             <dt className="text-muted-foreground text-[13px]">{label}</dt>
@@ -1518,7 +1649,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     );
 }
 
-function Departments({ items }: { items: Employee['departments'] }) {
+function Departments({ items }: { items: NonNullable<Employee['departments']> }) {
     return (
         <ul className="flex flex-col gap-1">
             {items.map((department) => (
@@ -1692,9 +1823,7 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
                         <Link href={route('equipment.show', unit.id)} className="text-sm font-medium hover:underline">
                             {unit.name}
                         </Link>
-                        <span className="text-muted-foreground text-[13px]">
-                            {[unit.type, unit.details].filter(Boolean).join(' · ')}
-                        </span>
+                        <span className="text-muted-foreground text-[13px]">{[unit.type, unit.details].filter(Boolean).join(' · ')}</span>
                         <span className="text-muted-foreground text-[13px] tabular-nums">
                             Инв. № {unit.inventory_number}
                             {unit.issued_at && ` · выдано ${formatDate(unit.issued_at)}`}
@@ -1855,9 +1984,12 @@ export default function EmployeeProfile({
     options,
     assigned,
     access,
+    visibleFields,
+    editableFields,
 }: {
     employee: Employee;
     neighbours: { prev: Neighbour; next: Neighbour };
+    /** Whether anything at all is theirs to change; the photograph hangs on this. */
     canEdit: boolean;
     isSelf: boolean;
     /** Choices for the edit dialogs; null for viewers who may not edit. */
@@ -1865,6 +1997,10 @@ export default function EmployeeProfile({
     assigned: Assigned | null;
     /** Rights and personal exceptions; only a system administrator is sent these. */
     access: AccessPicture | null;
+    /** Which lines of this card the viewer reads; everything else is not drawn. */
+    visibleFields: string[];
+    /** Which of them they may change; the rest are shown without a pencil. */
+    editableFields: string[];
 }) {
     const [editing, setEditing] = useState<'personal' | 'passport' | 'contacts' | 'languages' | 'employment' | 'family' | null>(null);
     // Education is edited one record at a time, so these hold a record, not a card name.
@@ -1877,7 +2013,13 @@ export default function EmployeeProfile({
     const fullName = [employee.surname, employee.name, employee.patronymic].filter(Boolean).join(' ');
     const details = employee.private;
 
-    const tabs = TABS.filter((tab) => !('private' in tab && tab.private) || details);
+    // A block is editable while one of its lines is: the dialog behind the
+    // pencil then has something to save, even if not the whole card.
+    const canEditBlock = (block: Block) => BLOCK_FIELDS[block].some((field) => editableFields.includes(field));
+
+    // A section is offered when its own field is readable and there is a card
+    // behind it to read.
+    const tabs = TABS.filter((tab) => !('field' in tab) || (details !== null && visibleFields.includes(tab.field)));
     const [tab, setTab] = useTab(tabs.map((t) => t.key));
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -1886,519 +2028,546 @@ export default function EmployeeProfile({
     ];
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs} fitViewport>
-            <Head title={shortName} />
+        <ProfileFields visible={visibleFields} editable={editableFields}>
+            <AppLayout breadcrumbs={breadcrumbs} fitViewport>
+                <Head title={shortName} />
 
-            {/* The header and tabs stay put; each column below scrolls on its own. */}
-            <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:items-end">
-                    <Avatar employee={employee} canEdit={canEdit} onDelete={() => setDeletingAvatar(true)} />
+                {/* The header and tabs stay put; each column below scrolls on its own. */}
+                <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
+                    <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:items-end">
+                        <Avatar employee={employee} canEdit={canEdit} onDelete={() => setDeletingAvatar(true)} />
 
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="text-xl font-semibold tracking-tight">{fullName}</h1>
-                            {employee.status !== 'active' && (
-                                <StatusBadge tone={employee.status === 'fired' ? 'danger' : 'warning'} title={employee.status_note ?? undefined}>
-                                    {[
-                                        employee.status === 'fired'
-                                            ? employee.sex === 'female'
-                                                ? 'Уволена'
-                                                : 'Уволен'
-                                            : employee.sex === 'female'
-                                              ? 'Переведена'
-                                              : 'Переведён',
-                                        formatDate(employee.status_changed_at),
-                                        employee.status_note &&
-                                            (employee.status === 'transferred' ? `→ ${employee.status_note}` : `· ${employee.status_note}`),
-                                    ]
-                                        .filter(Boolean)
-                                        .join(' ')}
-                                </StatusBadge>
-                            )}
-                        </div>
-
-                        {employee.positions.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                                {employee.positions.map((title) => (
-                                    <StatusBadge key={title} tone="success">
-                                        {title}
+                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <h1 className="text-xl font-semibold tracking-tight">{fullName}</h1>
+                                {employee.status !== 'active' && (
+                                    <StatusBadge tone={employee.status === 'fired' ? 'danger' : 'warning'} title={employee.status_note ?? undefined}>
+                                        {[
+                                            employee.status === 'fired'
+                                                ? employee.sex === 'female'
+                                                    ? 'Уволена'
+                                                    : 'Уволен'
+                                                : employee.sex === 'female'
+                                                  ? 'Переведена'
+                                                  : 'Переведён',
+                                            formatDate(employee.status_changed_at),
+                                            employee.status_note &&
+                                                (employee.status === 'transferred' ? `→ ${employee.status_note}` : `· ${employee.status_note}`),
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' ')}
                                     </StatusBadge>
-                                ))}
+                                )}
                             </div>
-                        )}
 
-                        <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                            <a href={`mailto:${employee.email}`} className={contactLink}>
-                                <Mail className="size-4" />
-                                {employee.email}
-                            </a>
-                            {details?.phone && (
-                                <a href={`tel:${details.phone}`} className={cn(contactLink, 'tabular-nums')}>
-                                    <Phone className="size-4" />
-                                    {formatPhone(details.phone)}
-                                </a>
+                            {(employee.positions ?? []).length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {(employee.positions ?? []).map((title) => (
+                                        <StatusBadge key={title} tone="success">
+                                            {title}
+                                        </StatusBadge>
+                                    ))}
+                                </div>
                             )}
+
+                            <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                                <a href={`mailto:${employee.email}`} className={contactLink}>
+                                    <Mail className="size-4" />
+                                    {employee.email}
+                                </a>
+                                {details?.phone && (
+                                    <a href={`tel:${details.phone}`} className={cn(contactLink, 'tabular-nums')}>
+                                        <Phone className="size-4" />
+                                        {formatPhone(details.phone)}
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-end">
+                            <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-start sm:self-end">
-                        <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
-                    </div>
-                </div>
+                    <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
-                <Tabs tabs={tabs} active={tab} onChange={setTab} />
+                    {/* One card per tab, in a pane of its own that takes the height left over. */}
+                    {tab !== 'profile' && (
+                        <div className="scroll-soft flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
+                            {TABS.find((t) => t.key === tab && 'soon' in t) && <Soon title={TABS.find((t) => t.key === tab)!.title} />}
 
-                {/* One card per tab, in a pane of its own that takes the height left over. */}
-                {tab !== 'profile' && (
-                    <div className="scroll-soft flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
-                        {TABS.find((t) => t.key === tab && 'soon' in t) && <Soon title={TABS.find((t) => t.key === tab)!.title} />}
+                            {tab === 'education' && details && (
+                                <>
+                                    <Section>
+                                        {details.educations.length === 0 ? (
+                                            <p className="text-muted-foreground text-sm">Не указано</p>
+                                        ) : (
+                                            <Educations
+                                                items={details.educations}
+                                                canEdit={canEditBlock('education')}
+                                                onEdit={setEducation}
+                                                onDelete={setDeletingEducation}
+                                            />
+                                        )}
+                                    </Section>
 
-                        {tab === 'education' && details && (
-                            <>
-                                <Section>
-                                    {details.educations.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm">Не указано</p>
-                                    ) : (
-                                        <Educations
-                                            items={details.educations}
-                                            canEdit={canEdit}
-                                            onEdit={setEducation}
-                                            onDelete={setDeletingEducation}
-                                        />
+                                    {/* Outside the card: the card is the list, this adds to it. */}
+                                    {canEditBlock('education') && (
+                                        <Button type="button" variant="outline" className="self-start" onClick={() => setEducation('new')}>
+                                            <Plus />
+                                            Добавить образование
+                                        </Button>
                                     )}
-                                </Section>
+                                </>
+                            )}
 
-                                {/* Outside the card: the card is the list, this adds to it. */}
-                                {canEdit && (
-                                    <Button type="button" variant="outline" className="self-start" onClick={() => setEducation('new')}>
-                                        <Plus />
-                                        Добавить образование
-                                    </Button>
-                                )}
-                            </>
-                        )}
+                            {tab === 'experience' && details && (
+                                <>
+                                    <Section>
+                                        {details.work_experiences.length === 0 ? (
+                                            <p className="text-muted-foreground text-sm">Не указана</p>
+                                        ) : (
+                                            <WorkExperiences
+                                                items={details.work_experiences}
+                                                canEdit={canEditBlock('experience')}
+                                                onEdit={setJob}
+                                                onDelete={setDeletingJob}
+                                            />
+                                        )}
+                                    </Section>
 
-                        {tab === 'experience' && details && (
-                            <>
-                                <Section>
-                                    {details.work_experiences.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm">Не указана</p>
-                                    ) : (
-                                        <WorkExperiences
-                                            items={details.work_experiences}
-                                            canEdit={canEdit}
-                                            onEdit={setJob}
-                                            onDelete={setDeletingJob}
-                                        />
+                                    {canEditBlock('experience') && (
+                                        <Button type="button" variant="outline" className="self-start" onClick={() => setJob('new')}>
+                                            <Plus />
+                                            Добавить место работы
+                                        </Button>
                                     )}
-                                </Section>
+                                </>
+                            )}
 
-                                {canEdit && (
-                                    <Button type="button" variant="outline" className="self-start" onClick={() => setJob('new')}>
-                                        <Plus />
-                                        Добавить место работы
-                                    </Button>
-                                )}
-                            </>
-                        )}
+                            {tab === 'equipment' && details && (
+                                // What they hold now on the left, what has been
+                                // through their hands on the right.
+                                <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
+                                    <div className={pane}>
+                                        <Section
+                                            title="Текущие оборудования"
+                                            action={
+                                                canEditBlock('equipment') && (
+                                                    // A text link rather than a button: the strip keeps the
+                                                    // height it has without one.
+                                                    <Link
+                                                        // "У кого" is a name search now, so the link passes the name.
+                                                        href={route('equipment.index', { holder: `${employee.surname} ${employee.name}` })}
+                                                        className="text-brand-strong flex shrink-0 items-center gap-1.5 text-[13px] font-medium hover:underline dark:text-[#C5E27A]"
+                                                    >
+                                                        <Laptop className="size-4" />
+                                                        Открыть в разделе оборудования
+                                                    </Link>
+                                                )
+                                            }
+                                        >
+                                            {details.equipment.length === 0 ? (
+                                                <p className="text-muted-foreground text-sm">Не выдано</p>
+                                            ) : (
+                                                <EquipmentList items={details.equipment} />
+                                            )}
+                                        </Section>
+                                    </div>
 
-                        {tab === 'equipment' && details && (
-                            // What they hold now on the left, what has been
-                            // through their hands on the right.
+                                    <div className={pane}>
+                                        <EquipmentJournal events={details.equipment_history.events} names={details.equipment_history.names} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {tab === 'profile' &&
+                        (details ? (
+                            // Narrow: one column, the grid scrolls. Wide: two columns,
+                            // each scrolling on its own so neither drags the other along.
                             <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
                                 <div className={pane}>
                                     <Section
-                                        title="Текущие оборудования"
+                                        title="Основные данные"
                                         action={
-                                            canEdit && (
-                                                // A text link rather than a button: the strip keeps the
-                                                // height it has without one.
-                                                <Link
-                                                    // "У кого" is a name search now, so the link passes the name.
-                                                    href={route('equipment.index', { holder: `${employee.surname} ${employee.name}` })}
-                                                    className="text-brand-strong flex shrink-0 items-center gap-1.5 text-[13px] font-medium hover:underline dark:text-[#C5E27A]"
+                                            canEditBlock('personal') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать основные данные"
+                                                    onClick={() => setEditing('personal')}
                                                 >
-                                                    <Laptop className="size-4" />
-                                                    Открыть в разделе оборудования
-                                                </Link>
+                                                    <Pencil className="size-4" />
+                                                </Button>
                                             )
                                         }
                                     >
-                                        {details.equipment.length === 0 ? (
-                                            <p className="text-muted-foreground text-sm">Не выдано</p>
+                                        <Fields>
+                                            <Field label="Фамилия">{employee.surname}</Field>
+                                            <Field label="Имя">{employee.name}</Field>
+                                            <Field label="Отчество" field="patronymic">
+                                                {employee.patronymic}
+                                            </Field>
+                                            <Field label="Пол" field="sex">
+                                                {employee.sex && sexLabels[employee.sex]}
+                                            </Field>
+                                            <Field label="Дата рождения" field="birth_date">
+                                                {details.birth_date && (
+                                                    <>
+                                                        {formatDate(details.birth_date)}
+                                                        <span className="text-muted-foreground font-normal"> · {age(details.birth_date)}</span>
+                                                    </>
+                                                )}
+                                            </Field>
+                                            <Field label="Место рождения" field="birth_place">
+                                                {details.birth_place}
+                                            </Field>
+                                            <Field label="Гражданство" field="citizenship">
+                                                {details.citizenship}
+                                            </Field>
+                                            <Field label="Национальность" field="nationality">
+                                                {details.nationality && capitalize(details.nationality)}
+                                            </Field>
+                                            <Field label="Домашний адрес" field="home_address">
+                                                {details.home_address}
+                                            </Field>
+                                            <Field label={(employee.roles ?? []).length > 1 ? 'Позиции' : 'Позиция'} field="roles">
+                                                {employee.roles?.length ? employee.roles.join(', ') : null}
+                                            </Field>
+                                            <Field label={(employee.positions ?? []).length > 1 ? 'Должности' : 'Должность'} field="positions">
+                                                {employee.positions?.length ? employee.positions.join(', ') : null}
+                                            </Field>
+                                            <Field label={(employee.departments ?? []).length > 1 ? 'Отделы' : 'Отдел'} field="departments">
+                                                {employee.departments?.length ? <Departments items={employee.departments} /> : null}
+                                            </Field>
+                                        </Fields>
+                                    </Section>
+
+                                    <Section
+                                        fields={['passport_number', 'passport_issued_at', 'passport_issued_by']}
+                                        title="Паспорт"
+                                        action={
+                                            canEditBlock('passport') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать паспорт"
+                                                    onClick={() => setEditing('passport')}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                            )
+                                        }
+                                    >
+                                        <Fields>
+                                            <Field label="Серия и номер" field="passport_number">
+                                                {(details.passport.series || details.passport.number) && (
+                                                    <span className="tabular-nums">
+                                                        {[details.passport.series, details.passport.number].filter(Boolean).join(' ')}
+                                                    </span>
+                                                )}
+                                            </Field>
+                                            <Field label="Дата выдачи" field="passport_issued_at">
+                                                {formatDate(details.passport.issued_at)}
+                                            </Field>
+                                            <Field label="Кем выдан" field="passport_issued_by">
+                                                {details.passport.issued_by}
+                                            </Field>
+                                        </Fields>
+                                    </Section>
+
+                                    <Section
+                                        fields={['marital_status', 'spouse', 'children']}
+                                        title="Семья"
+                                        action={
+                                            canEditBlock('family') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать семью"
+                                                    onClick={() => setEditing('family')}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                            )
+                                        }
+                                    >
+                                        <Fields>
+                                            <Field label="Семейное положение" field="marital_status">
+                                                {details.marital_status && maritalLabels[employee.sex ?? 'male'][details.marital_status]}
+                                            </Field>
+                                            <Field label={spouseLabel(employee.sex ?? 'male')} field="spouse">
+                                                {details.spouse_name && (
+                                                    <>
+                                                        {details.spouse_name}
+                                                        {details.spouse_birth_date && (
+                                                            <span className="text-muted-foreground font-normal">
+                                                                {' · '}
+                                                                {formatDate(details.spouse_birth_date)} · {age(details.spouse_birth_date)}
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </Field>
+                                        </Fields>
+
+                                        <h3 className="text-muted-foreground text-[13px]">Дети</h3>
+                                        {details.children.length === 0 ? (
+                                            // A dash while nobody has filled this in; "Нет" only once HR says so.
+                                            <p className="text-muted-foreground text-sm">{details.has_children === false ? 'Нет' : '—'}</p>
                                         ) : (
-                                            <EquipmentList items={details.equipment} />
+                                            <ul className="flex flex-col">
+                                                {details.children.map((child) => (
+                                                    <li
+                                                        key={child.full_name + child.birth_date}
+                                                        className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0"
+                                                    >
+                                                        <span className="text-sm font-medium">{child.full_name}</span>
+                                                        {child.birth_date && (
+                                                            <span className="text-muted-foreground text-[13px]">
+                                                                {formatDate(child.birth_date)} · {age(child.birth_date)}
+                                                            </span>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         )}
                                     </Section>
                                 </div>
 
-                                <div className={pane}>
-                                    <EquipmentJournal events={details.equipment_history.events} names={details.equipment_history.names} />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {tab === 'profile' &&
-                    (details ? (
-                        // Narrow: one column, the grid scrolls. Wide: two columns,
-                        // each scrolling on its own so neither drags the other along.
-                        <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
-                            <div className={pane}>
-                                <Section
-                                    title="Основные данные"
-                                    action={
-                                        canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground -mr-2 size-7"
-                                                aria-label="Редактировать основные данные"
-                                                onClick={() => setEditing('personal')}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                        )
-                                    }
-                                >
-                                    <Fields>
-                                        <Field label="Фамилия">{employee.surname}</Field>
-                                        <Field label="Имя">{employee.name}</Field>
-                                        <Field label="Отчество">{employee.patronymic}</Field>
-                                        <Field label="Пол">{sexLabels[employee.sex]}</Field>
-                                        <Field label="Дата рождения">
-                                            {details.birth_date && (
-                                                <>
-                                                    {formatDate(details.birth_date)}
-                                                    <span className="text-muted-foreground font-normal"> · {age(details.birth_date)}</span>
-                                                </>
-                                            )}
-                                        </Field>
-                                        <Field label="Место рождения">{details.birth_place}</Field>
-                                        <Field label="Гражданство">{details.citizenship}</Field>
-                                        <Field label="Национальность">{details.nationality && capitalize(details.nationality)}</Field>
-                                        <Field label="Домашний адрес">{details.home_address}</Field>
-                                        <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'}>
-                                            {employee.roles.length > 0 ? employee.roles.join(', ') : null}
-                                        </Field>
-                                        <Field label={employee.positions.length > 1 ? 'Должности' : 'Должность'}>
-                                            {employee.positions.length > 0 ? employee.positions.join(', ') : null}
-                                        </Field>
-                                        <Field label={employee.departments.length > 1 ? 'Отделы' : 'Отдел'}>
-                                            {employee.departments.length > 0 ? <Departments items={employee.departments} /> : null}
-                                        </Field>
-                                    </Fields>
-                                </Section>
-
-                                <Section
-                                    title="Паспорт"
-                                    action={
-                                        canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground -mr-2 size-7"
-                                                aria-label="Редактировать паспорт"
-                                                onClick={() => setEditing('passport')}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                        )
-                                    }
-                                >
-                                    <Fields>
-                                        <Field label="Серия и номер">
-                                            {(details.passport.series || details.passport.number) && (
-                                                <span className="tabular-nums">
-                                                    {[details.passport.series, details.passport.number].filter(Boolean).join(' ')}
-                                                </span>
-                                            )}
-                                        </Field>
-                                        <Field label="Дата выдачи">{formatDate(details.passport.issued_at)}</Field>
-                                        <Field label="Кем выдан">{details.passport.issued_by}</Field>
-                                    </Fields>
-                                </Section>
-
-                                <Section
-                                    title="Семья"
-                                    action={
-                                        canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground -mr-2 size-7"
-                                                aria-label="Редактировать семью"
-                                                onClick={() => setEditing('family')}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                        )
-                                    }
-                                >
-                                    <Fields>
-                                        <Field label="Семейное положение">
-                                            {details.marital_status && maritalLabels[employee.sex][details.marital_status]}
-                                        </Field>
-                                        <Field label={spouseLabel(employee.sex)}>
-                                            {details.spouse_name && (
-                                                <>
-                                                    {details.spouse_name}
-                                                    {details.spouse_birth_date && (
-                                                        <span className="text-muted-foreground font-normal">
-                                                            {' · '}
-                                                            {formatDate(details.spouse_birth_date)} · {age(details.spouse_birth_date)}
-                                                        </span>
-                                                    )}
-                                                </>
-                                            )}
-                                        </Field>
-                                    </Fields>
-
-                                    <h3 className="text-muted-foreground text-[13px]">Дети</h3>
-                                    {details.children.length === 0 ? (
-                                        // A dash while nobody has filled this in; "Нет" only once HR says so.
-                                        <p className="text-muted-foreground text-sm">{details.has_children === false ? 'Нет' : '—'}</p>
-                                    ) : (
-                                        <ul className="flex flex-col">
-                                            {details.children.map((child) => (
-                                                <li
-                                                    key={child.full_name + child.birth_date}
-                                                    className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0"
-                                                >
-                                                    <span className="text-sm font-medium">{child.full_name}</span>
-                                                    {child.birth_date && (
-                                                        <span className="text-muted-foreground text-[13px]">
-                                                            {formatDate(child.birth_date)} · {age(child.birth_date)}
-                                                        </span>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </Section>
-                            </div>
-
-                            <aside className={pane}>
-                                {/* Bare, without a card of its own: two facts that need no heading.
+                                <aside className={pane}>
+                                    {/* Bare, without a card of its own: two facts that need no heading.
                                     Two fields across two columns end level, so the gap below one
                                     field is the gap below both, and trimming it is exact. */}
-                                <div className="-mb-4 px-1">
-                                    <Fields columns={2}>
-                                        <Field label="Начало работы">
-                                            {/* The pencil sits by the value it edits, not by the block. */}
-                                            <span className="flex items-center gap-1">
-                                                {formatDate(details.hired_at) ?? <span className="text-muted-foreground font-normal">—</span>}
-                                                {canEdit && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-muted-foreground -my-1 size-6 shrink-0"
-                                                        aria-label="Редактировать начало работы"
-                                                        onClick={() => setEditing('employment')}
-                                                    >
-                                                        <Pencil className="size-3.5" />
-                                                    </Button>
+                                    <div className="-mb-4 px-1">
+                                        <Fields columns={2}>
+                                            <Field label="Начало работы" field="hired_at">
+                                                {/* The pencil sits by the value it edits, not by the block. */}
+                                                <span className="flex items-center gap-1">
+                                                    {formatDate(details.hired_at) ?? <span className="text-muted-foreground font-normal">—</span>}
+                                                    {canEditBlock('employment') && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-muted-foreground -my-1 size-6 shrink-0"
+                                                            aria-label="Редактировать начало работы"
+                                                            onClick={() => setEditing('employment')}
+                                                        >
+                                                            <Pencil className="size-3.5" />
+                                                        </Button>
+                                                    )}
+                                                </span>
+                                            </Field>
+                                            <Field label="Стаж в компании" field="hired_at">
+                                                {details.hired_at && tenure(details.hired_at)}
+                                            </Field>
+                                        </Fields>
+                                    </div>
+
+                                    <Section
+                                        fields={['languages']}
+                                        title="Знание языков"
+                                        action={
+                                            canEditBlock('languages') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать знание языков"
+                                                    onClick={() => setEditing('languages')}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                            )
+                                        }
+                                    >
+                                        {(employee.languages ?? []).length === 0 ? (
+                                            <p className="text-muted-foreground text-sm">Не указаны</p>
+                                        ) : (
+                                            <Languages items={employee.languages ?? []} />
+                                        )}
+                                    </Section>
+
+                                    <Section
+                                        fields={['email', 'phone', 'sos_phone']}
+                                        title="Контакты"
+                                        action={
+                                            canEditBlock('contacts') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать контакты"
+                                                    onClick={() => setEditing('contacts')}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                            )
+                                        }
+                                    >
+                                        <Fields columns={1}>
+                                            <Field label="Электронная почта" field="email">
+                                                <a href={`mailto:${employee.email}`} className={contactLink}>
+                                                    <Mail className="size-4 shrink-0" />
+                                                    <span className="truncate">{employee.email}</span>
+                                                </a>
+                                            </Field>
+                                            <Field label="Телефон" field="phone">
+                                                {details.phone && (
+                                                    <a href={`tel:${details.phone}`} className={cn(contactLink, 'tabular-nums')}>
+                                                        <Phone className="size-4 shrink-0" />
+                                                        {formatPhone(details.phone)}
+                                                    </a>
                                                 )}
-                                            </span>
-                                        </Field>
-                                        <Field label="Стаж в компании">{details.hired_at && tenure(details.hired_at)}</Field>
-                                    </Fields>
+                                            </Field>
+                                            <Field label="Телефон SOS" field="sos_phone">
+                                                {details.sos_phone && <SosPhone phone={details.sos_phone} contact={details.sos_contact} />}
+                                            </Field>
+                                        </Fields>
+                                    </Section>
+
+                                    {access && <AccessSection employee={employee} access={access} />}
+
+                                    {canEdit && (
+                                        <EmployeeActions
+                                            variant="group"
+                                            isSelf={isSelf}
+                                            employee={{
+                                                id: employee.id,
+                                                name: employee.name,
+                                                surname: employee.surname,
+                                                status: employee.status,
+                                            }}
+                                        />
+                                    )}
+                                </aside>
+                            </div>
+                        ) : (
+                            <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
+                                <div className={pane}>
+                                    <Section title="Основное">
+                                        <Fields>
+                                            <Field label={(employee.roles ?? []).length > 1 ? 'Позиции' : 'Позиция'} field="roles">
+                                                {employee.roles?.length ? employee.roles.join(', ') : null}
+                                            </Field>
+                                            <Field label={(employee.positions ?? []).length > 1 ? 'Должности' : 'Должность'} field="positions">
+                                                {employee.positions?.length ? employee.positions.join(', ') : null}
+                                            </Field>
+                                            <Field label={(employee.departments ?? []).length > 1 ? 'Отделы' : 'Отдел'} field="departments">
+                                                {employee.departments?.length ? <Departments items={employee.departments} /> : null}
+                                            </Field>
+                                            <Field label="Пол" field="sex">
+                                                {employee.sex && sexLabels[employee.sex]}
+                                            </Field>
+                                        </Fields>
+                                    </Section>
+
+                                    <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-6 py-5 text-sm">
+                                        <Lock className="mt-0.5 size-5 shrink-0" />
+                                        <p>
+                                            Личные данные, контакты, паспорт и семья закрыты. Их видят только сам сотрудник, его руководитель, HR и
+                                            администратор.
+                                        </p>
+                                    </Card>
                                 </div>
 
-                                <Section
-                                    title="Знание языков"
-                                    action={
-                                        canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground -mr-2 size-7"
-                                                aria-label="Редактировать знание языков"
-                                                onClick={() => setEditing('languages')}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                        )
-                                    }
-                                >
-                                    {employee.languages.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm">Не указаны</p>
-                                    ) : (
-                                        <Languages items={employee.languages} />
-                                    )}
-                                </Section>
-
-                                <Section
-                                    title="Контакты"
-                                    action={
-                                        canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground -mr-2 size-7"
-                                                aria-label="Редактировать контакты"
-                                                onClick={() => setEditing('contacts')}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                        )
-                                    }
-                                >
-                                    <Fields columns={1}>
-                                        <Field label="Электронная почта">
-                                            <a href={`mailto:${employee.email}`} className={contactLink}>
-                                                <Mail className="size-4 shrink-0" />
-                                                <span className="truncate">{employee.email}</span>
-                                            </a>
-                                        </Field>
-                                        <Field label="Телефон">
-                                            {details.phone && (
-                                                <a href={`tel:${details.phone}`} className={cn(contactLink, 'tabular-nums')}>
-                                                    <Phone className="size-4 shrink-0" />
-                                                    {formatPhone(details.phone)}
-                                                </a>
-                                            )}
-                                        </Field>
-                                        <Field label="Телефон SOS">
-                                            {details.sos_phone && <SosPhone phone={details.sos_phone} contact={details.sos_contact} />}
-                                        </Field>
-                                    </Fields>
-                                </Section>
-
-                                {access && <AccessSection employee={employee} access={access} />}
-
-                                {canEdit && (
-                                    <EmployeeActions
-                                        variant="group"
-                                        isSelf={isSelf}
-                                        employee={{
-                                            id: employee.id,
-                                            name: employee.name,
-                                            surname: employee.surname,
-                                            status: employee.status,
-                                        }}
-                                    />
-                                )}
-                            </aside>
-                        </div>
-                    ) : (
-                        <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
-                            <div className={pane}>
-                                <Section title="Основное">
-                                    <Fields>
-                                        <Field label={employee.roles.length > 1 ? 'Позиции' : 'Позиция'}>
-                                            {employee.roles.length > 0 ? employee.roles.join(', ') : null}
-                                        </Field>
-                                        <Field label={employee.positions.length > 1 ? 'Должности' : 'Должность'}>
-                                            {employee.positions.length > 0 ? employee.positions.join(', ') : null}
-                                        </Field>
-                                        <Field label={employee.departments.length > 1 ? 'Отделы' : 'Отдел'}>
-                                            {employee.departments.length > 0 ? <Departments items={employee.departments} /> : null}
-                                        </Field>
-                                        <Field label="Пол">{sexLabels[employee.sex]}</Field>
-                                    </Fields>
-                                </Section>
-
-                                <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-6 py-5 text-sm">
-                                    <Lock className="mt-0.5 size-5 shrink-0" />
-                                    <p>
-                                        Личные данные, контакты, паспорт и семья закрыты. Их видят только сам сотрудник, его руководитель, HR и
-                                        администратор.
-                                    </p>
-                                </Card>
-                            </div>
-
-                            {/* Hire date, phones and the rest are private, so a colleague's sidebar
+                                {/* Hire date, phones and the rest are private, so a colleague's sidebar
                             holds languages alone — those are public. */}
-                            <aside className={pane}>
-                                <Section
-                                    title="Знание языков"
-                                    action={
-                                        canEdit && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="text-muted-foreground -mr-2 size-7"
-                                                aria-label="Редактировать знание языков"
-                                                onClick={() => setEditing('languages')}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                        )
-                                    }
-                                >
-                                    {employee.languages.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm">Не указаны</p>
-                                    ) : (
-                                        <Languages items={employee.languages} />
-                                    )}
-                                </Section>
-                            </aside>
-                        </div>
-                    ))}
-            </div>
+                                <aside className={pane}>
+                                    <Section
+                                        fields={['languages']}
+                                        title="Знание языков"
+                                        action={
+                                            canEditBlock('languages') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать знание языков"
+                                                    onClick={() => setEditing('languages')}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                            )
+                                        }
+                                    >
+                                        {(employee.languages ?? []).length === 0 ? (
+                                            <p className="text-muted-foreground text-sm">Не указаны</p>
+                                        ) : (
+                                            <Languages items={employee.languages ?? []} />
+                                        )}
+                                    </Section>
+                                </aside>
+                            </div>
+                        ))}
+                </div>
 
-            {editing === 'personal' && details && options && assigned && (
-                <PersonalDialog employee={employee} details={details} options={options} assigned={assigned} onClose={() => setEditing(null)} />
-            )}
+                {editing === 'personal' && details && options && assigned && (
+                    <PersonalDialog employee={employee} details={details} options={options} assigned={assigned} onClose={() => setEditing(null)} />
+                )}
 
-            {editing === 'passport' && details && <PassportDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+                {editing === 'passport' && details && <PassportDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
 
-            {editing === 'contacts' && details && <ContactsDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+                {editing === 'contacts' && details && <ContactsDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
 
-            {editing === 'employment' && details && <EmploymentDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+                {editing === 'employment' && details && <EmploymentDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
 
-            {/* Languages are public, so this one needs no private details. */}
-            {editing === 'languages' && options && <LanguagesDialog employee={employee} options={options} onClose={() => setEditing(null)} />}
+                {/* Languages are public, so this one needs no private details. */}
+                {editing === 'languages' && options && <LanguagesDialog employee={employee} options={options} onClose={() => setEditing(null)} />}
 
-            {editing === 'family' && details && <FamilyDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
+                {editing === 'family' && details && <FamilyDialog employee={employee} details={details} onClose={() => setEditing(null)} />}
 
-            {deletingAvatar && (
-                <DeleteRecordDialog
-                    title="Удалить фотографию?"
-                    description="Вместо неё снова будут показаны инициалы. Отменить удаление нельзя."
-                    onConfirm={() =>
-                        router.delete(route('employees.avatar.destroy', employee.id), {
-                            preserveScroll: true,
-                            onFinish: () => setDeletingAvatar(false),
-                        })
-                    }
-                    onClose={() => setDeletingAvatar(false)}
-                />
-            )}
+                {deletingAvatar && (
+                    <DeleteRecordDialog
+                        title="Удалить фотографию?"
+                        description="Вместо неё снова будут показаны инициалы. Отменить удаление нельзя."
+                        onConfirm={() =>
+                            router.delete(route('employees.avatar.destroy', employee.id), {
+                                preserveScroll: true,
+                                onFinish: () => setDeletingAvatar(false),
+                            })
+                        }
+                        onClose={() => setDeletingAvatar(false)}
+                    />
+                )}
 
-            {education && <EducationDialog employee={employee} education={education} onClose={() => setEducation(null)} />}
+                {education && <EducationDialog employee={employee} education={education} onClose={() => setEducation(null)} />}
 
-            {job && options && <WorkExperienceDialog employee={employee} job={job} options={options} onClose={() => setJob(null)} />}
+                {job && options && <WorkExperienceDialog employee={employee} job={job} options={options} onClose={() => setJob(null)} />}
 
-            {deletingJob && (
-                <DeleteRecordDialog
-                    title={`Удалить место работы «${deletingJob.organization}»?`}
-                    description="Запись исчезнет из профиля. Отменить удаление нельзя."
-                    onConfirm={() =>
-                        router.delete(route('employees.experiences.destroy', [employee.id, deletingJob.id]), {
-                            preserveScroll: true,
-                            onFinish: () => setDeletingJob(null),
-                        })
-                    }
-                    onClose={() => setDeletingJob(null)}
-                />
-            )}
+                {deletingJob && (
+                    <DeleteRecordDialog
+                        title={`Удалить место работы «${deletingJob.organization}»?`}
+                        description="Запись исчезнет из профиля. Отменить удаление нельзя."
+                        onConfirm={() =>
+                            router.delete(route('employees.experiences.destroy', [employee.id, deletingJob.id]), {
+                                preserveScroll: true,
+                                onFinish: () => setDeletingJob(null),
+                            })
+                        }
+                        onClose={() => setDeletingJob(null)}
+                    />
+                )}
 
-            {deletingEducation && (
-                <DeleteRecordDialog
-                    title={`Удалить образование «${deletingEducation.institution}»?`}
-                    description="Запись исчезнет из профиля. Отменить удаление нельзя."
-                    onConfirm={() =>
-                        router.delete(route('employees.educations.destroy', [employee.id, deletingEducation.id]), {
-                            preserveScroll: true,
-                            onFinish: () => setDeletingEducation(null),
-                        })
-                    }
-                    onClose={() => setDeletingEducation(null)}
-                />
-            )}
-        </AppLayout>
+                {deletingEducation && (
+                    <DeleteRecordDialog
+                        title={`Удалить образование «${deletingEducation.institution}»?`}
+                        description="Запись исчезнет из профиля. Отменить удаление нельзя."
+                        onConfirm={() =>
+                            router.delete(route('employees.educations.destroy', [employee.id, deletingEducation.id]), {
+                                preserveScroll: true,
+                                onFinish: () => setDeletingEducation(null),
+                            })
+                        }
+                        onClose={() => setDeletingEducation(null)}
+                    />
+                )}
+            </AppLayout>
+        </ProfileFields>
     );
 }

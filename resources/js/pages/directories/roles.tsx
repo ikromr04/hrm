@@ -1,3 +1,4 @@
+import { type CardFieldGroup } from '@/components/card-fields';
 import { DirectoryManager } from '@/components/directory-manager';
 import DirectoriesLayout from '@/layouts/directories-layout';
 import { type AccessSection } from '@/lib/access';
@@ -13,7 +14,21 @@ interface RoleItem {
 }
 
 /** Access roles, shown in the UI as "Позиция". */
-export default function Roles({ items, sections, canManageAccess }: { items: RoleItem[]; sections: AccessSection[]; canManageAccess: boolean }) {
+export default function Roles({
+    items,
+    sections,
+    fields,
+    defaults,
+    canManageAccess,
+}: {
+    items: RoleItem[];
+    sections: AccessSection[];
+    /** The lines of an employee card, read and changed, chosen in the same dialog. */
+    fields: CardFieldGroup[];
+    /** What a new position starts with, as the server defines it. */
+    defaults: string[];
+    canManageAccess: boolean;
+}) {
     const byId = new Map(items.map((item) => [item.id, item]));
 
     return (
@@ -33,6 +48,8 @@ export default function Roles({ items, sections, canManageAccess }: { items: Rol
                 // A position is no use until somebody says what it opens, so the
                 // rights are ticked in the same dialog — for whoever may decide.
                 rights={canManageAccess ? sections : undefined}
+                cardFields={canManageAccess ? fields : undefined}
+                defaultRights={defaults}
             />
         </DirectoriesLayout>
     );

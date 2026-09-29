@@ -1,3 +1,4 @@
+import { CardFields, countCardFields, type CardFieldGroup, type CardFieldsMode } from '@/components/card-fields';
 import { CategoryFieldsEditor } from '@/components/category-fields-editor';
 import { IconChip } from '@/components/equipment-icon';
 import InputError from '@/components/input-error';
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { accessDefaults, useCan, type AccessSection } from '@/lib/access';
+import { useCan, type AccessSection } from '@/lib/access';
 import { type CategoryField, type FieldTypeOption } from '@/lib/equipment-fields';
 import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { plural } from '@/lib/plural';
@@ -82,8 +83,16 @@ interface DirectoryManagerProps {
      * by (equipment categories), choosing from these types of field.
      */
     fieldTypes?: FieldTypeOption[];
+    /**
+     * When given, the dialog also chooses which lines of an employee card the
+     * record reads and may change (positions). Absent for anybody who may not
+     * decide on access.
+     */
+    cardFields?: CardFieldGroup[];
     /** What a new record's fields start off as (equipment categories). */
     defaultFields?: CategoryField[];
+    /** What a new record starts with, right by right (positions); from the server. */
+    defaultRights?: string[];
 }
 
 type Row = DirectoryItem & { depth: number };
@@ -130,6 +139,8 @@ export function DirectoryManager({
     rights,
     fieldTypes,
     defaultFields,
+    cardFields,
+    defaultRights,
 }: DirectoryManagerProps) {
     // Looking at a directory and changing it are two different rights, so the
     // same list serves both: without the second one it simply has no controls.
@@ -293,6 +304,8 @@ export function DirectoryManager({
                     rights={rights}
                     fieldTypes={fieldTypes}
                     defaultFields={defaultFields}
+                    cardFields={cardFields}
+                    defaultRights={defaultRights}
                     onClose={() => setEditing(null)}
                 />
             )}
@@ -301,6 +314,23 @@ export function DirectoryManager({
         </>
     );
 }
+
+/** A heading over one group inside the "Доступы" block. */
+const groupHeading = 'text-muted-foreground text-xs font-semibold tracking-wide uppercase';
+
+/**
+ * Whether the employee section opens at all is not ticked but worked out: a
+ * position that reads no line of a card would find nothing but blank rows there.
+ */
+const viewRight = 'employees.view';
+
+const cardFieldTitles: Record<CardFieldsMode, string> = {
+    view: 'Просмотр карточки сотрудника',
+    edit: 'Изменение карточки сотрудника',
+};
+
+/** What is left of the employee section once its lines are chosen above. */
+const sectionTitles: Record<string, string> = { employees: 'Действия с сотрудником' };
 
 function EditorDialog({
     item,
@@ -314,6 +344,8 @@ function EditorDialog({
     rights,
     fieldTypes,
     defaultFields,
+    cardFields,
+    defaultRights,
     onClose,
 }: {
     item: DirectoryItem | null;
@@ -327,6 +359,8 @@ function EditorDialog({
     rights?: AccessSection[];
     fieldTypes?: FieldTypeOption[];
     defaultFields?: CategoryField[];
+    cardFields?: CardFieldGroup[];
+    defaultRights?: string[];
     onClose: () => void;
 }) {
     // A position that is new to the system may look around, like every other
@@ -344,7 +378,7 @@ function EditorDialog({
         head_ids: item?.heads?.map((head) => head.id) ?? [],
         member_ids: item?.member_ids ?? [],
         icon: item?.icon ?? null,
-        permissions: item?.permissions ?? [...accessDefaults],
+        permissions: item?.permissions ?? [...(defaultRights ?? [])],
     });
 
     const [fields, setFields] = useState<CategoryField[]>(item?.fields ?? defaultFields ?? []);
@@ -370,6 +404,18 @@ function EditorDialog({
     const blocked = useMemo(() => (item && tree ? descendantIds(items, item.id) : new Set<number>()), [item, items, tree]);
     const parents = useMemo(() => orderRows(items, true).filter((row) => !blocked.has(row.id)), [items, blocked]);
 
+    /**
+     * The right to the employee section, put in or left out by the card lines
+     * chosen for viewing: it is the one right nobody ticks by hand.
+     */
+    const withViewRight = (permissions: string[]) => {
+        if (!cardFields) return permissions;
+
+        const rest = permissions.filter((right) => right !== viewRight);
+
+        return countCardFields(cardFields, permissions, 'view').chosen > 0 ? [...rest, viewRight] : rest;
+    };
+
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
@@ -378,7 +424,7 @@ function EditorDialog({
             ...(tree ? { parent_id: data.parent_id } : {}),
             ...(people ? { head_ids: data.head_ids, member_ids: data.member_ids } : {}),
             ...(icons ? { icon: data.icon } : {}),
-            ...(rights && !item?.protected ? { permissions: data.permissions } : {}),
+            ...(rights && !item?.protected ? { permissions: withViewRight(data.permissions) } : {}),
             ...(fieldTypes
                 ? {
                       has_accessories: hasAccessories,
@@ -406,7 +452,9 @@ function EditorDialog({
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className={cn('max-h-[90vh] overflow-y-auto sm:max-w-md', fieldTypes && 'sm:max-w-2xl')}>
+            {/* The lines of a card are a list of their own, so the dialog that holds
+                them asks for more room than a name and a couple of checkboxes. */}
+            <DialogContent className={cn('max-h-[90vh] overflow-y-auto sm:max-w-md', cardFields && 'sm:max-w-lg', fieldTypes && 'sm:max-w-2xl')}>
                 <form onSubmit={submit} className="flex flex-col gap-5">
                     <DialogHeader>
                         <DialogTitle>{item ? labels.edit : labels.create}</DialogTitle>
@@ -433,25 +481,56 @@ function EditorDialog({
                                 </p>
                             ) : (
                                 <>
-                                    <div className="grid gap-3">
-                                        {rights.map((section) => (
-                                            <div key={section.key} className="grid gap-1.5">
-                                                <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{section.title}</p>
-                                                {section.rights.map((right) => (
-                                                    <label key={right.key} className="flex items-start gap-2 text-sm">
-                                                        <Checkbox
-                                                            checked={form.data.permissions.includes(right.key)}
-                                                            onCheckedChange={() => togglePermission(right.key)}
-                                                            className="mt-0.5"
+                                    <div className="grid gap-4">
+                                        {/* A card is read line by line, so the two things one does with
+                                            a card come first and the sections follow. */}
+                                        {cardFields &&
+                                            (['view', 'edit'] as CardFieldsMode[]).map((mode) => {
+                                                const { chosen, total } = countCardFields(cardFields, form.data.permissions, mode);
+
+                                                return (
+                                                    <div key={mode} className="grid gap-1.5">
+                                                        <p className={groupHeading}>
+                                                            {cardFieldTitles[mode]}
+                                                            <span className="font-normal normal-case tabular-nums">
+                                                                {' · '}
+                                                                {chosen} из {total}
+                                                            </span>
+                                                        </p>
+                                                        <CardFields
+                                                            mode={mode}
+                                                            groups={cardFields}
+                                                            held={form.data.permissions}
+                                                            onChange={(permissions) => form.setData('permissions', permissions)}
                                                         />
-                                                        <span className="min-w-0">
-                                                            <span>{right.title}</span>
-                                                            <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
-                                                        </span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        ))}
+                                                    </div>
+                                                );
+                                            })}
+
+                                        {rights.map((section) => {
+                                            const shown = section.rights.filter((right) => right.key !== viewRight);
+
+                                            if (shown.length === 0) return null;
+
+                                            return (
+                                                <div key={section.key} className="grid gap-1.5">
+                                                    <p className={groupHeading}>{sectionTitles[section.key] ?? section.title}</p>
+                                                    {shown.map((right) => (
+                                                        <label key={right.key} className="flex items-start gap-2 text-sm">
+                                                            <Checkbox
+                                                                checked={form.data.permissions.includes(right.key)}
+                                                                onCheckedChange={() => togglePermission(right.key)}
+                                                                className="mt-0.5"
+                                                            />
+                                                            <span className="min-w-0">
+                                                                <span>{right.title}</span>
+                                                                <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
+                                                            </span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                     <InputError message={listError('permissions')} />
                                 </>

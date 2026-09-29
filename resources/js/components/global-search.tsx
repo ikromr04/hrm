@@ -120,7 +120,7 @@ export function GlobalSearch() {
             [
                 { label: 'Главная', href: '/dashboard', icon: LayoutGrid },
                 ...(can('employees.view') ? [{ label: 'Сотрудники', href: '/employees', icon: Users }] : []),
-                ...(can('departments.view') ? [{ label: 'Структура компании', href: '/departments', icon: Network }] : []),
+                { label: 'Структура компании', href: '/departments', icon: Network },
                 ...(can('equipment.view') ? [{ label: 'Оборудование', href: '/equipment', icon: Laptop }] : []),
                 // The journal keeps to whoever manages the fleet, as the page does.
                 ...(can('equipment.journal') ? [{ label: 'Журнал операций', href: '/equipment/journal', icon: History }] : []),

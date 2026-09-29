@@ -36,21 +36,27 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 /* ------------------------------------------------------------------ types */
 
+/**
+ * A row of the list. Only the name and the avatar are certain: every other line
+ * is a field the viewer may or may not read, and what they may not read does not
+ * travel at all — so the types say "maybe" and the columns for those are not
+ * built in the first place.
+ */
 interface EmployeeRow {
     id: number;
     name: string;
     surname: string;
-    patronymic: string | null;
     avatar: string | null;
-    sex: Sex;
-    email: string;
+    patronymic?: string | null;
+    sex?: Sex;
+    email?: string;
     /** Access roles, shown as "Позиция". */
-    roles: string[];
+    roles?: string[];
     /** Positions, shown as "Должность"; an employee can hold several. */
-    positions: string[];
-    departments: { id: number; name: string; path: string; is_head: boolean }[];
+    positions?: string[];
+    departments?: { id: number; name: string; path: string; is_head: boolean }[];
     /** Public, like positions; the best known first. */
-    languages: SpokenLanguage[];
+    languages?: SpokenLanguage[];
     status: EmploymentStatus;
     status_changed_at: string | null;
     /** Where they were transferred or why they were let go; managers only. */
@@ -108,8 +114,11 @@ interface EmployeesProps {
     sort: Sort;
     perPage: number;
     perPageOptions: number[];
-    /** May see, sort and filter everyone's private data (admins). */
-    privateAccess: boolean;
+    /**
+     * Which fields of a card this viewer reads. The columns, their filters and
+     * the detail rows are all built from it.
+     */
+    visibleFields: string[];
     sortable: ColumnKey[];
     options: {
         roles: { name: string; title: string }[];
@@ -181,7 +190,7 @@ function PositionBadges({ titles }: { titles: string[] }) {
     );
 }
 
-function DepartmentBadges({ departments }: { departments: EmployeeRow['departments'] }) {
+function DepartmentBadges({ departments }: { departments: NonNullable<EmployeeRow['departments']> }) {
     return (
         <div className="flex flex-wrap gap-1 whitespace-normal">
             {departments.map((department) => (
@@ -248,182 +257,197 @@ function Children({ items }: { items: PrivateDetails['children'] }) {
 
 /* ---------------------------------------------------------------- columns */
 
-function buildColumns(options: EmployeesProps['options']): ColumnDef[] {
-    return [
-        {
-            key: 'name',
-            label: 'Сотрудник',
-            width: 320,
-            private: false,
-            filter: { type: 'text', param: 'search', placeholder: 'ФИО или почта' },
-            cell: (row) => (
-                <div className="flex items-center gap-3">
-                    {row.avatar ? (
-                        <img src={row.avatar} alt="" className="size-[38px] shrink-0 rounded-full object-cover" />
-                    ) : (
-                        <PersonAvatar name={`${row.name} ${row.surname}`} className="size-[38px] text-[13px]" />
-                    )}
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                        <Link
-                            href={route('employees.show', row.id)}
-                            className="hover:text-brand-strong truncate font-semibold hover:underline dark:hover:text-[#C5E27A]"
-                        >
-                            {fullName(row)}
-                        </Link>
-                        <a
-                            href={`mailto:${row.email}`}
-                            className="text-brand-strong truncate text-[13px] hover:underline dark:text-[#C5E27A]"
-                            title={`Написать: ${row.email}`}
-                        >
-                            {row.email}
-                        </a>
-                        {row.status !== 'active' && <LeftBadge row={row} />}
+/** The field behind a column, where the two are not called the same. */
+const COLUMN_FIELDS: Partial<Record<ColumnKey, string>> = {
+    role: 'roles',
+    position: 'positions',
+    department: 'departments',
+};
+
+function buildColumns(options: EmployeesProps['options'], visible: string[]): ColumnDef[] {
+    // The name stays whatever happens: a list of rows with no names on them
+    // would be no list at all.
+    const shows = (key: ColumnKey) => key === 'name' || visible.includes(COLUMN_FIELDS[key] ?? key);
+
+    return (
+        [
+            {
+                key: 'name',
+                label: 'Сотрудник',
+                width: 320,
+                private: false,
+                filter: { type: 'text', param: 'search', placeholder: 'ФИО или почта' },
+                cell: (row) => (
+                    <div className="flex items-center gap-3">
+                        {row.avatar ? (
+                            <img src={row.avatar} alt="" className="size-[38px] shrink-0 rounded-full object-cover" />
+                        ) : (
+                            <PersonAvatar name={`${row.name} ${row.surname}`} className="size-[38px] text-[13px]" />
+                        )}
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                            <Link
+                                href={route('employees.show', row.id)}
+                                className="hover:text-brand-strong truncate font-semibold hover:underline dark:hover:text-[#C5E27A]"
+                            >
+                                {fullName(row)}
+                            </Link>
+                            <a
+                                href={`mailto:${row.email}`}
+                                className="text-brand-strong truncate text-[13px] hover:underline dark:text-[#C5E27A]"
+                                title={`Написать: ${row.email}`}
+                            >
+                                {row.email}
+                            </a>
+                            {row.status !== 'active' && <LeftBadge row={row} />}
+                        </div>
                     </div>
-                </div>
-            ),
-        },
-        {
-            key: 'role',
-            label: 'Позиция',
-            width: 240,
-            private: false,
-            filter: { type: 'multi', param: 'role', options: options.roles.map((r) => ({ value: r.name, label: r.title })) },
-            cell: (row) => (row.roles.length ? <RoleBadges titles={row.roles} /> : <Empty />),
-        },
-        {
-            key: 'department',
-            label: 'Отдел / Департамент',
-            width: 300,
-            private: false,
-            filter: {
-                type: 'multi',
-                param: 'department',
-                options: options.departments.map((d) => ({ value: d.id, label: d.name, depth: d.depth })),
+                ),
             },
-            cell: (row) => (row.departments.length ? <DepartmentBadges departments={row.departments} /> : <Empty />),
-        },
-        {
-            key: 'position',
-            label: 'Должность',
-            width: 240,
-            private: false,
-            filter: { type: 'multi', param: 'position', options: options.positions.map((t) => ({ value: t.id, label: t.name })) },
-            cell: (row) => (row.positions.length ? <PositionBadges titles={row.positions} /> : <Empty />),
-        },
-        {
-            key: 'languages',
-            label: 'Языки',
-            width: 260,
-            private: false,
-            filter: { type: 'multi', param: 'language', options: options.languages.map((l) => ({ value: l.id, label: l.name })) },
-            cell: (row) => (row.languages.length ? <LanguageBadges languages={row.languages} /> : <Empty />),
-        },
-        {
-            key: 'birth_date',
-            label: 'Дата рождения',
-            width: 200,
-            private: true,
-            filter: { type: 'dates', from: 'birth_from', to: 'birth_to' },
-            cell: (_, d) => <span className="tabular-nums">{formatDate(d.birth_date) ?? <Empty />}</span>,
-        },
-        {
-            key: 'sex',
-            label: 'Пол',
-            width: 130,
-            private: false,
-            filter: {
-                type: 'select',
-                param: 'sex',
-                options: [
-                    { value: 'male', label: 'Мужской' },
-                    { value: 'female', label: 'Женский' },
-                ],
+            {
+                key: 'role',
+                label: 'Позиция',
+                width: 240,
+                private: false,
+                filter: { type: 'multi', param: 'role', options: options.roles.map((r) => ({ value: r.name, label: r.title })) },
+                cell: (row) => (row.roles?.length ? <RoleBadges titles={row.roles} /> : <Empty />),
             },
-            cell: (row) => sexLabels[row.sex],
-        },
-        {
-            key: 'nationality',
-            label: 'Национальность',
-            width: 210,
-            private: true,
-            filter: { type: 'multi', param: 'nationality', options: options.nationalities.map((n) => ({ value: n, label: capitalize(n) })) },
-            cell: (_, d) => (d.nationality ? capitalize(d.nationality) : <Empty />),
-        },
-        {
-            key: 'citizenship',
-            label: 'Гражданство',
-            width: 190,
-            private: true,
-            filter: { type: 'multi', param: 'citizenship', options: options.citizenships.map((c) => ({ value: c, label: c })) },
-            cell: (_, d) => d.citizenship ?? <Empty />,
-        },
-        {
-            key: 'home_address',
-            label: 'Домашний адрес',
-            width: 280,
-            private: true,
-            filter: { type: 'text', param: 'address', placeholder: 'Улица, дом…' },
-            cell: (_, d) => <span className="whitespace-normal">{d.home_address ?? <Empty />}</span>,
-        },
-        {
-            key: 'phone',
-            label: 'Телефон',
-            width: 200,
-            private: true,
-            filter: { type: 'text', param: 'phone', placeholder: 'Цифры номера' },
-            cell: (_, d) => <Phones phone={d.phone} sos={d.sos_phone} sosContact={d.sos_contact} />,
-        },
-        {
-            key: 'marital_status',
-            label: 'Семейное положение',
-            width: 240,
-            private: true,
-            filter: {
-                type: 'select',
-                param: 'marital_status',
-                options: [
-                    { value: 'married', label: 'В браке' },
-                    { value: 'single', label: 'Не в браке' },
-                ],
+            {
+                key: 'department',
+                label: 'Отдел / Департамент',
+                width: 300,
+                private: false,
+                filter: {
+                    type: 'multi',
+                    param: 'department',
+                    options: options.departments.map((d) => ({ value: d.id, label: d.name, depth: d.depth })),
+                },
+                cell: (row) => (row.departments?.length ? <DepartmentBadges departments={row.departments} /> : <Empty />),
             },
-            cell: (row, d) => (d.marital_status ? maritalLabels[row.sex][d.marital_status] : <Empty />),
-        },
-        {
-            key: 'children',
-            label: 'Дети',
-            width: 130,
-            private: true,
-            filter: {
-                type: 'multi',
-                param: 'children',
-                options: [
-                    { value: 0, label: 'Нет детей' },
-                    { value: 1, label: '1' },
-                    { value: 2, label: '2' },
-                    { value: 3, label: '3 и более' },
-                ],
+            {
+                key: 'position',
+                label: 'Должность',
+                width: 240,
+                private: false,
+                filter: { type: 'multi', param: 'position', options: options.positions.map((t) => ({ value: t.id, label: t.name })) },
+                cell: (row) => (row.positions?.length ? <PositionBadges titles={row.positions} /> : <Empty />),
             },
-            cell: (_, d) => <Children items={d.children} />,
-        },
-        {
-            key: 'hired_at',
-            label: 'Начало работы',
-            width: 200,
-            private: true,
-            filter: { type: 'dates', from: 'hired_from', to: 'hired_to' },
-            cell: (_, d) => <span className="tabular-nums">{formatDate(d.hired_at) ?? <Empty />}</span>,
-        },
-    ];
+            {
+                key: 'languages',
+                label: 'Языки',
+                width: 260,
+                private: false,
+                filter: { type: 'multi', param: 'language', options: options.languages.map((l) => ({ value: l.id, label: l.name })) },
+                cell: (row) => (row.languages?.length ? <LanguageBadges languages={row.languages} /> : <Empty />),
+            },
+            {
+                key: 'birth_date',
+                label: 'Дата рождения',
+                width: 200,
+                private: true,
+                filter: { type: 'dates', from: 'birth_from', to: 'birth_to' },
+                cell: (_, d) => <span className="tabular-nums">{formatDate(d.birth_date) ?? <Empty />}</span>,
+            },
+            {
+                key: 'sex',
+                label: 'Пол',
+                width: 130,
+                private: false,
+                filter: {
+                    type: 'select',
+                    param: 'sex',
+                    options: [
+                        { value: 'male', label: 'Мужской' },
+                        { value: 'female', label: 'Женский' },
+                    ],
+                },
+                cell: (row) => (row.sex ? sexLabels[row.sex] : <Empty />),
+            },
+            {
+                key: 'nationality',
+                label: 'Национальность',
+                width: 210,
+                private: true,
+                filter: { type: 'multi', param: 'nationality', options: options.nationalities.map((n) => ({ value: n, label: capitalize(n) })) },
+                cell: (_, d) => (d.nationality ? capitalize(d.nationality) : <Empty />),
+            },
+            {
+                key: 'citizenship',
+                label: 'Гражданство',
+                width: 190,
+                private: true,
+                filter: { type: 'multi', param: 'citizenship', options: options.citizenships.map((c) => ({ value: c, label: c })) },
+                cell: (_, d) => d.citizenship ?? <Empty />,
+            },
+            {
+                key: 'home_address',
+                label: 'Домашний адрес',
+                width: 280,
+                private: true,
+                filter: { type: 'text', param: 'address', placeholder: 'Улица, дом…' },
+                cell: (_, d) => <span className="whitespace-normal">{d.home_address ?? <Empty />}</span>,
+            },
+            {
+                key: 'phone',
+                label: 'Телефон',
+                width: 200,
+                private: true,
+                filter: { type: 'text', param: 'phone', placeholder: 'Цифры номера' },
+                cell: (_, d) => <Phones phone={d.phone} sos={d.sos_phone} sosContact={d.sos_contact} />,
+            },
+            {
+                key: 'marital_status',
+                label: 'Семейное положение',
+                width: 240,
+                private: true,
+                filter: {
+                    type: 'select',
+                    param: 'marital_status',
+                    options: [
+                        { value: 'married', label: 'В браке' },
+                        { value: 'single', label: 'Не в браке' },
+                    ],
+                },
+                cell: (row, d) => (d.marital_status ? maritalLabels[row.sex ?? 'male'][d.marital_status] : <Empty />),
+            },
+            {
+                key: 'children',
+                label: 'Дети',
+                width: 130,
+                private: true,
+                filter: {
+                    type: 'multi',
+                    param: 'children',
+                    options: [
+                        { value: 0, label: 'Нет детей' },
+                        { value: 1, label: '1' },
+                        { value: 2, label: '2' },
+                        { value: 3, label: '3 и более' },
+                    ],
+                },
+                cell: (_, d) => <Children items={d.children} />,
+            },
+            {
+                key: 'hired_at',
+                label: 'Начало работы',
+                width: 200,
+                private: true,
+                filter: { type: 'dates', from: 'hired_from', to: 'hired_to' },
+                cell: (_, d) => <span className="tabular-nums">{formatDate(d.hired_at) ?? <Empty />}</span>,
+            },
+        ] as ColumnDef[]
+    ).filter((column) => shows(column.key as ColumnKey));
 }
 
 /* ------------------------------------------------------ view preferences */
 
-const STORAGE_KEY = 'employees.table.view.v4';
+// v5: the columns a viewer gets now depend on the fields they may read, so a
+// view saved under the old rules would hide the wrong ones.
+const STORAGE_KEY = 'employees.table.view.v5';
 
-function defaultView(columns: ColumnDef[], privateAccess: boolean) {
+function defaultView() {
     return {
-        // Without private access those columns are locks for everyone but yourself.
-        hidden: privateAccess ? [] : columns.filter((c) => c.private).map((c) => c.key as string),
+        // Nothing to hide by default: a column nobody may read is never built.
+        hidden: [] as string[],
         pinned: { left: ['name'], right: [] as string[] },
     };
 }
@@ -462,7 +486,7 @@ export default function Employees({
     sort,
     perPage,
     perPageOptions,
-    privateAccess,
+    visibleFields,
     sortable,
     options,
     status,
@@ -473,9 +497,9 @@ export default function Employees({
     const can = useCan();
     // The menu decides for itself which of its actions the viewer may take,
     // and renders nothing when that is none of them.
-    const canManage = can('employees.status') || can('employees.delete');
-    const columns = useMemo(() => buildColumns(options), [options]);
-    const defaults = useMemo(() => defaultView(columns, privateAccess), [columns, privateAccess]);
+    const canManage = can('employees.transfer') || can('employees.fire') || can('employees.delete');
+    const columns = useMemo(() => buildColumns(options, visibleFields), [options, visibleFields]);
+    const defaults = useMemo(() => defaultView(), []);
     const { view, setView, pin, toggleHidden } = useTableView(
         STORAGE_KEY,
         columns.map((c) => c.key),
@@ -509,7 +533,8 @@ export default function Employees({
     const isHidden = (key: string) => view.hidden.includes(key);
 
     // A column may carry a filter the viewer must not use on everyone.
-    const canFilter = (column: ColumnDef) => Boolean(column.filter) && (!column.private || privateAccess);
+    // Everything on screen may be filtered by: what may not be read is not here.
+    const canFilter = (column: ColumnDef) => Boolean(column.filter);
     const activeFilters = countActiveFilters(columns as unknown as TableColumn[], filters as unknown as Record<string, unknown>, (column) =>
         canFilter(column as unknown as ColumnDef),
     );

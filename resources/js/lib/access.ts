@@ -11,23 +11,15 @@ import { usePage } from '@inertiajs/react';
  */
 export type Permission =
     | 'employees.view'
-    | 'employees.manage'
-    | 'employees.private'
-    | 'employees.status'
+    | 'employees.transfer'
+    | 'employees.fire'
     | 'employees.delete'
     | 'equipment.view'
     | 'equipment.manage'
     | 'equipment.journal'
     | 'equipment.delete'
-    | 'departments.view'
     | 'directories.view'
     | 'directories.manage';
-
-/**
- * What a position carries the moment it is created: everybody who works here may
- * look around. Mirrors Access::DEFAULTS.
- */
-export const accessDefaults: Permission[] = ['employees.view', 'equipment.view', 'departments.view'];
 
 /** A right as the server describes it: what it is called and what it opens. */
 export interface AccessRight {
