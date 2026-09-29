@@ -39,8 +39,11 @@ interface RoleRow {
     permissions: string[];
 }
 
-/** The one section whose columns are not a plain row of checkboxes. */
+/** The sections whose columns are not a plain row of checkboxes. */
 const EMPLOYEES = 'employees';
+
+/** The same lines of a card, but the ones a person holds over their own. */
+const PROFILE = 'profile';
 
 /**
  * Whether the section opens at all. It is never ticked by hand: a position that
@@ -70,13 +73,13 @@ const EMPLOYEE_COLUMNS: Column[] = [
     {
         key: 'view',
         title: 'Просмотр',
-        hint: 'Какие строки карточки позиция видит — в карточке, в колонках таблицы, в фильтрах и в поиске. Пока не выбрана ни одна строка, раздел «Сотрудники» для позиции закрыт.',
+        hint: 'Какие строки чужой карточки позиция видит — в карточке сотрудника, в колонках таблицы, в фильтрах и в поиске. Свою карточку открывает раздел «Профиль». Пока не выбрана ни одна строка, раздел «Сотрудники» для позиции закрыт.',
         width: 'w-36',
     },
     {
         key: 'edit',
         title: 'Изменение',
-        hint: 'Какие строки позиция может править. Менять можно только то, что видно: строка, закрытая в «Просмотре», недоступна и здесь.',
+        hint: 'Какие строки чужой карточки позиция может править. Менять можно только то, что видно: строка, закрытая в «Просмотре», недоступна и здесь.',
         width: 'w-36',
     },
     {
@@ -87,9 +90,38 @@ const EMPLOYEE_COLUMNS: Column[] = [
     },
 ];
 
-/** What the section spans across the table: its rights, or the three columns of «Сотрудники». */
-const columnsOf = (section: Section): Column[] =>
-    section.key === EMPLOYEES ? EMPLOYEE_COLUMNS : section.rights.map((right) => ({ ...right, width: 'w-28' }));
+/**
+ * The two columns of «Профиль». The same counters, over the same lines, but about
+ * one's own card: there is nothing one "does" to oneself, so the section has no
+ * third column and no plain rights of its own.
+ */
+const PROFILE_COLUMNS: Column[] = [
+    {
+        key: 'view',
+        title: 'Просмотр',
+        hint: 'Какие строки своей карточки сотрудник видит сам — в разделе «Профиль». Речь только о собственной карточке: чужие открывает раздел «Сотрудники».',
+        width: 'w-36',
+    },
+    {
+        key: 'edit',
+        title: 'Изменение',
+        hint: 'Какие строки своей карточки сотрудник правит сам, без кадровика. Менять можно только видимое: строка, закрытая в «Просмотре», недоступна и здесь.',
+        width: 'w-36',
+    },
+];
+
+/** What the section spans across the table: its rights, or the counters of the two card sections. */
+const columnsOf = (section: Section): Column[] => {
+    if (section.key === EMPLOYEES) {
+        return EMPLOYEE_COLUMNS;
+    }
+
+    if (section.key === PROFILE) {
+        return PROFILE_COLUMNS;
+    }
+
+    return section.rights.map((right) => ({ ...right, width: 'w-28' }));
+};
 
 /**
  * Who may do what: positions down the side, rights across the top.
@@ -98,12 +130,25 @@ const columnsOf = (section: Section): Column[] =>
  * with one "Сохранить" at the bottom is a page where half the work is lost to a
  * stray reload. The row is sent whole, so the server never has to guess.
  */
-export default function AccessPage({ sections, roles, fields }: { sections: Section[]; roles: RoleRow[]; fields: CardFieldGroup[] }) {
+export default function AccessPage({
+    sections,
+    roles,
+    fields,
+    profileFields,
+}: {
+    sections: Section[];
+    roles: RoleRow[];
+    /** The lines of somebody else's card. */
+    fields: CardFieldGroup[];
+    /** The same lines, carrying the rights one holds over one's own card. */
+    profileFields: CardFieldGroup[];
+}) {
     const [query, setQuery] = useState('');
-    // Whose card fields are being chosen, and which half of them. The position is
-    // kept by id rather than as the row it was opened from, so the window shows
-    // what has just been saved instead of the copy that is now stale.
-    const [picking, setPicking] = useState<{ id: number; mode: CardFieldsMode | 'actions' } | null>(null);
+    // Whose card fields are being chosen, whose card they belong to, and which
+    // half of them. The position is kept by id rather than as the row it was
+    // opened from, so the window shows what has just been saved instead of the
+    // copy that is now stale.
+    const [picking, setPicking] = useState<{ id: number; scope: typeof EMPLOYEES | typeof PROFILE; mode: CardFieldsMode | 'actions' } | null>(null);
     // What the table shows while a save is in flight, so a tick answers at once.
     const [pending, setPending] = useState<Record<number, string[]>>({});
 
@@ -143,12 +188,15 @@ export default function AccessPage({ sections, roles, fields }: { sections: Sect
     };
 
     /**
-     * The view window also answers whether the section opens: the first line
-     * chosen brings "employees.view" with it, the last one taken away removes it
-     * again. A position with no readable line has nothing to open.
+     * The view window over somebody else's card also answers whether the section
+     * opens: the first line chosen brings "employees.view" with it, the last one
+     * taken away removes it again. A position with no readable line has nothing
+     * to open.
      */
-    const saveFields = (role: RoleRow, mode: CardFieldsMode, permissions: string[]) => {
-        if (mode === 'edit') {
+    const saveFields = (role: RoleRow, scope: typeof EMPLOYEES | typeof PROFILE, mode: CardFieldsMode, permissions: string[]) => {
+        // One's own card needs no door: a position always has a profile of its
+        // own, so "employees.view" is none of its business.
+        if (scope === PROFILE || mode === 'edit') {
             save(role, permissions);
 
             return;
@@ -250,7 +298,7 @@ export default function AccessPage({ sections, roles, fields }: { sections: Sect
                                                                 mode={mode}
                                                                 groups={fields}
                                                                 held={held(role)}
-                                                                onOpen={() => setPicking({ id: role.id, mode })}
+                                                                onOpen={() => setPicking({ id: role.id, scope: EMPLOYEES, mode })}
                                                             />
                                                         )}
                                                     </td>
@@ -267,10 +315,27 @@ export default function AccessPage({ sections, roles, fields }: { sections: Sect
                                                             chosen={actions.filter((right) => held(role).includes(right.key)).length}
                                                             total={actions.length}
                                                             title="Действия с сотрудником"
-                                                            onOpen={() => setPicking({ id: role.id, mode: 'actions' })}
+                                                            onOpen={() => setPicking({ id: role.id, scope: EMPLOYEES, mode: 'actions' })}
                                                         />
                                                     )}
                                                 </td>
+                                            </Fragment>
+                                        ) : section.key === PROFILE ? (
+                                            <Fragment key={section.key}>
+                                                {(['view', 'edit'] as CardFieldsMode[]).map((mode, index) => (
+                                                    <td key={mode} className={cn('px-2 py-2.5 text-center', index === 0 && 'border-l')}>
+                                                        {role.everything ? (
+                                                            <span className="text-muted-foreground text-[13px]">все</span>
+                                                        ) : (
+                                                            <CardFieldsButton
+                                                                mode={mode}
+                                                                groups={profileFields}
+                                                                held={held(role)}
+                                                                onOpen={() => setPicking({ id: role.id, scope: PROFILE, mode })}
+                                                            />
+                                                        )}
+                                                    </td>
+                                                ))}
                                             </Fragment>
                                         ) : (
                                             <Fragment key={section.key}>
@@ -326,12 +391,14 @@ export default function AccessPage({ sections, roles, fields }: { sections: Sect
             )}
 
             {picking && picked && picking.mode !== 'actions' && (
+                // The two windows hold the same list of lines, so the heading has
+                // to say whose card it is about, or the wrong half gets ticked.
                 <CardFieldsDialog
                     mode={picking.mode}
-                    subject={picked.title}
-                    groups={fields}
+                    subject={picking.scope === PROFILE ? `свой профиль — ${picked.title}` : picked.title}
+                    groups={picking.scope === PROFILE ? profileFields : fields}
                     held={held(picked)}
-                    onChange={(permissions) => saveFields(picked, picking.mode as CardFieldsMode, permissions)}
+                    onChange={(permissions) => saveFields(picked, picking.scope, picking.mode as CardFieldsMode, permissions)}
                     onClose={() => setPicking(null)}
                 />
             )}

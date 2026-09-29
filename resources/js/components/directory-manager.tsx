@@ -89,6 +89,11 @@ interface DirectoryManagerProps {
      * decide on access.
      */
     cardFields?: CardFieldGroup[];
+    /**
+     * The same lines again, but as the rights to one's own card: what a person
+     * holding the record sees and may change on themselves (positions).
+     */
+    profileFields?: CardFieldGroup[];
     /** What a new record's fields start off as (equipment categories). */
     defaultFields?: CategoryField[];
     /** What a new record starts with, right by right (positions); from the server. */
@@ -140,6 +145,7 @@ export function DirectoryManager({
     fieldTypes,
     defaultFields,
     cardFields,
+    profileFields,
     defaultRights,
 }: DirectoryManagerProps) {
     // Looking at a directory and changing it are two different rights, so the
@@ -305,6 +311,7 @@ export function DirectoryManager({
                     fieldTypes={fieldTypes}
                     defaultFields={defaultFields}
                     cardFields={cardFields}
+                    profileFields={profileFields}
                     defaultRights={defaultRights}
                     onClose={() => setEditing(null)}
                 />
@@ -324,13 +331,58 @@ const groupHeading = 'text-muted-foreground text-xs font-semibold tracking-wide 
  */
 const viewRight = 'employees.view';
 
-const cardFieldTitles: Record<CardFieldsMode, string> = {
-    view: 'Просмотр карточки сотрудника',
-    edit: 'Изменение карточки сотрудника',
+/**
+ * The same lines are asked about twice over — a colleague's card and one's own —
+ * so whose card it is goes first in the heading: the two lists look alike and
+ * mean quite different things.
+ */
+const cardScopeTitles: Record<string, Record<CardFieldsMode, string>> = {
+    employees: { view: 'Чужая карточка: просмотр', edit: 'Чужая карточка: изменение' },
+    profile: { view: 'Своя карточка: просмотр', edit: 'Своя карточка: изменение' },
+};
+
+/** Said plainly where the list alone would read as the one above it. */
+const cardScopeNotes: Record<string, string> = {
+    profile: 'Речь о собственной карточке сотрудника этой позиции, а не о карточках коллег.',
 };
 
 /** What is left of the employee section once its lines are chosen above. */
 const sectionTitles: Record<string, string> = { employees: 'Действия с сотрудником' };
+
+const cardModes: CardFieldsMode[] = ['view', 'edit'];
+
+/** One list of card lines under a heading that counts what is chosen in it. */
+function CardFieldsBlock({
+    title,
+    note,
+    mode,
+    groups,
+    held,
+    onChange,
+}: {
+    title: string;
+    note?: string;
+    mode: CardFieldsMode;
+    groups: CardFieldGroup[];
+    held: string[];
+    onChange: (permissions: string[]) => void;
+}) {
+    const { chosen, total } = countCardFields(groups, held, mode);
+
+    return (
+        <div className="grid gap-1.5">
+            <p className={groupHeading}>
+                {title}
+                <span className="font-normal normal-case tabular-nums">
+                    {' · '}
+                    {chosen} из {total}
+                </span>
+            </p>
+            {note && <p className="text-muted-foreground text-[13px]">{note}</p>}
+            <CardFields mode={mode} groups={groups} held={held} onChange={onChange} />
+        </div>
+    );
+}
 
 function EditorDialog({
     item,
@@ -345,6 +397,7 @@ function EditorDialog({
     fieldTypes,
     defaultFields,
     cardFields,
+    profileFields,
     defaultRights,
     onClose,
 }: {
@@ -360,6 +413,7 @@ function EditorDialog({
     fieldTypes?: FieldTypeOption[];
     defaultFields?: CategoryField[];
     cardFields?: CardFieldGroup[];
+    profileFields?: CardFieldGroup[];
     defaultRights?: string[];
     onClose: () => void;
 }) {
@@ -416,6 +470,13 @@ function EditorDialog({
         return countCardFields(cardFields, permissions, 'view').chosen > 0 ? [...rest, viewRight] : rest;
     };
 
+    /**
+     * Which lines belong to which section, so the dialog follows the sections
+     * themselves: a colleague's card under "Сотрудники", one's own under
+     * "Профиль", each right where the rest of that section is.
+     */
+    const cardGroups: Record<string, CardFieldGroup[] | undefined> = { employees: cardFields, profile: profileFields };
+
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
 
@@ -454,7 +515,13 @@ function EditorDialog({
         <Dialog open onOpenChange={(open) => !open && onClose()}>
             {/* The lines of a card are a list of their own, so the dialog that holds
                 them asks for more room than a name and a couple of checkboxes. */}
-            <DialogContent className={cn('max-h-[90vh] overflow-y-auto sm:max-w-md', cardFields && 'sm:max-w-lg', fieldTypes && 'sm:max-w-2xl')}>
+            <DialogContent
+                className={cn(
+                    'max-h-[90vh] overflow-y-auto sm:max-w-md',
+                    (cardFields || profileFields) && 'sm:max-w-lg',
+                    fieldTypes && 'sm:max-w-2xl',
+                )}
+            >
                 <form onSubmit={submit} className="flex flex-col gap-5">
                     <DialogHeader>
                         <DialogTitle>{item ? labels.edit : labels.create}</DialogTitle>
@@ -482,52 +549,47 @@ function EditorDialog({
                             ) : (
                                 <>
                                     <div className="grid gap-4">
-                                        {/* A card is read line by line, so the two things one does with
-                                            a card come first and the sections follow. */}
-                                        {cardFields &&
-                                            (['view', 'edit'] as CardFieldsMode[]).map((mode) => {
-                                                const { chosen, total } = countCardFields(cardFields, form.data.permissions, mode);
-
-                                                return (
-                                                    <div key={mode} className="grid gap-1.5">
-                                                        <p className={groupHeading}>
-                                                            {cardFieldTitles[mode]}
-                                                            <span className="font-normal normal-case tabular-nums">
-                                                                {' · '}
-                                                                {chosen} из {total}
-                                                            </span>
-                                                        </p>
-                                                        <CardFields
-                                                            mode={mode}
-                                                            groups={cardFields}
-                                                            held={form.data.permissions}
-                                                            onChange={(permissions) => form.setData('permissions', permissions)}
-                                                        />
-                                                    </div>
-                                                );
-                                            })}
-
                                         {rights.map((section) => {
                                             const shown = section.rights.filter((right) => right.key !== viewRight);
+                                            const groups = cardGroups[section.key];
 
-                                            if (shown.length === 0) return null;
+                                            if (!groups && shown.length === 0) return null;
 
                                             return (
-                                                <div key={section.key} className="grid gap-1.5">
-                                                    <p className={groupHeading}>{sectionTitles[section.key] ?? section.title}</p>
-                                                    {shown.map((right) => (
-                                                        <label key={right.key} className="flex items-start gap-2 text-sm">
-                                                            <Checkbox
-                                                                checked={form.data.permissions.includes(right.key)}
-                                                                onCheckedChange={() => togglePermission(right.key)}
-                                                                className="mt-0.5"
+                                                <div key={section.key} className="grid gap-4">
+                                                    {/* A card is read line by line, so the lines come first
+                                                        and what one does to the person follows them. */}
+                                                    {groups &&
+                                                        cardModes.map((mode) => (
+                                                            <CardFieldsBlock
+                                                                key={mode}
+                                                                title={cardScopeTitles[section.key]?.[mode] ?? section.title}
+                                                                note={cardScopeNotes[section.key]}
+                                                                mode={mode}
+                                                                groups={groups}
+                                                                held={form.data.permissions}
+                                                                onChange={(permissions) => form.setData('permissions', permissions)}
                                                             />
-                                                            <span className="min-w-0">
-                                                                <span>{right.title}</span>
-                                                                <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
-                                                            </span>
-                                                        </label>
-                                                    ))}
+                                                        ))}
+
+                                                    {shown.length > 0 && (
+                                                        <div className="grid gap-1.5">
+                                                            <p className={groupHeading}>{sectionTitles[section.key] ?? section.title}</p>
+                                                            {shown.map((right) => (
+                                                                <label key={right.key} className="flex items-start gap-2 text-sm">
+                                                                    <Checkbox
+                                                                        checked={form.data.permissions.includes(right.key)}
+                                                                        onCheckedChange={() => togglePermission(right.key)}
+                                                                        className="mt-0.5"
+                                                                    />
+                                                                    <span className="min-w-0">
+                                                                        <span>{right.title}</span>
+                                                                        <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
+                                                                    </span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}

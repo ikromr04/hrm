@@ -18,6 +18,7 @@ export default function Roles({
     items,
     sections,
     fields,
+    profileFields,
     defaults,
     canManageAccess,
 }: {
@@ -25,6 +26,8 @@ export default function Roles({
     sections: AccessSection[];
     /** The lines of an employee card, read and changed, chosen in the same dialog. */
     fields: CardFieldGroup[];
+    /** The same lines as the rights to one's own card, asked separately. */
+    profileFields: CardFieldGroup[];
     /** What a new position starts with, as the server defines it. */
     defaults: string[];
     canManageAccess: boolean;
@@ -49,6 +52,7 @@ export default function Roles({
                 // rights are ticked in the same dialog — for whoever may decide.
                 rights={canManageAccess ? sections : undefined}
                 cardFields={canManageAccess ? fields : undefined}
+                profileFields={canManageAccess ? profileFields : undefined}
                 defaultRights={defaults}
             />
         </DirectoriesLayout>
