@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -21,6 +22,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // In a Codespace the application sits behind a proxy that speaks HTTPS to
+        // the browser and plain HTTP to us, so links are written the way the page
+        // is read rather than the way the request arrived.
+        if (env('CODESPACES') === 'true') {
+            URL::forceScheme('https');
+        }
+
         // Administrators pass every authorization check, including rights added
         // later. A system administrator is one too; what only they can do —
         // appoint an administrator, or take the rights away — is guarded where

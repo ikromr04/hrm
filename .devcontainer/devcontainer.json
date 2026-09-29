@@ -1,0 +1,34 @@
+{
+    "name": "Evolet HRM",
+    // PHP with the extensions Laravel expects; Node is added as a feature so the
+    // front end is built in the same container rather than in a second one.
+    "image": "mcr.microsoft.com/devcontainers/php:8.3",
+    "features": {
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "22"
+        }
+    },
+    // 8000 is the application, 5173 is Vite while the dev server is running.
+    "forwardPorts": [8000, 5173],
+    "portsAttributes": {
+        "8000": {
+            "label": "HRM",
+            "onAutoForward": "notify"
+        },
+        "5173": {
+            "label": "Vite",
+            "onAutoForward": "silent"
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/setup.sh",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "bmewburn.vscode-intelephense-client",
+                "esbenp.prettier-vscode",
+                "dbaeumer.vscode-eslint",
+                "bradlc.vscode-tailwindcss"
+            ]
+        }
+    }
+}
