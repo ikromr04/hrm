@@ -132,11 +132,13 @@ class FieldVisibilityTest extends TestCase
             );
     }
 
-    public function test_a_person_reads_their_own_card_whole()
+    public function test_a_person_reads_their_own_card_the_way_their_position_says()
     {
         $employee = $this->colleagueWithEverything();
-        // A position that reads nothing of anybody: their own card is still theirs.
-        $employee->assignRole($this->reader()->roles->first());
+        // A position that reads nothing of anybody else's card. Its own is
+        // another question, and the set every position starts with answers it
+        // with the whole card — see OwnProfileFieldsTest for the narrow cases.
+        $this->mayLookAround($employee);
 
         $this->actingAs($employee)
             ->get("/employees/{$employee->id}")

@@ -679,7 +679,7 @@ class EquipmentTest extends TestCase
 
     public function test_the_profile_shows_what_the_employee_holds()
     {
-        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
+        $employee = $this->mayLookAround(User::factory()->has(UserDetail::factory(), 'details')->create());
         Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create(['inventory_number' => 'EV-0421']);
         // Somebody else's unit must not show up here.
         Equipment::factory()->ofType($this->type())->issuedTo(User::factory()->create()->id)->create();

@@ -68,7 +68,7 @@ class EmployeeProfileTest extends TestCase
 
     public function test_employee_sees_their_full_profile_including_passport()
     {
-        $user = User::factory()->has(UserDetail::factory(), 'details')->create();
+        $user = $this->mayLookAround(User::factory()->has(UserDetail::factory(), 'details')->create());
         UserChild::factory(2)->for($user)->create();
         UserEducation::factory()->for($user)->create();
         UserWorkExperience::factory()->for($user)->create(['organization' => 'ООО «Шифобахш»']);

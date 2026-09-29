@@ -160,7 +160,7 @@ class EmployeeFamilyTest extends TestCase
 
     public function test_the_spouse_reaches_the_profile_page()
     {
-        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
+        $employee = $this->mayLookAround(User::factory()->has(UserDetail::factory(), 'details')->create());
         $employee->details()->update(['marital_status' => 'married', 'spouse_name' => 'Азимова Нигина']);
 
         $this->actingAs($employee)
