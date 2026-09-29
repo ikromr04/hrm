@@ -1,8 +1,10 @@
 {
     "name": "Evolet HRM",
-    // PHP with the extensions Laravel expects; Node is added as a feature so the
-    // front end is built in the same container rather than in a second one.
-    "image": "mcr.microsoft.com/devcontainers/php:8.3",
+    // PHP 8.4 with the two extensions the image lacks — see the Dockerfile.
+    // Node is a feature so the front end is built in the same container.
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
     "features": {
         "ghcr.io/devcontainers/features/node:1": {
             "version": "22"
@@ -21,6 +23,11 @@
         }
     },
     "postCreateCommand": "bash .devcontainer/setup.sh",
+    // postCreateCommand runs once, when the container is made. A container that
+    // was made before this file existed — or whose first setup was interrupted —
+    // would come back empty on every resume, so each start checks and installs
+    // whatever is missing. Nothing to do when everything is already in place.
+    "postStartCommand": "[ -d vendor ] && [ -d node_modules ] && [ -f .env ] || bash .devcontainer/setup.sh",
     "customizations": {
         "vscode": {
             "extensions": [

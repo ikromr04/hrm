@@ -51,7 +51,8 @@ file_put_contents($path, $env);
 '
 
 echo "==> storage"
-php artisan storage:link
+# --force so running this script a second time is not an error in itself.
+php artisan storage:link --force
 
 echo "==> database"
 php artisan migrate --force --seed
