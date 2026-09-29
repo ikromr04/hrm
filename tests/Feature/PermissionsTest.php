@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
 use App\Models\PermissionOverride;
 use App\Models\User;
 use App\Support\Access;
@@ -58,10 +59,15 @@ class PermissionsTest extends TestCase
 
         $this->assertTrue($colleague->can('employees.view'));
         $this->assertTrue($colleague->can('equipment.view'));
-        $this->assertTrue($colleague->can('departments.view'));
+        // The structure of the company needs no right at all.
+        $this->assertTrue($colleague->can('employees.view'));
 
         $this->assertFalse($colleague->can('employees.manage'));
-        $this->assertFalse($colleague->can('employees.private'));
+        // Looking around includes the lines of a card that were never private,
+        // and nothing beyond them.
+        $this->assertTrue($colleague->can('employees.field.positions'));
+        $this->assertFalse($colleague->can('employees.field.home_address'));
+        $this->assertFalse($colleague->can('employees.field.passport_number'));
         $this->assertFalse($colleague->can('equipment.journal'));
         $this->assertFalse($colleague->can('directories.view'));
     }
@@ -93,7 +99,7 @@ class PermissionsTest extends TestCase
     public function test_moving_somebody_about_and_striking_them_out_are_separate_rights()
     {
         $colleague = User::factory()->create();
-        $mover = $this->withRights('employees.view', 'employees.status');
+        $mover = $this->withRights('employees.view', 'employees.fire');
 
         $this->actingAs($mover)->post("/employees/{$colleague->id}/fire", ['date' => '2026-09-01'])->assertRedirect();
         $this->actingAs($mover)->delete("/employees/{$colleague->id}")->assertForbidden();
@@ -118,13 +124,13 @@ class PermissionsTest extends TestCase
 
     public function test_a_right_taken_from_one_person_beats_their_position_too()
     {
-        $colleague = $this->withRights('employees.view', 'employees.private');
+        $colleague = $this->withRights('employees.view', 'employees.field.home_address');
 
-        $this->assertTrue($colleague->can('employees.private'));
+        $this->assertTrue($colleague->can('employees.field.home_address'));
 
-        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'employees.private', 'allowed' => false]);
+        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'employees.field.home_address', 'allowed' => false]);
 
-        $this->assertFalse($colleague->fresh()->can('employees.private'));
+        $this->assertFalse($colleague->fresh()->can('employees.field.home_address'));
         // What the position gives is untouched: the exception is about this person.
         $this->assertTrue($colleague->fresh()->can('employees.view'));
     }
@@ -168,10 +174,10 @@ class PermissionsTest extends TestCase
         $role = Role::findByName('analyst');
 
         $this->actingAs($this->sysadmin())
-            ->put("/directories/access/{$role->id}", ['permissions' => ['employees.view', 'employees.private']])
+            ->put("/directories/access/{$role->id}", ['permissions' => ['employees.view', 'employees.field.home_address']])
             ->assertRedirect();
 
-        $this->assertSame(['employees.private', 'employees.view'], $role->fresh()->permissions->pluck('name')->sort()->values()->all());
+        $this->assertSame(['employees.field.home_address', 'employees.view'], $role->fresh()->permissions->pluck('name')->sort()->values()->all());
 
         // An unknown right is refused, and the access roles are not editable at
         // all: they answer yes to everything whatever the table holds.
@@ -214,8 +220,8 @@ class PermissionsTest extends TestCase
 
     public function test_the_card_shows_a_system_administrator_where_each_right_comes_from()
     {
-        $colleague = $this->withRights('employees.view', 'employees.private');
-        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'employees.private', 'allowed' => false]);
+        $colleague = $this->withRights('employees.view', 'employees.field.home_address');
+        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'employees.field.home_address', 'allowed' => false]);
         PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'equipment.journal', 'allowed' => true]);
 
         $right = fn (array $rights, string $key) => collect($rights)->firstWhere('key', $key);
@@ -224,7 +230,7 @@ class PermissionsTest extends TestCase
             ->get("/employees/{$colleague->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('access.everything', false)
-                ->where('access.rights', fn ($rights) => $right($rights->all(), 'employees.private') === ['key' => 'employees.private', 'position' => true, 'override' => false]
+                ->where('access.rights', fn ($rights) => $right($rights->all(), 'employees.field.home_address') === ['key' => 'employees.field.home_address', 'position' => true, 'override' => false]
                     && $right($rights->all(), 'equipment.journal') === ['key' => 'equipment.journal', 'position' => false, 'override' => true])
             );
 
@@ -262,7 +268,7 @@ class PermissionsTest extends TestCase
             ->post('/directories/roles', ['title' => 'Курьер'])
             ->assertRedirect();
 
-        $this->assertSame(Access::DEFAULTS, Role::findByName('kurer')->permissions->pluck('name')->all());
+        $this->assertSame(collect(Access::defaults())->sort()->values()->all(), Role::findByName('kurer')->permissions->pluck('name')->sort()->values()->all());
     }
 
     public function test_the_rights_of_a_position_are_edited_from_its_own_dialog()
@@ -270,10 +276,10 @@ class PermissionsTest extends TestCase
         $role = Role::findByName('analyst');
 
         $this->actingAs($this->sysadmin())
-            ->put("/directories/roles/{$role->id}", ['title' => 'Аналитик', 'permissions' => ['employees.view', 'employees.private']])
+            ->put("/directories/roles/{$role->id}", ['title' => 'Аналитик', 'permissions' => ['employees.view', 'employees.field.phone']])
             ->assertRedirect();
 
-        $this->assertSame(['employees.private', 'employees.view'], $role->fresh()->permissions->pluck('name')->sort()->values()->all());
+        $this->assertSame(['employees.field.phone', 'employees.view'], $role->fresh()->permissions->pluck('name')->sort()->values()->all());
     }
 
     public function test_renaming_a_position_leaves_its_rights_where_they_are()
@@ -299,12 +305,28 @@ class PermissionsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('canManageAccess', true)
                 ->has('sections', count(Access::SECTIONS))
-                ->where('items', fn ($items) => collect(collect($items)->firstWhere('name', 'analyst')['permissions'])->all() === Access::DEFAULTS)
+                ->where('items', fn ($items) => collect(collect($items)->firstWhere('name', 'analyst')['permissions'])->sort()->values()->all() === collect(Access::defaults())->sort()->values()->all())
             );
 
         $this->actingAs(User::factory()->create()->assignRole('admin'))
             ->get('/directories/roles')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('canManageAccess', false));
+    }
+
+    public function test_the_structure_of_the_company_needs_no_right_at_all()
+    {
+        $department = Department::create(['name' => 'Отдел Дизайна']);
+        // Somebody whose position carries nothing whatsoever.
+        $nobody = User::factory()->create();
+
+        $this->actingAs($nobody)->get('/departments')->assertOk();
+        $this->actingAs($nobody)->get("/departments/{$department->id}")->assertOk();
+
+        // And the search offers it, since there is nowhere it could not go.
+        $this->actingAs($nobody)
+            ->getJson('/search?q='.urlencode('Дизайн'))
+            ->assertOk()
+            ->assertJsonPath('departments.0.name', 'Отдел Дизайна');
     }
 
     public function test_the_search_only_offers_what_the_viewer_may_open()

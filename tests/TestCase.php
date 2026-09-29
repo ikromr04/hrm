@@ -12,7 +12,8 @@ abstract class TestCase extends BaseTestCase
 {
     /**
      * A colleague who may look around: the employee list, the structure and the
-     * fleet, which is what every position carries (Access::DEFAULTS). Anything
+     * fleet and the fields of a card that were never private, which is what every
+     * position carries (Access::defaults()). Anything
      * beyond looking is a right a test hands out for itself.
      */
     protected function colleague(array $attributes = []): User
@@ -30,7 +31,7 @@ abstract class TestCase extends BaseTestCase
             $this->seed(PermissionSeeder::class);
         }
 
-        $user->givePermissionTo(Access::DEFAULTS);
+        $user->givePermissionTo(Access::defaults());
 
         return $user;
     }

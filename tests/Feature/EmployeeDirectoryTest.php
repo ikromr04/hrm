@@ -387,7 +387,7 @@ class EmployeeDirectoryTest extends TestCase
         $this->get('/employees?children[]=0')->assertSessionHasErrors('children');
 
         $this->get('/employees')->assertInertia(fn (Assert $page) => $page
-            ->where('privateAccess', false)
+            ->where('visibleFields', fn ($fields) => ! collect($fields)->contains('home_address'))
             ->where('options.nationalities', [])
         );
     }
@@ -420,7 +420,7 @@ class EmployeeDirectoryTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->has('employees.data', 1)->where('employees.data.0.id', $admin->id));
 
         $this->get('/employees')->assertInertia(fn (Assert $page) => $page
-            ->where('privateAccess', true)
+            ->where('visibleFields', fn ($fields) => collect($fields)->contains('home_address'))
             ->where('options.nationalities', ['таджичка', 'узбек'])
         );
     }

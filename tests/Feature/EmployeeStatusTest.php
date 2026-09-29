@@ -37,7 +37,7 @@ class EmployeeStatusTest extends TestCase
         $this->get('/employees?status=fired')->assertSessionHasErrors('status');
         $this->get('/employees')->assertInertia(fn (Assert $page) => $page
             ->where('statusCounts', null)
-            ->where('auth.can', fn ($can) => $can['employees.status'] === false)
+            ->where('auth.can', fn ($can) => $can['employees.fire'] === false)
         );
     }
 
