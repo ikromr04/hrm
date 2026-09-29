@@ -19,7 +19,7 @@
 
 ## Запуск на своей машине
 
-Нужны PHP 8.2+, Composer, Node 22+ и MySQL (подойдёт Laragon, Herd, XAMPP).
+Нужны PHP 8.4+, Composer, Node 22+ и MySQL (подойдёт Laragon, Herd, XAMPP).
 
 ```bash
 composer install
