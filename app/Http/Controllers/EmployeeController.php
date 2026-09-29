@@ -16,6 +16,7 @@ use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
 use App\Notifications\AccountCreated;
 use App\Support\Access;
+use App\Support\EmployeeFields;
 use App\Support\EquipmentHistory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -52,6 +53,14 @@ class EmployeeController extends Controller
      * data even without showing it, so only viewers who may see everyone's
      * private details can use them.
      */
+    /**
+     * Sorts named after something other than the field they read, so a sort can
+     * be matched against what the viewer may see.
+     *
+     * @var array<string, string>
+     */
+    private const SORT_FIELDS = ['role' => 'roles', 'position' => 'positions', 'department' => 'departments'];
+
     private const PRIVATE_SORTS = [
         'birth_date', 'nationality', 'citizenship', 'home_address', 'phone', 'marital_status', 'children', 'hired_at',
     ];
@@ -59,11 +68,21 @@ class EmployeeController extends Controller
     public function index(Request $request): Response
     {
         $viewer = $request->user();
-        $privateAccess = $viewer->can('viewAnyPrivateDetails', User::class);
+        // Which fields of a card this viewer reads at all. Everything below hangs
+        // off it: a column nobody may see is not offered, and neither is a filter
+        // or a sort by it — otherwise a hidden field leaks through the question
+        // "show me everybody living at this address".
+        $visible = EmployeeFields::visibleTo($viewer);
+        $shows = fn (string $field) => in_array($field, $visible, true);
         // Who was transferred or fired belongs to whoever moves people about.
-        $canStatus = $viewer->can('employees.status');
-        $sortable = $privateAccess ? [...self::PUBLIC_SORTS, ...self::PRIVATE_SORTS] : self::PUBLIC_SORTS;
-        $private = fn (array $rules) => $privateAccess ? $rules : ['prohibited'];
+        $canStatus = $viewer->can('employees.fire');
+        $sortable = array_values(array_filter(
+            [...self::PUBLIC_SORTS, ...self::PRIVATE_SORTS],
+            fn (string $sort) => $shows(self::SORT_FIELDS[$sort] ?? $sort) || ($sort === 'name'),
+        ));
+        // A filter on a field that is not shown is not merely ignored: sending it
+        // is refused, so nobody narrows a list by what they cannot read.
+        $private = fn (string $field, array $rules) => $shows($field) ? $rules : ['prohibited'];
 
         $input = $request->validate([
             'per_page' => ['nullable', 'integer', Rule::in(self::PER_PAGE_OPTIONS)],
@@ -73,29 +92,29 @@ class EmployeeController extends Controller
 
             'q' => ['nullable', 'string', 'max:100'],
             'search' => ['nullable', 'string', 'max:100'],
-            'position' => ['nullable', 'array'],
+            'position' => $private('positions', ['nullable', 'array']),
             'position.*' => ['integer', Rule::exists('positions', 'id')],
-            'role' => ['nullable', 'array'],
+            'role' => $private('roles', ['nullable', 'array']),
             'role.*' => ['string', Rule::exists('roles', 'name')],
-            'department' => ['nullable', 'array'],
+            'department' => $private('departments', ['nullable', 'array']),
             'department.*' => ['integer', Rule::exists('departments', 'id')],
-            'language' => ['nullable', 'array'],
+            'language' => $private('languages', ['nullable', 'array']),
             'language.*' => ['integer', Rule::exists('languages', 'id')],
-            'sex' => ['nullable', Rule::in(['male', 'female'])],
+            'sex' => $private('sex', ['nullable', Rule::in(['male', 'female'])]),
 
-            'birth_from' => $private(['nullable', 'date']),
-            'birth_to' => $private(['nullable', 'date']),
-            'nationality' => $private(['nullable', 'array']),
+            'birth_from' => $private('birth_date', ['nullable', 'date']),
+            'birth_to' => $private('birth_date', ['nullable', 'date']),
+            'nationality' => $private('nationality', ['nullable', 'array']),
             'nationality.*' => ['string', 'max:100'],
-            'citizenship' => $private(['nullable', 'array']),
+            'citizenship' => $private('citizenship', ['nullable', 'array']),
             'citizenship.*' => ['string', 'max:100'],
-            'address' => $private(['nullable', 'string', 'max:100']),
-            'phone' => $private(['nullable', 'string', 'max:32']),
-            'marital_status' => $private(['nullable', Rule::in(['single', 'married'])]),
-            'children' => $private(['nullable', 'array']),
+            'address' => $private('home_address', ['nullable', 'string', 'max:100']),
+            'phone' => $private('phone', ['nullable', 'string', 'max:32']),
+            'marital_status' => $private('marital_status', ['nullable', Rule::in(['single', 'married'])]),
+            'children' => $private('children', ['nullable', 'array']),
             'children.*' => ['integer', 'between:0,3'],
-            'hired_from' => $private(['nullable', 'date']),
-            'hired_to' => $private(['nullable', 'date']),
+            'hired_from' => $private('hired_at', ['nullable', 'date']),
+            'hired_to' => $private('hired_at', ['nullable', 'date']),
         ]);
 
         $filters = [
@@ -125,7 +144,7 @@ class EmployeeController extends Controller
 
         $query = User::query()->select(self::PUBLIC_COLUMNS)->with(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name'])
             ->where('status', $status);
-        $this->applySearch($query, $filters['q'], $privateAccess);
+        $this->applySearch($query, $filters['q'], $visible);
         $this->applyFilters($query, $filters);
         $this->applySort($query, $sort, $direction);
 
@@ -133,25 +152,34 @@ class EmployeeController extends Controller
 
         // Private data is loaded only for the rows the viewer may see, so it
         // never reaches the browser for anyone else.
-        $visible = $employees->getCollection()->filter(fn (User $user) => $viewer->can('viewPrivateDetails', $user));
-        $visible->load(['details', 'children']);
+        // Whose details are worth loading at all: the viewer's own row always,
+        // and everyone else's when at least one such field is open to them.
+        $loaded = $employees->getCollection()->filter(fn (User $user) => $viewer->can('viewPrivateDetails', $user));
+        $loaded->load(['details', 'children']);
 
         $employees->through(fn (User $user) => [
             'id' => $user->id,
+            // The surname and the name are never hidden: a list of blank rows
+            // would be no list at all.
             'name' => $user->name,
             'surname' => $user->surname,
-            'patronymic' => $user->patronymic,
             'avatar' => $user->avatar,
-            'sex' => $user->sex,
-            'email' => $user->email,
-            'roles' => $this->roleTitles($user),
-            'positions' => $this->positionNames($user),
-            'departments' => $this->departmentList($user),
-            'languages' => $this->languageList($user),
+            ...$this->only($visible, [
+                'patronymic' => fn () => $user->patronymic,
+                'sex' => fn () => $user->sex,
+                'email' => fn () => $user->email,
+                'roles' => fn () => $this->roleTitles($user),
+                'positions' => fn () => $this->positionNames($user),
+                'departments' => fn () => $this->departmentList($user),
+                'languages' => fn () => $this->languageList($user),
+            ]),
             'status' => $user->status,
             'status_changed_at' => $user->status_changed_at?->toDateString(),
             'status_note' => $canStatus ? $user->status_note : null,
-            'private' => $visible->contains($user) ? $this->privateDetails($user) : null,
+            // Their own row reads whole, as their own card does.
+            'private' => $loaded->contains($user)
+                ? $this->privateDetails($user, $user->is($viewer) ? EmployeeFields::keys() : $visible)
+                : null,
         ]);
 
         return Inertia::render('employees/index', [
@@ -160,19 +188,21 @@ class EmployeeController extends Controller
             'sort' => ['key' => $sort, 'direction' => $direction],
             'perPage' => $perPage,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
-            'privateAccess' => $privateAccess,
+            // What the page may draw: the columns, the filters and the detail
+            // rows all read this one list.
+            'visibleFields' => $visible,
             'sortable' => $sortable,
             'options' => [
                 'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
-                'nationalities' => $privateAccess ? $this->distinctDetail('nationality') : [],
-                'citizenships' => $privateAccess ? $this->distinctDetail('citizenship') : [],
+                'nationalities' => $shows('nationality') ? $this->distinctDetail('nationality') : [],
+                'citizenships' => $shows('citizenship') ? $this->distinctDetail('citizenship') : [],
             ],
             'status' => $status,
             'statusCounts' => $canStatus ? $this->statusCounts() : null,
-            'canEdit' => $viewer->can('employees.manage'),
+            'canEdit' => $viewer->can('employees.edit.any'),
             'total' => User::count(),
         ]);
     }
@@ -261,8 +291,15 @@ class EmployeeController extends Controller
     public function show(Request $request, User $employee): Response
     {
         $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name']);
+        // Which fields of this card the viewer reads. Their own card is whole;
+        // anybody else's is what their position and their exceptions allow.
+        $visible = EmployeeFields::visibleTo($request->user(), $employee);
+        $shows = fn (string $field) => in_array($field, $visible, true);
         $canSeePrivate = $request->user()->can('viewPrivateDetails', $employee);
-        $canEdit = $request->user()->can('employees.manage');
+        // Which lines of this card the viewer may change: the pencil over a block
+        // shows when anything inside it is theirs to change.
+        $editable = EmployeeFields::editableBy($request->user(), $employee);
+        $canEdit = $editable !== [];
 
         if ($canSeePrivate) {
             $employee->load(['details', 'children', 'educations', 'workExperiences', 'equipment.type.fields', 'equipment.fieldValues']);
@@ -271,37 +308,53 @@ class EmployeeController extends Controller
         return Inertia::render('employees/show', [
             'employee' => [
                 'id' => $employee->id,
+                // Never hidden: a card with no name on it answers nothing.
                 'name' => $employee->name,
                 'surname' => $employee->surname,
-                'patronymic' => $employee->patronymic,
                 'avatar' => $employee->avatar,
                 // The upload itself, for opening the photo at full size.
                 'avatar_original' => $employee->avatar_original,
-                'sex' => $employee->sex,
-                'email' => $employee->email,
                 'status' => $employee->status,
                 'status_changed_at' => $employee->status_changed_at?->toDateString(),
                 // Why somebody was let go is for whoever handles that side of things.
-                'status_note' => $request->user()->can('employees.status') ? $employee->status_note : null,
-                'roles' => $this->roleTitles($employee),
-                'positions' => $this->positionNames($employee),
-                'departments' => $this->departmentList($employee),
-                'languages' => $this->languageList($employee),
+                'status_note' => $request->user()->can('employees.fire') ? $employee->status_note : null,
+                ...$this->only($visible, [
+                    'patronymic' => fn () => $employee->patronymic,
+                    'sex' => fn () => $employee->sex,
+                    'email' => fn () => $employee->email,
+                    'roles' => fn () => $this->roleTitles($employee),
+                    'positions' => fn () => $this->positionNames($employee),
+                    'departments' => fn () => $this->departmentList($employee),
+                    'languages' => fn () => $this->languageList($employee),
+                ]),
                 'private' => $canSeePrivate ? [
-                    ...$this->privateDetails($employee),
-                    'birth_place' => $employee->details?->birth_place,
+                    ...$this->privateDetails($employee, $visible),
+                    ...$this->only($visible, [
+                        'birth_place' => fn () => $employee->details?->birth_place,
+                        'educations' => fn () => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
+                        'work_experiences' => fn () => $employee->workExperiences->map(fn (UserWorkExperience $w) => $this->workExperience($w))->all(),
+                    ]),
+                    // What they hold and what happened to it while they held it:
+                    // one field, two things to read.
+                    ...($shows('equipment') ? [
+                        'equipment' => $employee->equipment->map(fn (Equipment $e) => $this->equipment($e))->all(),
+                        'equipment_history' => $this->equipmentHistory($employee),
+                    ] : []),
+                    // The passport reads as three lines, each its own field, so a
+                    // line nobody may read comes through empty rather than the
+                    // block changing shape under the page.
                     'passport' => [
-                        'series' => $employee->details?->passport_series,
-                        'number' => $employee->details?->passport_number,
-                        'issued_at' => $employee->details?->passport_issued_at?->toDateString(),
-                        'issued_by' => $employee->details?->passport_issued_by,
+                        'series' => $shows('passport_number') ? $employee->details?->passport_series : null,
+                        'number' => $shows('passport_number') ? $employee->details?->passport_number : null,
+                        'issued_at' => $shows('passport_issued_at') ? $employee->details?->passport_issued_at?->toDateString() : null,
+                        'issued_by' => $shows('passport_issued_by') ? $employee->details?->passport_issued_by : null,
                     ],
-                    'educations' => $employee->educations->map(fn (UserEducation $e) => $this->education($e))->all(),
-                    'work_experiences' => $employee->workExperiences->map(fn (UserWorkExperience $w) => $this->workExperience($w))->all(),
-                    'equipment' => $employee->equipment->map(fn (Equipment $e) => $this->equipment($e))->all(),
-                    'equipment_history' => $this->equipmentHistory($employee),
                 ] : null,
             ],
+            // What the page may draw, block by block and line by line.
+            'visibleFields' => $visible,
+            // And which of those lines are theirs to change.
+            'editableFields' => $editable,
             'neighbours' => $this->neighbours($employee),
             // Each card is edited in place, so the suggestions its dialog needs
             // travel with the page — and only for viewers who may edit.
@@ -390,11 +443,16 @@ class EmployeeController extends Controller
     /**
      * Toolbar search across every column. Each word must match some field, so
      * "Назарова Дилноза" finds a person whose surname and name hold the words.
-     * Private fields are searched only for viewers who may see them for
-     * everyone; otherwise a search would reveal them.
+     *
+     * Only the fields the viewer may read are searched: a word that matched a
+     * hidden telephone number would tell them whose it is without ever showing
+     * it, which is the same leak by a longer road.
+     *
+     * @param  list<string>  $visible
      */
-    private function applySearch(Builder $query, string $term, bool $privateAccess): void
+    private function applySearch(Builder $query, string $term, array $visible): void
     {
+        $shows = fn (string $field) => in_array($field, $visible, true);
         // "90 555 44 33" is one phone number, not four words.
         $words = preg_match('/^[\d\s+()\-]+$/', $term)
             ? [preg_replace('/\D/', '', $term)]
@@ -404,51 +462,78 @@ class EmployeeController extends Controller
             $like = "%{$word}%";
             $lower = mb_strtolower($word);
 
-            $query->where(function (Builder $q) use ($like, $lower, $word, $privateAccess) {
-                foreach (['surname', 'name', 'patronymic', 'email'] as $column) {
-                    $q->orWhere($column, 'like', $like);
-                }
+            $query->where(function (Builder $q) use ($like, $lower, $word, $shows) {
+                // The name is always readable, the rest by the same rules as the
+                // columns of the table.
+                $q->where('surname', 'like', $like)->orWhere('name', 'like', $like);
 
-                $q->orWhereHas('roles', fn (Builder $q) => $q->where('title', 'like', $like))
-                    ->orWhereHas('positions', fn (Builder $q) => $q->where('name', 'like', $like))
-                    ->orWhereHas('languages', fn (Builder $q) => $q->where('name', 'like', $like))
-                    ->orWhereHas('departments', fn (Builder $q) => $q->where('name', 'like', $like));
-
-                foreach (['male' => 'мужской', 'female' => 'женский'] as $sex => $label) {
-                    if (str_starts_with($label, $lower)) {
-                        $q->orWhere('sex', $sex);
+                foreach (['patronymic' => 'patronymic', 'email' => 'email'] as $field => $column) {
+                    if ($shows($field)) {
+                        $q->orWhere($column, 'like', $like);
                     }
                 }
 
-                if (! $privateAccess) {
-                    return;
+                foreach (['roles' => ['roles', 'title'], 'positions' => ['positions', 'name'], 'languages' => ['languages', 'name'], 'departments' => ['departments', 'name']] as $field => [$relation, $column]) {
+                    if ($shows($field)) {
+                        $q->orWhereHas($relation, fn (Builder $q) => $q->where($column, 'like', $like));
+                    }
+                }
+
+                if ($shows('sex')) {
+                    foreach (['male' => 'мужской', 'female' => 'женский'] as $sex => $label) {
+                        if (str_starts_with($label, $lower)) {
+                            $q->orWhere('sex', $sex);
+                        }
+                    }
                 }
 
                 // Grouped, so the OR conditions stay inside the "belongs to this employee" constraint.
-                $q->orWhereHas('details', fn (Builder $q) => $q->where(function (Builder $q) use ($like, $lower, $word) {
-                    foreach (['home_address', 'nationality', 'citizenship', 'birth_place', 'sos_contact'] as $column) {
-                        $q->orWhere($column, 'like', $like);
+                $q->orWhereHas('details', fn (Builder $q) => $q->where(function (Builder $q) use ($like, $lower, $word, $shows) {
+                    // Nothing matches by default here: every line is a field.
+                    $q->whereRaw('1 = 0');
+
+                    foreach (['home_address' => 'home_address', 'nationality' => 'nationality', 'citizenship' => 'citizenship', 'birth_place' => 'birth_place', 'sos_phone' => 'sos_contact'] as $field => $column) {
+                        if ($shows($field)) {
+                            $q->orWhere($column, 'like', $like);
+                        }
                     }
 
                     $digits = preg_replace('/\D/', '', $word);
                     if (strlen($digits) >= 3) {
-                        $q->orWhere('phone', 'like', "%{$digits}%")->orWhere('sos_phone', 'like', "%{$digits}%");
+                        if ($shows('phone')) {
+                            $q->orWhere('phone', 'like', "%{$digits}%");
+                        }
+                        if ($shows('sos_phone')) {
+                            $q->orWhere('sos_phone', 'like', "%{$digits}%");
+                        }
                     }
 
                     // "14.05.1992" or a year such as "1992" matches the dates shown in the table.
-                    if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $word, $m)) {
-                        $q->orWhereDate('birth_date', "{$m[3]}-{$m[2]}-{$m[1]}")->orWhereDate('hired_at', "{$m[3]}-{$m[2]}-{$m[1]}");
-                    } elseif (preg_match('/^(19|20)\d{2}$/', $word)) {
-                        $q->orWhereYear('birth_date', (int) $word)->orWhereYear('hired_at', (int) $word);
-                    }
+                    $dates = array_filter(['birth_date' => $shows('birth_date'), 'hired_at' => $shows('hired_at')]);
 
-                    $marital = ['married' => ['женат', 'замужем'], 'single' => ['не женат', 'не замужем', 'холост']];
-                    foreach ($marital as $status => $labels) {
-                        if (collect($labels)->contains(fn ($l) => str_starts_with($l, $lower))) {
-                            $q->orWhere('marital_status', $status);
+                    if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $word, $m)) {
+                        foreach (array_keys($dates) as $column) {
+                            $q->orWhereDate($column, "{$m[3]}-{$m[2]}-{$m[1]}");
+                        }
+                    } elseif (preg_match('/^(19|20)\d{2}$/', $word)) {
+                        foreach (array_keys($dates) as $column) {
+                            $q->orWhereYear($column, (int) $word);
                         }
                     }
-                }))->orWhereHas('children', fn (Builder $q) => $q->where('full_name', 'like', $like));
+
+                    if ($shows('marital_status')) {
+                        $marital = ['married' => ['женат', 'замужем'], 'single' => ['не женат', 'не замужем', 'холост']];
+                        foreach ($marital as $status => $labels) {
+                            if (collect($labels)->contains(fn ($l) => str_starts_with($l, $lower))) {
+                                $q->orWhere('marital_status', $status);
+                            }
+                        }
+                    }
+                }));
+
+                if ($shows('children')) {
+                    $q->orWhereHas('children', fn (Builder $q) => $q->where('full_name', 'like', $like));
+                }
             });
         }
     }
@@ -785,29 +870,63 @@ class EmployeeController extends Controller
     }
 
     /**
+     * The values whose fields are visible, computed only for those: a closure per
+     * field so a hidden one costs neither a query nor a lookup.
+     *
+     * @param  list<string>  $visible
+     * @param  array<string, callable>  $values
      * @return array<string, mixed>
      */
-    private function privateDetails(User $user): array
+    private function only(array $visible, array $values): array
+    {
+        $shown = [];
+
+        foreach ($values as $field => $read) {
+            if (in_array($field, $visible, true)) {
+                $shown[$field] = $read();
+            }
+        }
+
+        return $shown;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function privateDetails(User $user, array $visible): array
     {
         $details = $user->details;
 
+        $shows = fn (string $field) => in_array($field, $visible, true);
+
         return [
-            'birth_date' => $details?->birth_date?->toDateString(),
-            'nationality' => $details?->nationality,
-            'citizenship' => $details?->citizenship,
-            'home_address' => $details?->home_address,
-            'phone' => $details?->phone,
-            'sos_phone' => $details?->sos_phone,
-            'sos_contact' => $details?->sos_contact,
-            'marital_status' => $details?->marital_status,
-            'spouse_name' => $details?->spouse_name,
-            'spouse_birth_date' => $details?->spouse_birth_date?->toDateString(),
-            'has_children' => $details?->has_children,
-            'hired_at' => $details?->hired_at?->toDateString(),
-            'children' => $user->children->map(fn ($child) => [
-                'full_name' => $child->full_name,
-                'birth_date' => $child->birth_date?->toDateString(),
-            ])->all(),
+            ...$this->only($visible, [
+                'birth_date' => fn () => $details?->birth_date?->toDateString(),
+                'nationality' => fn () => $details?->nationality,
+                'citizenship' => fn () => $details?->citizenship,
+                'home_address' => fn () => $details?->home_address,
+                'phone' => fn () => $details?->phone,
+                'marital_status' => fn () => $details?->marital_status,
+                'hired_at' => fn () => $details?->hired_at?->toDateString(),
+            ]),
+            // Three fields that read as one line each on the card but are kept as
+            // two columns: the number and whom to call, the spouse and their
+            // birthday, whether there are children and who they are.
+            ...($shows('sos_phone') ? [
+                'sos_phone' => $details?->sos_phone,
+                'sos_contact' => $details?->sos_contact,
+            ] : []),
+            ...($shows('spouse') ? [
+                'spouse_name' => $details?->spouse_name,
+                'spouse_birth_date' => $details?->spouse_birth_date?->toDateString(),
+            ] : []),
+            ...($shows('children') ? [
+                'has_children' => $details?->has_children,
+                'children' => $user->children->map(fn ($child) => [
+                    'full_name' => $child->full_name,
+                    'birth_date' => $child->birth_date?->toDateString(),
+                ])->all(),
+            ] : []),
         ];
     }
 }

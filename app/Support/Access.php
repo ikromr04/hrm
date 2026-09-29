@@ -20,7 +20,6 @@ final class Access
     public const SECTIONS = [
         'employees' => 'Сотрудники',
         'equipment' => 'Оборудование',
-        'departments' => 'Структура компании',
         'directories' => 'Справочники',
     ];
 
@@ -33,18 +32,19 @@ final class Access
      * @var array<string, array{string, string}>
      */
     public const PERMISSIONS = [
-        'employees.view' => ['Просмотр', 'Список сотрудников и их карточки — без личных данных.'],
-        'employees.manage' => ['Изменение', 'Новый сотрудник, правка карточек, аватар, оборудование на руках.'],
-        'employees.private' => ['Личные данные', 'Паспорт, семья, адрес, телефоны, дата рождения и приёма.'],
-        'employees.status' => ['Перевод и увольнение', 'Перевод, увольнение и восстановление сотрудника.'],
-        'employees.delete' => ['Удаление', 'Удаление сотрудника вместе со всем, что на него записано.'],
+        // Открывается ли раздел вообще. Ставится не галочкой, а самим выбором
+        // полей: позиция, которая не читает ни одной строки карточки, в разделе
+        // ничего и не найдёт.
+        'employees.view' => ['Просмотр', 'Список сотрудников и их карточки. Что именно видно в карточке — выбирается по строкам.'],
+
+        'employees.transfer' => ['Перевод', 'Перевести сотрудника в другой отдел или на другую должность.'],
+        'employees.fire' => ['Увольнение', 'Уволить сотрудника и восстановить уволенного.'],
+        'employees.delete' => ['Удаление', 'Удалить сотрудника вместе со всем, что на него записано.'],
 
         'equipment.view' => ['Просмотр', 'Список техники и карточки единиц.'],
         'equipment.manage' => ['Изменение', 'Постановка на баланс, выдача, возврат, списание, обслуживание.'],
         'equipment.journal' => ['Журнал операций', 'Что происходило с техникой за период.'],
         'equipment.delete' => ['Удаление', 'Снятие единицы с учёта вместе с её журналом.'],
-
-        'departments.view' => ['Просмотр', 'Структура компании и состав отделов.'],
 
         'directories.view' => ['Просмотр', 'Позиции, должности, отделы, языки и категории техники.'],
         'directories.manage' => ['Изменение', 'Добавление, переименование и удаление записей справочников.'],
@@ -57,13 +57,50 @@ final class Access
      *
      * @var list<string>
      */
-    public const DEFAULTS = ['employees.view', 'equipment.view', 'departments.view'];
+    public const DEFAULTS = ['employees.view', 'equipment.view'];
 
-    /** @return list<string> */
+    /**
+     * The same, with the fields a card used to show any colleague: a position is
+     * created able to see what was never private in the first place.
+     *
+     * @return list<string>
+     */
+    public static function defaults(): array
+    {
+        return [...self::DEFAULTS, ...EmployeeFields::defaultPermissions()];
+    }
+
+    /**
+     * Every right there is: the sections, and then one per field of an employee
+     * card — those are rights like any other, so positions, personal exceptions
+     * and Gate::before apply to them unchanged.
+     *
+     * @return list<string>
+     */
     public static function keys(): array
+    {
+        return [...array_keys(self::PERMISSIONS), ...EmployeeFields::permissions()];
+    }
+
+    /**
+     * The rights a table of positions against rights shows as columns: the
+     * sections only. The lines of a card are four dozen rights and belong in a
+     * dialog behind a counter, not in a column each.
+     *
+     * @return list<string>
+     */
+    public static function sectionKeys(): array
     {
         return array_keys(self::PERMISSIONS);
     }
+
+    /**
+     * The three things one does to a colleague rather than to a line of their
+     * card, which is what the "Действия" column of the table holds.
+     *
+     * @var list<string>
+     */
+    public const ACTIONS = ['employees.transfer', 'employees.fire', 'employees.delete'];
 
     public static function has(string $key): bool
     {

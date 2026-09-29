@@ -53,12 +53,12 @@ class SearchController extends Controller
         return response()->json([
             'employees' => $people ? $this->employees($words) : [],
             'equipment' => $units ? $this->equipment($words) : [],
-            'departments' => $user->can('departments.view') ? Department::query()
+            'departments' => Department::query()
                 ->where(fn (Builder $q) => $this->everyWord($q, $words, ['name']))
                 ->orderBy('name')
                 ->limit(self::LIMIT)
                 ->get(['id', 'name'])
-                ->map(fn (Department $d) => ['id' => $d->id, 'name' => $d->name]) : [],
+                ->map(fn (Department $d) => ['id' => $d->id, 'name' => $d->name]),
             'positions' => $people ? Position::query()
                 ->where(fn (Builder $q) => $this->everyWord($q, $words, ['name']))
                 ->orderBy('name')

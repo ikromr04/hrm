@@ -59,7 +59,7 @@ class RoleSeeder extends Seeder
             // Looking around comes with the job; anything more is handed out
             // deliberately on the access page, so a re-seed leaves it alone.
             if (! in_array($name, ['admin', 'sysadmin'], true)) {
-                $role->givePermissionTo(Access::DEFAULTS);
+                $role->givePermissionTo(Access::defaults());
             }
         }
 

@@ -6,6 +6,7 @@ use App\Http\Requests\UpdateContactsRequest;
 use App\Http\Requests\UpdatePersonalDataRequest;
 use App\Models\Language;
 use App\Models\User;
+use App\Support\EmployeeFields;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -24,20 +25,56 @@ class EmployeeDetailsController extends Controller
     private const RELATIONS = ['roles', 'positions', 'departments'];
 
     /**
+     * What a line of these two blocks is called in the request, where that is not
+     * the name of the field itself. The two are the blocks a position is given
+     * line by line, so a form may carry more than the viewer is allowed to
+     * change — from a stale page, or from somebody trying it on — and what they
+     * may not change is simply not saved.
+     *
+     * @var array<string, list<string>>
+     */
+    private const LINES = [
+        'patronymic' => ['patronymic'],
+        'sex' => ['sex'],
+        'birth_date' => ['birth_date'],
+        'birth_place' => ['birth_place'],
+        'citizenship' => ['citizenship'],
+        'nationality' => ['nationality'],
+        'home_address' => ['home_address'],
+        'roles' => ['roles'],
+        'positions' => ['positions'],
+        'departments' => ['departments'],
+        'email' => ['email'],
+        'phone' => ['phone'],
+        'sos_phone' => ['sos_phone', 'sos_contact'],
+    ];
+
+    /**
      * The "Основные данные" card.
      */
     public function personal(UpdatePersonalDataRequest $request, User $employee): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $this->allowed($request, $employee, $request->validated());
 
         DB::transaction(function () use ($employee, $data) {
             $employee->update(Arr::only($data, self::ON_USER));
-            $employee->details()->updateOrCreate([], Arr::except($data, [...self::ON_USER, ...self::RELATIONS]));
 
-            $employee->syncRoles($data['roles']);
-            $employee->positions()->sync($data['positions']);
-            // Departments the employee stays in keep their head flag.
-            $employee->departments()->sync($data['departments']);
+            $details = Arr::except($data, [...self::ON_USER, ...self::RELATIONS]);
+
+            if ($details !== []) {
+                $employee->details()->updateOrCreate([], $details);
+            }
+
+            // A relation left out of the form is left as it is, rather than being
+            // emptied by a save that was never allowed to touch it.
+            foreach (['roles' => 'syncRoles', 'positions' => 'positions', 'departments' => 'departments'] as $key => $how) {
+                if (! array_key_exists($key, $data)) {
+                    continue;
+                }
+
+                // Departments the employee stays in keep their head flag.
+                $how === 'syncRoles' ? $employee->syncRoles($data[$key]) : $employee->{$how}()->sync($data[$key]);
+            }
         });
 
         return back();
@@ -72,14 +109,42 @@ class EmployeeDetailsController extends Controller
      */
     public function contacts(UpdateContactsRequest $request, User $employee): RedirectResponse
     {
-        $data = $request->validated();
+        $data = $this->allowed($request, $employee, $request->validated());
 
         DB::transaction(function () use ($employee, $data) {
-            $employee->update(['email' => $data['email']]);
-            $employee->details()->updateOrCreate([], Arr::except($data, 'email'));
+            if (array_key_exists('email', $data)) {
+                $employee->update(['email' => $data['email']]);
+            }
+
+            $details = Arr::except($data, 'email');
+
+            if ($details !== []) {
+                $employee->details()->updateOrCreate([], $details);
+            }
         });
 
         return back();
+    }
+
+    /**
+     * The part of a save the viewer is allowed to make. The surname and the name
+     * are not on the list of lines at all — they are always readable and always
+     * theirs to correct — so they pass through untouched.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function allowed(Request $request, User $employee, array $data): array
+    {
+        $editable = EmployeeFields::editableBy($request->user(), $employee);
+
+        foreach (self::LINES as $field => $keys) {
+            if (! in_array($field, $editable, true)) {
+                $data = Arr::except($data, $keys);
+            }
+        }
+
+        return $data;
     }
 
     /**

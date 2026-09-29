@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Support\Access;
+use App\Support\EmployeeFields;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -34,6 +35,9 @@ class AccessController extends Controller
 
         return Inertia::render('directories/access', [
             'sections' => Access::tree(),
+            // The fields of a card are two dozen rights; the table shows how many
+            // of them a position reads and opens a dialog for the list itself.
+            'fields' => EmployeeFields::tree(),
             'roles' => $roles->map(fn (Role $role) => [
                 'id' => $role->id,
                 'name' => $role->name,

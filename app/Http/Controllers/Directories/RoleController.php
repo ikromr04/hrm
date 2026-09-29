@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Support\Access;
+use App\Support\EmployeeFields;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -28,6 +29,11 @@ class RoleController extends Controller
             // a new position is no use until somebody says what it opens. Only a
             // system administrator is offered it, and only they may send it.
             'sections' => Access::tree(),
+            // Which fields of a card the position reads, chosen in the same dialog.
+            'fields' => EmployeeFields::tree(),
+            // What a new position starts with, so the dialog offers the same set a
+            // seeded position gets rather than a copy of it kept in the client.
+            'defaults' => Access::defaults(),
             'canManageAccess' => $request->user()->hasRole('sysadmin'),
             // Counts match the employee list the number links to: working staff only.
             'items' => Role::query()
@@ -54,7 +60,7 @@ class RoleController extends Controller
 
         // What the dialog ticked, or — when it was not offered any — looking
         // around, which every position carries.
-        $role->syncPermissions($data['permissions'] ?? Access::DEFAULTS);
+        $role->syncPermissions($data['permissions'] ?? Access::defaults());
         $this->forgetCache();
 
         return back();

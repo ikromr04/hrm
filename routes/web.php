@@ -28,7 +28,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('employees.index');
     // Before the profile, or "create" would be read as somebody's id.
     Route::get('employees/create', [EmployeeController::class, 'create'])
-        ->middleware('can:employees.manage')
+        ->middleware('can:employees.edit.any')
         ->name('employees.create');
     // Everybody reaches their own card, whatever rights they hold.
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])
@@ -52,56 +52,64 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('can:equipment.view')
         ->name('equipment.show');
 
-    Route::get('departments', [DepartmentController::class, 'index'])
-        ->middleware('can:departments.view')
-        ->name('departments.index');
-    Route::get('departments/{department}', [DepartmentController::class, 'show'])
-        ->middleware('can:departments.view')
-        ->name('departments.show');
+    // Who works where is nobody's secret: the structure of the company is open
+    // to everybody who signs in, and the pages show names and nothing more.
+    Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
+    Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
 });
 
 // Putting a new colleague on the books.
 Route::post('employees', [EmployeeController::class, 'store'])
-    ->middleware(['auth', 'can:employees.manage'])
+    ->middleware(['auth', 'can:employees.edit.any'])
     ->name('employees.store');
 
-Route::middleware(['auth', 'can:employees.manage'])->prefix('employees/{employee}')->name('employees.')->group(function () {
-    // One card of the profile at a time, edited from its own dialog.
+// One card of the profile at a time, each form guarded by the block it saves:
+// whoever may change a passport is not thereby allowed to rewrite a family.
+Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')->group(function () {
     // Multipart, so the upload is a POST rather than a PUT.
-    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->name('avatar.update');
-    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->name('avatar.destroy');
+    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->middleware('can:employees.edit.any')->name('avatar.update');
+    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->middleware('can:employees.edit.any')->name('avatar.destroy');
 
-    Route::put('personal', [EmployeeDetailsController::class, 'personal'])->name('personal');
-    Route::put('passport', [EmployeeDetailsController::class, 'passport'])->name('passport');
-    Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->name('contacts');
-    Route::put('languages', [EmployeeDetailsController::class, 'languages'])->name('languages');
-    Route::put('employment', [EmployeeDetailsController::class, 'employment'])->name('employment');
+    Route::put('personal', [EmployeeDetailsController::class, 'personal'])->middleware('can:employees.edit.block.main')->name('personal');
+    Route::put('passport', [EmployeeDetailsController::class, 'passport'])->middleware('can:employees.edit.block.passport')->name('passport');
+    Route::put('contacts', [EmployeeDetailsController::class, 'contacts'])->middleware('can:employees.edit.block.contacts')->name('contacts');
+    Route::put('languages', [EmployeeDetailsController::class, 'languages'])->middleware('can:employees.edit.block.languages')->name('languages');
+    Route::put('employment', [EmployeeDetailsController::class, 'employment'])->middleware('can:employees.edit.block.employment')->name('employment');
 
     // Education is kept record by record. The controller checks that the record
     // belongs to the employee in the URL, so one person's id cannot reach
     // another's; scoped bindings would not, as "education" has no plural form
     // for Laravel to find the relation by.
-    Route::post('educations', [EmployeeEducationController::class, 'store'])->name('educations.store');
-    // Several records in one request: the steps of the "new colleague" wizard.
-    Route::post('educations/many', [EmployeeEducationController::class, 'storeMany'])->name('educations.many');
-    Route::put('educations/{education}', [EmployeeEducationController::class, 'update'])->name('educations.update');
-    Route::delete('educations/{education}', [EmployeeEducationController::class, 'destroy'])->name('educations.destroy');
+    Route::middleware('can:employees.edit.block.education')->group(function () {
+        Route::post('educations', [EmployeeEducationController::class, 'store'])->name('educations.store');
+        // Several records in one request: the steps of the "new colleague" wizard.
+        Route::post('educations/many', [EmployeeEducationController::class, 'storeMany'])->name('educations.many');
+        Route::put('educations/{education}', [EmployeeEducationController::class, 'update'])->name('educations.update');
+        Route::delete('educations/{education}', [EmployeeEducationController::class, 'destroy'])->name('educations.destroy');
+    });
 
-    Route::post('experiences', [EmployeeWorkExperienceController::class, 'store'])->name('experiences.store');
-    Route::post('experiences/many', [EmployeeWorkExperienceController::class, 'storeMany'])->name('experiences.many');
-    Route::post('equipment', [EmployeeEquipmentController::class, 'store'])->name('equipment.store');
-    Route::put('experiences/{experience}', [EmployeeWorkExperienceController::class, 'update'])->name('experiences.update');
-    Route::delete('experiences/{experience}', [EmployeeWorkExperienceController::class, 'destroy'])->name('experiences.destroy');
+    Route::middleware('can:employees.edit.block.experience')->group(function () {
+        Route::post('experiences', [EmployeeWorkExperienceController::class, 'store'])->name('experiences.store');
+        Route::post('experiences/many', [EmployeeWorkExperienceController::class, 'storeMany'])->name('experiences.many');
+        Route::put('experiences/{experience}', [EmployeeWorkExperienceController::class, 'update'])->name('experiences.update');
+        Route::delete('experiences/{experience}', [EmployeeWorkExperienceController::class, 'destroy'])->name('experiences.destroy');
+    });
 
-    Route::put('family', [EmployeeDetailsController::class, 'family'])->name('family');
+    Route::post('equipment', [EmployeeEquipmentController::class, 'store'])
+        ->middleware('can:employees.edit.block.equipment')
+        ->name('equipment.store');
+
+    Route::put('family', [EmployeeDetailsController::class, 'family'])->middleware('can:employees.edit.block.family')->name('family');
 });
 
-// Moving somebody, letting them go and taking them back: a right of its own,
-// not a part of editing a card — HR moves people about without rewriting them.
-Route::middleware(['auth', 'can:employees.status'])->prefix('employees/{employee}')->name('employees.')->group(function () {
-    Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->name('transfer');
-    Route::post('fire', [EmployeeStatusController::class, 'fire'])->name('fire');
-    Route::post('restore', [EmployeeStatusController::class, 'restore'])->name('restore');
+// What is done to a colleague rather than to a line of their card. Moving
+// somebody about and letting them go are asked separately: plenty of people
+// reassign a department and very few end an employment. Taking somebody back is
+// the counterpart of letting them go, so it goes with it.
+Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')->group(function () {
+    Route::post('transfer', [EmployeeStatusController::class, 'transfer'])->middleware('can:employees.transfer')->name('transfer');
+    Route::post('fire', [EmployeeStatusController::class, 'fire'])->middleware('can:employees.fire')->name('fire');
+    Route::post('restore', [EmployeeStatusController::class, 'restore'])->middleware('can:employees.fire')->name('restore');
 });
 
 // Striking the card out of the system altogether, with everything on it.
