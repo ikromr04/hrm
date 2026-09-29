@@ -6,6 +6,7 @@ use App\Models\Equipment;
 use App\Models\EquipmentEvent;
 use App\Models\EquipmentPhoto;
 use App\Models\EquipmentRepair;
+use App\Rules\ReadableImage;
 use Illuminate\Http\Request;
 
 /**
@@ -18,12 +19,31 @@ trait KeepsEquipmentPhotos
 {
     /**
      * The same limits in every window, so a picture from a phone is never
-     * refused in one form and taken in another.
+     * refused in one form and taken in another. A method rather than a constant
+     * because one of the rules is an object.
+     *
+     * @return array<string, mixed>
      */
-    protected const PHOTO_RULES = [
-        'photos' => ['nullable', 'array', 'max:10'],
-        'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
-    ];
+    protected function photoRules(): array
+    {
+        return [
+            'photos' => ['nullable', 'array', 'max:10'],
+            // bail: one complaint per file is enough, and it should be the
+            // first thing wrong with it rather than all of them at once.
+            'photos.*' => ['bail', 'image', 'mimes:jpeg,png,webp', 'max:12288', new ReadableImage],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function photoMessages(): array
+    {
+        return [
+            'photos.*.image' => ReadableImage::MESSAGE,
+            'photos.*.mimes' => ReadableImage::MESSAGE,
+        ];
+    }
 
     /**
      * Hangs the upload on the entry a save has just written. `$since` is the

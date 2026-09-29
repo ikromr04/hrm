@@ -78,8 +78,8 @@ class EquipmentDetailsController extends Controller
             'condition' => ['nullable', 'string', 'max:200'],
             'checked_at' => ['nullable', 'date', 'before_or_equal:today'],
             'next_inventory_at' => ['nullable', 'date'],
-            ...self::PHOTO_RULES,
-        ], attributes: [
+            ...$this->photoRules(),
+        ], messages: $this->photoMessages(), attributes: [
             'condition' => 'текущее состояние',
             'checked_at' => 'последняя проверка',
             'next_inventory_at' => 'следующая инвентаризация',

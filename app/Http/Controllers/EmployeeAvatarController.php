@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\ReadableImage;
 use App\Support\Photo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,10 @@ class EmployeeAvatarController extends Controller
     public function update(Request $request, User $employee): RedirectResponse
     {
         $request->validate([
-            'avatar' => ['required', 'image', 'mimes:jpeg,png,webp', 'max:8192'],
+            'avatar' => ['bail', 'required', 'image', 'mimes:jpeg,png,webp', 'max:8192', new ReadableImage],
+        ], messages: [
+            'avatar.image' => ReadableImage::MESSAGE,
+            'avatar.mimes' => ReadableImage::MESSAGE,
         ], attributes: ['avatar' => 'фотография']);
 
         /** @var UploadedFile $file */

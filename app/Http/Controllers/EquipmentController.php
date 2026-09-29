@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\KeepsEquipmentPhotos;
 use App\Http\Controllers\Concerns\SavesEquipmentFields;
 use App\Models\Equipment;
 use App\Models\EquipmentEvent;
@@ -25,7 +26,7 @@ use Inertia\Response;
  */
 class EquipmentController extends Controller
 {
-    use SavesEquipmentFields;
+    use KeepsEquipmentPhotos, SavesEquipmentFields;
 
     public const PER_PAGE_OPTIONS = [25, 50, 100];
 
@@ -178,8 +179,7 @@ class EquipmentController extends Controller
             'accessories.*' => ['string', 'max:100'],
 
             // How it looked on arrival, kept with the entry that records it.
-            'photos' => ['nullable', 'array', 'max:10'],
-            'photos.*' => ['image', 'mimes:jpeg,png,webp,heic', 'max:12288'],
+            ...$this->photoRules(),
 
             // A unit often arrives for somebody in particular, so it can be
             // handed over in the same breath as it is put on the books.

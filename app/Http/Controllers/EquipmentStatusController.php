@@ -30,8 +30,8 @@ class EquipmentStatusController extends Controller
             // In what state it went out, so a return has something to be
             // compared against. The form opens on what the card says now.
             'condition' => ['nullable', 'string', 'max:200'],
-            ...self::PHOTO_RULES,
-        ], attributes: [
+            ...$this->photoRules(),
+        ], messages: $this->photoMessages(), attributes: [
             'holder_user_id' => 'сотрудник',
             'issued_at' => 'дата выдачи',
             'condition' => 'состояние',
@@ -64,8 +64,8 @@ class EquipmentStatusController extends Controller
             'condition_on_return' => ['nullable', 'string', 'max:200'],
             // The day it was handed back, which is the day it was last seen.
             'returned_at' => ['required', 'date', 'before_or_equal:today'],
-            ...self::PHOTO_RULES,
-        ], attributes: [
+            ...$this->photoRules(),
+        ], messages: $this->photoMessages(), attributes: [
             'condition_on_return' => 'состояние при возврате',
             'returned_at' => 'дата возврата',
             'photos' => 'фотографии',
@@ -102,8 +102,8 @@ class EquipmentStatusController extends Controller
             // Why it is going: the form opens on what the card says now, and
             // whoever strikes it off says what state it is in at the end.
             'condition' => ['nullable', 'string', 'max:200'],
-            ...self::PHOTO_RULES,
-        ], attributes: [
+            ...$this->photoRules(),
+        ], messages: $this->photoMessages(), attributes: [
             'written_off_at' => 'дата списания',
             'condition' => 'состояние',
             'photos' => 'фотографии',

@@ -82,8 +82,8 @@ class EquipmentRepairController extends Controller
             'started_at' => ['required', 'date', 'before_or_equal:today'],
             'ended_at' => ['nullable', 'date', 'after_or_equal:started_at'],
             'note' => ['nullable', 'string', 'max:200'],
-            ...self::PHOTO_RULES,
-        ], attributes: [
+            ...$this->photoRules(),
+        ], messages: $this->photoMessages(), attributes: [
             'kind' => 'тип работ',
             'started_at' => 'дата начала',
             'ended_at' => 'дата окончания',

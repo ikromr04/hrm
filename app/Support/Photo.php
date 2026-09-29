@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use GdImage;
+use RuntimeException;
 
 /**
  * The bits of image handling shared by whatever accepts a photograph: a file
@@ -17,6 +18,13 @@ class Photo
     public static function upright(string $path): GdImage
     {
         $image = imagecreatefromstring((string) file_get_contents($path));
+
+        // Everything that accepts a photograph checks this at the door, in
+        // AppRulesReadableImage, so getting here means something slipped past
+        // and saying so plainly beats a type error three lines down.
+        if ($image === false) {
+            throw new RuntimeException("Изображение не читается: {$path}");
+        }
         $orientation = @exif_read_data($path)['Orientation'] ?? null;
 
         $angle = match ($orientation) {

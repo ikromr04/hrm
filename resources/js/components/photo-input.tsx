@@ -78,10 +78,13 @@ export function PhotoInput({
 
             {shooting && <CameraDialog onShot={(photo) => onChange([...photos, photo])} onClose={() => setShooting(false)} />}
 
+            {/* Exactly what the server can open. Naming the formats instead of
+                image/* also makes iOS convert a HEIC photograph to JPEG as it is
+                chosen, rather than handing over a file nothing here can read. */}
             <input
                 ref={picker}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
                 hidden
                 onChange={(event) => {
@@ -95,7 +98,7 @@ export function PhotoInput({
                 <input
                     ref={camera}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     capture="environment"
                     hidden
                     onChange={(event) => {
