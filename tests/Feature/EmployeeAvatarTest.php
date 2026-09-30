@@ -26,9 +26,13 @@ class EmployeeAvatarTest extends TestCase
         Storage::fake('public');
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     /** The raw column holds a path; the model hands out a URL. */
@@ -43,7 +47,7 @@ class EmployeeAvatarTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/avatar", [
                 // Deliberately not square: the thumbnail must still come out so.
                 'avatar' => UploadedFile::fake()->image('photo.jpg', 900, 600),
@@ -64,7 +68,7 @@ class EmployeeAvatarTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg', 900, 600)]);
 
         [$thumbnail, $original] = $this->paths($employee);
@@ -78,7 +82,7 @@ class EmployeeAvatarTest extends TestCase
     public function test_replacing_a_photo_removes_the_files_it_replaces()
     {
         $employee = $this->colleague();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('first.jpg')]);
         $before = $this->paths($employee);
@@ -93,7 +97,7 @@ class EmployeeAvatarTest extends TestCase
     public function test_an_admin_deletes_the_photo_and_its_files()
     {
         $employee = $this->colleague();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg')]);
         $files = $this->paths($employee);
@@ -110,7 +114,7 @@ class EmployeeAvatarTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg')]);
+        $this->actingAs($this->sysadmin())->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->image('photo.jpg')]);
 
         $this->assertStringStartsWith('/storage/', $employee->refresh()->avatar);
         $this->assertStringStartsWith('/storage/', $employee->avatar_original);
@@ -119,7 +123,7 @@ class EmployeeAvatarTest extends TestCase
     public function test_anything_that_is_not_an_image_is_rejected()
     {
         $employee = $this->colleague();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)
             ->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->create('resume.pdf', 20, 'application/pdf')])

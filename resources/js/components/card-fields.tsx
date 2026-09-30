@@ -11,6 +11,8 @@ import { useState } from 'react';
 export interface CardField {
     key: string;
     title: string;
+    /** Never closed to anybody: the surname on a card, and the name. */
+    always?: boolean;
     /** "employees.field.phone" */
     permission: string;
     /** "employees.edit.phone" */
@@ -28,11 +30,16 @@ export interface CardFieldGroup {
 
 export type CardFieldsMode = 'view' | 'edit';
 
-const rightOf = (field: CardField, mode: CardFieldsMode) => (mode === 'view' ? field.permission : field.editPermission);
+/**
+ * The right behind a box, or null where there is none: a line everybody reads has
+ * nothing to tick in «Просмотр», though changing it is a right like any other.
+ */
+const rightOf = (field: CardField, mode: CardFieldsMode): string | null =>
+    mode === 'edit' ? field.editPermission : field.always ? null : field.permission;
 
 /** Every right of that kind, for counting and for toggling everything at once. */
 export const cardFieldRights = (groups: CardFieldGroup[], mode: CardFieldsMode): string[] =>
-    groups.flatMap((group) => group.fields.map((field) => rightOf(field, mode)));
+    groups.flatMap((group) => group.fields.map((field) => rightOf(field, mode)).filter((right) => right !== null));
 
 /** How much of a card a position reads or may change: for the button in the table. */
 export function countCardFields(groups: CardFieldGroup[], held: string[], mode: CardFieldsMode): { chosen: number; total: number } {
@@ -77,7 +84,13 @@ export function CardFields({
 
     // Changing is allowed only where reading is: the right to read is what makes
     // a line available here at all.
-    const locked = (field: CardField) => mode === 'edit' && !held.includes(field.permission);
+    const locked = (field: CardField) => mode === 'edit' && !field.always && !held.includes(field.permission);
+
+    /** A box that is ticked and cannot be unticked: a line nobody can close. */
+    const fixed = (field: CardField) => mode === 'view' && field.always === true;
+
+    /** Whether the box beside a line is ticked, the fixed ones included. */
+    const ticked = (field: CardField) => fixed(field) || held.includes(rightOf(field, mode) ?? '');
 
     const set = (rights: string[], on: boolean) =>
         onChange(on ? [...held, ...rights.filter((right) => !held.includes(right))] : held.filter((right) => !rights.includes(right)));
@@ -85,17 +98,19 @@ export function CardFields({
     const toggleField = (field: CardField) => {
         const right = rightOf(field, mode);
 
-        set([right], !held.includes(right));
+        if (right !== null) {
+            set([right], !held.includes(right));
+        }
     };
 
     const toggleGroup = (group: CardFieldGroup) => {
-        const rights = group.fields.filter((field) => !locked(field)).map((field) => rightOf(field, mode));
+        const rights = group.fields.filter((field) => !locked(field) && !fixed(field)).map((field) => rightOf(field, mode)!);
         const all = rights.length > 0 && rights.every((right) => held.includes(right));
 
         set(rights, !all);
     };
 
-    const chosenIn = (group: CardFieldGroup) => group.fields.filter((field) => held.includes(rightOf(field, mode))).length;
+    const chosenIn = (group: CardFieldGroup) => group.fields.filter(ticked).length;
 
     return (
         <div className="grid gap-3">
@@ -105,7 +120,7 @@ export function CardFields({
                 {groups.map((group) => {
                     const chosen = chosenIn(group);
                     const all = chosen === group.fields.length;
-                    const available = group.fields.filter((field) => !locked(field)).length;
+                    const available = group.fields.filter((field) => !locked(field) && !fixed(field)).length;
                     const expanded = open.includes(group.key);
 
                     return (
@@ -157,8 +172,8 @@ export function CardFields({
                                                         className={cn('flex items-center gap-2 text-sm', locked(field) && 'text-muted-foreground')}
                                                     >
                                                         <Checkbox
-                                                            checked={held.includes(rightOf(field, mode))}
-                                                            disabled={locked(field)}
+                                                            checked={ticked(field)}
+                                                            disabled={locked(field) || fixed(field)}
                                                             onCheckedChange={() => toggleField(field)}
                                                         />
                                                         {field.title}

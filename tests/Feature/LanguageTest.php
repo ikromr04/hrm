@@ -22,7 +22,7 @@ class LanguageTest extends TestCase
 
         $this->seed(RoleSeeder::class);
         $this->admin = User::factory()->create();
-        $this->admin->assignRole('admin');
+        $this->admin->assignRole('sysadmin');
     }
 
     public function test_only_admins_manage_the_languages_directory()

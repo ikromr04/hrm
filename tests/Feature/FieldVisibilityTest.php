@@ -78,7 +78,8 @@ class FieldVisibilityTest extends TestCase
                 ->missing('employee.private.marital_status')
                 ->missing('employee.email')
                 ->where('employee.private.passport.number', null)
-                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['patronymic', 'phone'])
+                // The surname and the name need no right, so they are always there.
+                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['name', 'patronymic', 'phone', 'surname'])
             );
     }
 
@@ -95,7 +96,7 @@ class FieldVisibilityTest extends TestCase
                 ->missing('employees.data.0.email')
                 ->missing('employees.data.0.departments')
                 ->where('employees.data.0.positions', [])
-                ->where('visibleFields', ['positions'])
+                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['name', 'positions', 'surname'])
             );
     }
 
@@ -141,7 +142,7 @@ class FieldVisibilityTest extends TestCase
         $this->mayLookAround($employee);
 
         $this->actingAs($employee)
-            ->get("/employees/{$employee->id}")
+            ->get('/profile')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('employee.private.home_address', 'Душанбе, Рудаки 55')
@@ -159,7 +160,7 @@ class FieldVisibilityTest extends TestCase
     {
         $employee = $this->colleagueWithEverything();
 
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
+        $this->actingAs(User::factory()->create()->assignRole('sysadmin'))
             ->get("/employees/{$employee->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('employee.private.home_address', 'Душанбе, Рудаки 55')

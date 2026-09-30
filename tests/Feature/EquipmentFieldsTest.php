@@ -30,9 +30,13 @@ class EquipmentFieldsTest extends TestCase
         $this->seed(RoleSeeder::class);
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function laptops(): EquipmentType
@@ -51,7 +55,7 @@ class EquipmentFieldsTest extends TestCase
 
     public function test_a_category_is_given_its_fields_in_the_directory()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/directories/equipment', [
                 'name' => 'Мониторы',
                 'icon' => 'monitor',
@@ -79,7 +83,7 @@ class EquipmentFieldsTest extends TestCase
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
         $unit->fieldValues()->create(['equipment_field_id' => $field->id, 'value' => 'Intel Core i5']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/directories/equipment/{$type->id}", [
                 'name' => 'Ноутбуки и планшеты',
                 'icon' => 'laptop',
@@ -99,7 +103,7 @@ class EquipmentFieldsTest extends TestCase
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
         $unit->fieldValues()->create(['equipment_field_id' => $field->id, 'value' => 'Intel Core i5']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/directories/equipment/{$type->id}", ['name' => 'Ноутбуки', 'icon' => 'laptop', 'fields' => []])
             ->assertSessionHasNoErrors();
 
@@ -109,14 +113,14 @@ class EquipmentFieldsTest extends TestCase
 
     public function test_two_fields_cannot_share_a_name_and_a_list_needs_something_to_choose_from()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/directories/equipment', [
                 'name' => 'Мониторы',
                 'fields' => [$this->field(['name' => 'Диагональ']), $this->field(['name' => 'диагональ'])],
             ])
             ->assertSessionHasErrors('fields.1.name');
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/directories/equipment', [
                 'name' => 'Периферия',
                 'fields' => [$this->field(['name' => 'Подключение', 'type' => 'select', 'options' => []])],
@@ -133,7 +137,7 @@ class EquipmentFieldsTest extends TestCase
         $warranty = $type->fields()->create(['name' => 'Гарантия до', 'type' => 'date', 'position' => 1]);
         $corporate = $type->fields()->create(['name' => 'Корпоративная', 'type' => 'boolean', 'position' => 2]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', [
                 'equipment_type_id' => $type->id,
                 'name' => 'Ноутбук Dell Latitude 5440',
@@ -156,7 +160,7 @@ class EquipmentFieldsTest extends TestCase
         $needed = $type->fields()->create(['name' => 'Процессор', 'type' => 'text', 'required' => true, 'position' => 1]);
         $list = $type->fields()->create(['name' => 'Формат', 'type' => 'select', 'options' => ['A4', 'A3'], 'position' => 2]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', [
                 'equipment_type_id' => $type->id,
                 'name' => 'Ноутбук',
@@ -176,7 +180,7 @@ class EquipmentFieldsTest extends TestCase
 
         // A monitor goes on the books without a word about processors, required
         // or not: the field belongs to another category.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', ['equipment_type_id' => $monitors->id, 'name' => 'Монитор Dell', 'inventory_number' => 'EV-9999'])
             ->assertSessionHasNoErrors();
 
@@ -192,7 +196,7 @@ class EquipmentFieldsTest extends TestCase
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
         $unit->fieldValues()->create(['equipment_field_id' => $cpu->id, 'value' => 'Intel Core i5']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get("/equipment/{$unit->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('unit.fields.0.name', 'Процессор')
@@ -216,7 +220,7 @@ class EquipmentFieldsTest extends TestCase
         $unit->fieldValues()->create(['equipment_field_id' => $cpu->id, 'value' => 'Intel Core i5']);
         $before = $unit->events()->count();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/specs", [
                 'equipment_type_id' => $type->id,
                 'name' => $unit->name,
@@ -240,7 +244,7 @@ class EquipmentFieldsTest extends TestCase
         $own = $type->fields()->create(['name' => 'Корпоративная', 'type' => 'boolean', 'position' => 0]);
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/specs", [
                 'equipment_type_id' => $type->id,
                 'name' => $unit->name,
@@ -262,7 +266,7 @@ class EquipmentFieldsTest extends TestCase
         $unit = Equipment::factory()->create(['equipment_type_id' => $laptops->id]);
         $unit->fieldValues()->create(['equipment_field_id' => $cpu->id, 'value' => 'Intel Core i5']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/specs", [
                 'equipment_type_id' => $monitors->id,
                 'name' => 'Монитор Dell P2422H',
@@ -286,7 +290,7 @@ class EquipmentFieldsTest extends TestCase
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
         $unit->fieldValues()->create(['equipment_field_id' => $cpu->id, 'value' => 'Intel Core i5']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/specs", [
                 'equipment_type_id' => $type->id,
                 'name' => $unit->name,
@@ -304,7 +308,7 @@ class EquipmentFieldsTest extends TestCase
         $type = $this->laptops();
         $type->fields()->create(['name' => 'Процессор', 'type' => 'text', 'position' => 0]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment/create')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -316,7 +320,7 @@ class EquipmentFieldsTest extends TestCase
 
     public function test_a_new_category_is_offered_the_fields_most_hardware_has()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/directories/equipment')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -328,7 +332,7 @@ class EquipmentFieldsTest extends TestCase
 
     public function test_a_category_says_whether_its_units_come_with_anything()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/directories/equipment', ['name' => 'Периферия', 'fields' => [], 'has_accessories' => false])
             ->assertSessionHasNoErrors();
 
@@ -336,13 +340,13 @@ class EquipmentFieldsTest extends TestCase
         $this->assertFalse($type->has_accessories);
 
         // A category says its units do unless somebody says otherwise.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/directories/equipment', ['name' => 'Ноутбуки', 'fields' => []])
             ->assertSessionHasNoErrors();
         $this->assertTrue(EquipmentType::firstWhere('name', 'Ноутбуки')->has_accessories);
 
         // And it can change its mind later.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/directories/equipment/{$type->id}", ['name' => 'Периферия', 'fields' => [], 'has_accessories' => true])
             ->assertSessionHasNoErrors();
         $this->assertTrue($type->fresh()->has_accessories);
@@ -352,7 +356,7 @@ class EquipmentFieldsTest extends TestCase
     {
         $type = EquipmentType::create(['name' => 'Периферия', 'has_accessories' => false]);
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         // The card leaves the block out rather than showing an empty one.
         $this->actingAs($admin)
@@ -372,7 +376,7 @@ class EquipmentFieldsTest extends TestCase
         $type = EquipmentType::create(['name' => 'Ноутбуки', 'has_accessories' => true]);
         $unit = Equipment::factory()->create(['equipment_type_id' => $type->id]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/accessories", ['accessories' => ['Блок питания 65 Вт', 'Сумка']])
             ->assertSessionHasNoErrors();
 
@@ -383,7 +387,7 @@ class EquipmentFieldsTest extends TestCase
     {
         EquipmentType::create(['name' => 'Периферия', 'has_accessories' => false]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment/create')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('options.types', fn ($types) => collect($types)->firstWhere('name', 'Периферия')['has_accessories'] === false)
@@ -395,7 +399,7 @@ class EquipmentFieldsTest extends TestCase
         $type = $this->laptops();
         $type->fields()->create(['name' => 'Разрешение', 'type' => 'select', 'options' => ['A4'], 'position' => 0]);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/directories/equipment')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page

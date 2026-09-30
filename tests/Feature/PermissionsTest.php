@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
@@ -51,6 +52,23 @@ class PermissionsTest extends TestCase
 
         // And nothing else: a right that leaves the code leaves the database.
         $this->assertSame(count(Access::keys()), Permission::count());
+    }
+
+    public function test_a_right_with_no_row_behind_it_answers_no_rather_than_failing()
+    {
+        // The catalogue lives in code and the database is told the same list by a
+        // seeder. Between the two — a branch with a new right, a database not yet
+        // re-seeded — the answer is "no", not a broken page.
+        $colleague = $this->colleague();
+
+        $this->assertFalse($colleague->can('employees.teleport'));
+        $this->assertFalse($colleague->hasPermissionTo('employees.teleport'));
+
+        // And once the row is gone, a position that held the right loses it too.
+        $this->assertTrue($colleague->can('employees.view'));
+        Permission::findByName('employees.view')->delete();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $this->assertFalse($colleague->fresh()->can('employees.view'));
     }
 
     public function test_a_position_carries_looking_around_and_nothing_more()
@@ -138,17 +156,6 @@ class PermissionsTest extends TestCase
         $this->assertTrue($colleague->fresh()->can('employees.view'));
     }
 
-    public function test_an_administrator_passes_every_check_without_a_single_right()
-    {
-        $admin = User::factory()->create()->assignRole('admin');
-
-        $this->assertEmpty($admin->getAllPermissions());
-
-        foreach (Access::keys() as $key) {
-            $this->assertTrue($admin->can($key), "администратор должен проходить {$key}");
-        }
-    }
-
     public function test_the_access_page_is_a_directory_like_any_other()
     {
         $role = Role::findByName('analyst');
@@ -159,13 +166,12 @@ class PermissionsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('directories/access')
                 ->has('sections', count(Access::SECTIONS))
-                ->where('roles', fn ($roles) => collect($roles)->firstWhere('name', 'admin')['everything'] === true)
+                // Exactly one row has nothing to tick, and it is the system
+                // administrator's: every other position is filled in by hand,
+                // «Администратор» along with the rest.
+                ->where('roles', fn ($roles) => collect($roles)->where('everything', true)->pluck('name')->all() === ['sysadmin']
+                    && collect($roles)->firstWhere('name', 'admin')['permissions'] === Access::defaults())
             );
-
-        // An administrator holds every right there is, this one included.
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
-            ->get('/directories/access')
-            ->assertOk();
 
         // A position gets it the way it gets any other list, and reading the table
         // is not deciding what is in it.
@@ -196,14 +202,14 @@ class PermissionsTest extends TestCase
             ->put("/directories/access/{$role->id}", ['permissions' => []])
             ->assertForbidden();
 
-        // An unknown right is refused, and the access roles are not editable at
-        // all: they answer yes to everything whatever the table holds.
+        // An unknown right is refused, and the one row with nothing to tick is the
+        // system administrator's: it answers yes whatever the table holds.
         $this->actingAs($this->sysadmin())
             ->put("/directories/access/{$role->id}", ['permissions' => ['employees.everything']])
             ->assertSessionHasErrors('permissions.0');
 
         $this->actingAs($this->sysadmin())
-            ->put('/directories/access/'.Role::findByName('admin')->id, ['permissions' => []])
+            ->put('/directories/access/'.Role::findByName('sysadmin')->id, ['permissions' => []])
             ->assertForbidden();
     }
 
@@ -229,9 +235,9 @@ class PermissionsTest extends TestCase
         $this->assertSame(0, PermissionOverride::count());
         $this->assertFalse($colleague->fresh()->can('equipment.journal.all'));
 
-        // It takes the same right as the table itself: an administrator holds it,
-        // somebody who merely reads the table does not.
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
+        // It takes the same right as the table itself: whoever holds that right
+        // may, somebody who merely reads the table may not.
+        $this->actingAs($this->withRights('employees.view', 'directories.view.access', 'directories.edit.access'))
             ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal.all', 'allowed' => true])
             ->assertRedirect();
 
@@ -256,9 +262,9 @@ class PermissionsTest extends TestCase
                     && $right($rights->all(), 'equipment.journal.all') === ['key' => 'equipment.journal.all', 'position' => false, 'override' => true])
             );
 
-        // Only whoever hands rights out is shown it: an administrator is, and a
-        // position that merely reads the staff is not.
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
+        // Only whoever hands rights out is shown it; a position that merely reads
+        // the staff is not.
+        $this->actingAs($this->withRights('employees.view', 'directories.view.access', 'directories.edit.access'))
             ->get("/employees/{$colleague->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('access.everything', false));
 
@@ -271,7 +277,9 @@ class PermissionsTest extends TestCase
     {
         $employee = User::factory()->create();
 
-        $this->actingAs($employee)->get("/employees/{$employee->id}")->assertOk();
+        // At its own address, where no id is asked for and none is guarded.
+        $this->actingAs($employee)->get('/profile')->assertOk();
+        $this->actingAs($employee)->get("/employees/{$employee->id}")->assertRedirect('/profile');
 
         // Somebody else's takes the right to read the staff.
         $this->actingAs($employee)->get('/employees/'.User::factory()->create()->id)->assertForbidden();
@@ -292,9 +300,10 @@ class PermissionsTest extends TestCase
 
     public function test_a_position_created_without_a_word_about_rights_may_look_around()
     {
-        // An administrator is not offered the list, so the position starts with
-        // what every position carries rather than with nothing at all.
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
+        // Whoever keeps the positions directory is not offered the list of rights,
+        // so a position they create starts with what every position carries rather
+        // than with nothing at all.
+        $this->actingAs($this->withRights('directories.view.roles', 'directories.edit.roles'))
             ->post('/directories/roles', ['title' => 'Курьер'])
             ->assertRedirect();
 
@@ -341,12 +350,7 @@ class PermissionsTest extends TestCase
                 ->where('items', fn ($items) => collect(collect($items)->firstWhere('name', 'analyst')['permissions'])->sort()->values()->all() === collect(Access::defaults())->sort()->values()->all())
             );
 
-        // An administrator holds every right, so the list is offered to them too;
-        // a position that only keeps the positions directory is not offered it.
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
-            ->get('/directories/roles')
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('canManageAccess', true));
-
+        // A position that only keeps the positions directory is not offered it.
         $this->actingAs($this->withRights('directories.view.roles'))
             ->get('/directories/roles')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('canManageAccess', false));

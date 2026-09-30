@@ -18,6 +18,7 @@ use App\Notifications\AccountCreated;
 use App\Support\Access;
 use App\Support\Directories;
 use App\Support\EmployeeFields;
+use App\Support\EquipmentAccess;
 use App\Support\EquipmentHistory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -48,6 +49,9 @@ class EmployeeController extends Controller
 
     /** @var Collection<int, Department>|null All departments keyed by id; the tree is small. */
     private ?Collection $departments = null;
+
+    /** @var list<int> Units on the card being built that the viewer may open. */
+    private array $openUnits = [];
 
     /**
      * Sorting or filtering by these reveals how colleagues compare on private
@@ -164,7 +168,9 @@ class EmployeeController extends Controller
             // would be no list at all.
             'name' => $user->name,
             'surname' => $user->surname,
-            'avatar' => $user->avatar,
+            // The photograph is a line like any other: closed, the row shows the
+            // initials instead, which is what a row without a photograph shows.
+            'avatar' => in_array('avatar', $visible, true) ? $user->avatar : null,
             ...$this->only($visible, [
                 'patronymic' => fn () => $user->patronymic,
                 'sex' => fn () => $user->sex,
@@ -195,7 +201,7 @@ class EmployeeController extends Controller
             'visibleFields' => $visible,
             'sortable' => $sortable,
             'options' => [
-                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'roles' => Access::offeredRoles()->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
@@ -228,7 +234,7 @@ class EmployeeController extends Controller
     {
         return Inertia::render('employees/create', [
             'options' => [
-                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                'roles' => Access::offeredRoles()->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
@@ -290,7 +296,33 @@ class EmployeeController extends Controller
             : to_route('employees.show', $employee);
     }
 
-    public function show(Request $request, User $employee): Response
+    /**
+     * One's own card, at an address of its own.
+     *
+     * Everybody has a card and nobody needs a right to read their own, so it is
+     * not a page one arrives at by knowing an id. There is nothing to page
+     * through here either: a profile has no previous and no next.
+     */
+    public function profile(Request $request): Response
+    {
+        return $this->card($request, $request->user(), neighbours: false);
+    }
+
+    public function show(Request $request, User $employee): Response|RedirectResponse
+    {
+        // Their own card lives at /profile; an id that happens to be theirs leads
+        // there rather than drawing the same page twice.
+        if ($request->user()->is($employee)) {
+            return to_route('profile');
+        }
+
+        return $this->card($request, $employee, neighbours: true);
+    }
+
+    /**
+     * The card itself, as both addresses render it.
+     */
+    private function card(Request $request, User $employee, bool $neighbours): Response
     {
         $employee->load(['roles:id,name,title', 'positions:id,name', 'departments:id,name,parent_id', 'languages:id,name']);
         // Which fields of this card the viewer reads. Their own card is whole;
@@ -313,9 +345,10 @@ class EmployeeController extends Controller
                 // Never hidden: a card with no name on it answers nothing.
                 'name' => $employee->name,
                 'surname' => $employee->surname,
-                'avatar' => $employee->avatar,
+                // A line of the card, so it travels only when it is open.
+                'avatar' => $shows('avatar') ? $employee->avatar : null,
                 // The upload itself, for opening the photo at full size.
-                'avatar_original' => $employee->avatar_original,
+                'avatar_original' => $shows('avatar') ? $employee->avatar_original : null,
                 'status' => $employee->status,
                 'status_changed_at' => $employee->status_changed_at?->toDateString(),
                 // Why somebody was let go is for whoever handles that side of things.
@@ -338,7 +371,7 @@ class EmployeeController extends Controller
                     ]),
                     // What they hold and what happened to it while they held it:
                     // one field, two things to read.
-                    ...($shows('equipment') ? [
+                    ...($shows('equipment') && $this->openUnitsFor($request->user(), $employee) ? [
                         'equipment' => $employee->equipment->map(fn (Equipment $e) => $this->equipment($e))->all(),
                         'equipment_history' => $this->equipmentHistory($employee),
                     ] : []),
@@ -357,16 +390,26 @@ class EmployeeController extends Controller
             'visibleFields' => $visible,
             // And which of those lines are theirs to change.
             'editableFields' => $editable,
-            'neighbours' => $this->neighbours($employee),
+            'neighbours' => $neighbours ? $this->neighbours($employee) : null,
             // Each card is edited in place, so the suggestions its dialog needs
             // travel with the page — and only for viewers who may edit.
             'canEdit' => $canEdit,
             // Nobody transfers, fires or deletes themselves.
             'isSelf' => $request->user()->is($employee),
+            // Why the positions of this card are not this viewer's to change, if
+            // they are not: the form shows the sentence beside the locked field
+            // instead of letting somebody find out by saving.
+            'rolesLocked' => Access::rolesLockedReason($request->user(), $employee),
             'options' => $canEdit ? [
                 'nationalities' => $this->distinctDetail('nationality'),
                 'citizenships' => $this->distinctDetail('citizenship'),
-                'roles' => Role::query()->orderBy('title')->get(['name', 'title']),
+                // What a card may be given, plus whatever it already carries: the
+                // single system administrator is offered to nobody, and their own
+                // card must still show the role it holds rather than lose it on
+                // the next save.
+                'roles' => Access::offeredRoles()
+                    ->orWhereIn('name', $employee->roles->pluck('name'))
+                    ->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
                 'departments' => $this->departmentOptions(),
                 'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
@@ -397,9 +440,9 @@ class EmployeeController extends Controller
         $overrides = $employee->permissionOverrides->pluck('allowed', 'permission');
 
         return [
-            // An access role passes every check through Gate::before, so the
+            // The one account passes every check through Gate::before, so the
             // rights below would only be telling half the story.
-            'everything' => $employee->hasAnyRole(['sysadmin', 'admin']),
+            'everything' => $employee->hasRole(Access::SOLE_ROLE),
             'sections' => Access::tree(),
             'rights' => collect(Access::keys())->map(fn (string $key) => [
                 'key' => $key,
@@ -760,6 +803,9 @@ class EmployeeController extends Controller
             'inventory_number' => $unit->inventory_number,
             'type' => $unit->type?->name,
             'issued_at' => $unit->issued_at?->toDateString(),
+            // Whether the unit's own card is this viewer's to open: holding the
+            // line of a person's card is not the same as seeing the fleet.
+            'open' => in_array($unit->id, $this->openUnits, true),
         ];
     }
 
@@ -801,7 +847,7 @@ class EmployeeController extends Controller
                 'actor' => $event->user === null ? null : [
                     'id' => $event->user->id,
                     'name' => "{$event->user->surname} {$event->user->name}",
-                    'avatar' => $event->user->avatar,
+                    'avatar' => EmployeeFields::showsAvatar(request()->user(), $event->user) ? $event->user->avatar : null,
                 ],
                 'photos' => $event->photos->map(fn ($photo) => [
                     'id' => $photo->id,
@@ -827,7 +873,27 @@ class EmployeeController extends Controller
             'name' => $event->equipment->name,
             'inventory_number' => $event->equipment->inventory_number,
             'type' => $event->equipment->type?->name,
+            'open' => in_array($event->equipment->id, $this->openUnits, true),
         ];
+    }
+
+    /**
+     * Which of the units on this card — held now or passed through their hands —
+     * the viewer may open, asked once for the lot rather than unit by unit.
+     * Always true, so it can sit in the condition that builds the block.
+     */
+    private function openUnitsFor(User $viewer, User $employee): bool
+    {
+        $ids = $employee->equipment->pluck('id')
+            ->merge(EquipmentHistory::of($employee)->events()->pluck('equipment_id'))
+            ->filter()->unique()->values()->all();
+
+        $this->openUnits = $ids === [] ? [] : Equipment::query()
+            ->whereIn('id', $ids)
+            ->tap(fn (Builder $q) => EquipmentAccess::narrow($q, $viewer))
+            ->pluck('id')->all();
+
+        return true;
     }
 
     /**

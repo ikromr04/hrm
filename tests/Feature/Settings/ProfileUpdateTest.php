@@ -149,7 +149,10 @@ class ProfileUpdateTest extends TestCase
     {
         $user = $this->colleague();
 
-        $this->actingAs($user)->delete('/settings/profile')->assertStatus(405);
+        // There is no such action to call: the catch-all answers every method for
+        // an address with nothing behind it, so the refusal is a 404 rather than
+        // "method not allowed". What matters is that the account is still there.
+        $this->actingAs($user)->delete('/settings/profile')->assertNotFound();
 
         $this->assertNotNull($user->fresh());
     }

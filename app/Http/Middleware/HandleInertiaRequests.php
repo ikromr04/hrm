@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -47,10 +48,10 @@ class HandleInertiaRequests extends Middleware
                 // Every right in the catalogue with a yes or a no, so a page can
                 // hide what it must without asking a second question.
                 'can' => $request->user()?->accessMap() ?? [],
-                // Whether the two access roles may be put on somebody's card. Not
-                // a right that can be handed out: an administrator holds every one
-                // of those and still may not appoint another administrator.
-                'manageAccess' => (bool) $request->user()?->hasRole('sysadmin'),
+                // The one account outside the list of rights. Pages ask this only
+                // where something is not a right at all — the company dashboard,
+                // which nobody is granted line by line.
+                'sysadmin' => (bool) $request->user()?->hasRole(Access::SOLE_ROLE),
             ],
             // What a form hands back to itself: the colleague the "new
             // employee" wizard has just created, or the unit of equipment the
@@ -58,6 +59,9 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'employee' => $request->session()->get('employee'),
                 'equipment' => $request->session()->get('equipment'),
+                // A sentence for whoever lands back on a page after something went
+                // sideways on the way — an expired session, for one.
+                'notice' => $request->session()->get('notice'),
             ],
         ]);
     }

@@ -61,9 +61,13 @@ class EmployeeProfileTest extends TestCase
             ->where('neighbours.prev', ['id' => $a->id, 'name' => 'Азимов Далер'])
             ->where('neighbours.next', ['id' => $c->id, 'name' => 'Бобоева Нигина'])
         );
-        // First and last of the list; someone who left is not in it.
-        $this->get("/employees/{$a->id}")->assertInertia(fn (Assert $page) => $page->where('neighbours.prev', null));
+        // Last of the list; someone who left is not in it.
         $this->get("/employees/{$c->id}")->assertInertia(fn (Assert $page) => $page->where('neighbours.next', null));
+
+        // Their own card is not a page of the list at all: it lives at its own
+        // address and has nothing to page through.
+        $this->get("/employees/{$a->id}")->assertRedirect('/profile');
+        $this->get('/profile')->assertInertia(fn (Assert $page) => $page->where('neighbours', null));
     }
 
     public function test_employee_sees_their_full_profile_including_passport()
@@ -74,7 +78,7 @@ class EmployeeProfileTest extends TestCase
         UserWorkExperience::factory()->for($user)->create(['organization' => 'ООО «Шифобахш»']);
 
         $this->actingAs($user)
-            ->get("/employees/{$user->id}")
+            ->get('/profile')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('employee.private.passport.number', $user->details->passport_number)
                 ->where('employee.private.passport.issued_by', $user->details->passport_issued_by)
@@ -90,7 +94,7 @@ class EmployeeProfileTest extends TestCase
     public function test_admin_sees_anyones_full_profile()
     {
         $admin = $this->colleague();
-        $admin->assignRole('admin');
+        $admin->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)

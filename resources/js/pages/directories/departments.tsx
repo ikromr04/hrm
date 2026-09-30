@@ -30,6 +30,7 @@ export default function Departments({ items, employees, canEdit }: { items: Depa
                 route="directories.departments"
                 labels={{ add: 'Добавить отдел', create: 'Новый отдел', edit: 'Изменить отдел', accusative: 'отдел' }}
                 employeesUrl={(item) => route('employees.index', { department: [item.id] })}
+                employeesField="employees.field.departments"
                 tree
                 people={employees}
             />

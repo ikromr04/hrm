@@ -308,7 +308,7 @@ class EquipmentAccessTest extends TestCase
 
     public function test_an_administrator_is_asked_nothing()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $unit = $this->unitOf(User::factory()->create());
         $this->entry($unit, $admin);
 

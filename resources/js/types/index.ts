@@ -1,14 +1,16 @@
 import { LucideIcon } from 'lucide-react';
 
 export interface Auth {
-    user: User;
+    /**
+     * Null for a visitor who is not signed in. Almost every page here is behind
+     * the door and may read this without asking; the page for a wrong address is
+     * shown on both sides of it, so it asks.
+     */
+    user: User | null;
     /** Every right in the catalogue with a yes or a no; see lib/access.ts. */
     can: Record<string, boolean>;
-    /**
-     * Whether they may hand access out. Not a right: an administrator holds
-     * every right there is and still may not decide who else gets them.
-     */
-    manageAccess: boolean;
+    /** The one account outside that list, for the few things that are not rights. */
+    sysadmin: boolean;
 }
 
 export interface BreadcrumbItem {
@@ -48,6 +50,8 @@ export interface SharedData {
     flash: {
         employee: { id: number; name: string } | null;
         equipment: { id: number; name: string; inventory_number: string } | null;
+        /** A sentence for whoever lands back on a page after something went sideways. */
+        notice: string | null;
     };
     [key: string]: unknown;
 }

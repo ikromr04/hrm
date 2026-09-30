@@ -36,7 +36,7 @@ class EmployeePassportTest extends TestCase
 
     public function test_an_admin_edits_the_passport()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -53,7 +53,7 @@ class EmployeePassportTest extends TestCase
 
     public function test_the_details_row_is_created_when_the_employee_has_none()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = $this->colleague();
 
         $this->actingAs($admin)
@@ -65,7 +65,7 @@ class EmployeePassportTest extends TestCase
 
     public function test_the_whole_card_may_stay_empty()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         // A new hire can be on file before their document is.
@@ -85,7 +85,7 @@ class EmployeePassportTest extends TestCase
 
     public function test_invalid_data_is_rejected()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)

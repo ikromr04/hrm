@@ -8,6 +8,8 @@ use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
+use App\Support\Access;
+use App\Support\EmployeeFields;
 use App\Support\EquipmentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -51,6 +53,12 @@ class SearchController extends Controller
         $people = $user->can('employees.view');
         $units = EquipmentAccess::sees($user);
 
+        // A position, a job title or a language leads to the staff list narrowed by
+        // that line of a card, and the list refuses to be narrowed by a line the
+        // viewer may not read. So each of those doors asks for its own line too.
+        $visible = EmployeeFields::visibleTo($user);
+        $narrows = fn (string $field) => $people && in_array($field, $visible, true);
+
         return response()->json([
             'employees' => $people ? $this->employees($words) : [],
             'equipment' => $units ? $this->equipment($words, $user) : [],
@@ -60,15 +68,14 @@ class SearchController extends Controller
                 ->limit(self::LIMIT)
                 ->get(['id', 'name'])
                 ->map(fn (Department $d) => ['id' => $d->id, 'name' => $d->name]),
-            'positions' => $people ? Position::query()
+            'positions' => $narrows('positions') ? Position::query()
                 ->where(fn (Builder $q) => $this->everyWord($q, $words, ['name']))
                 ->orderBy('name')
                 ->limit(self::LIMIT)
                 ->get(['id', 'name'])
                 ->map(fn (Position $p) => ['id' => $p->id, 'name' => $p->name]) : [],
-            'roles' => $people ? Role::query()
+            'roles' => $narrows('roles') ? Access::offeredRoles()
                 ->where(fn (Builder $q) => $this->everyWord($q, $words, ['title']))
-                ->orderBy('title')
                 ->limit(self::LIMIT)
                 ->get(['name', 'title'])
                 ->map(fn (Role $r) => ['name' => $r->name, 'title' => $r->title]) : [],
@@ -78,7 +85,7 @@ class SearchController extends Controller
                 ->limit(self::LIMIT)
                 ->get(['id', 'name', 'icon'])
                 ->map(fn (EquipmentType $t) => ['id' => $t->id, 'name' => $t->name, 'icon' => $t->icon]) : [],
-            'languages' => $people ? Language::query()
+            'languages' => $narrows('languages') ? Language::query()
                 ->where(fn (Builder $q) => $this->everyWord($q, $words, ['name']))
                 ->orderBy('name')
                 ->limit(self::LIMIT)
@@ -111,7 +118,7 @@ class SearchController extends Controller
             ->map(fn (User $u) => [
                 'id' => $u->id,
                 'name' => "{$u->surname} {$u->name}",
-                'avatar' => $u->avatar,
+                'avatar' => EmployeeFields::showsAvatar(request()->user(), $u) ? $u->avatar : null,
                 'email' => $u->email,
                 'positions' => $u->positions->pluck('name')->sort()->values(),
             ])

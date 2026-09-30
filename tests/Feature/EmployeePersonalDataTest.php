@@ -47,7 +47,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_an_admin_edits_the_personal_data_of_an_employee()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create(['sex' => 'male']);
 
         $this->actingAs($admin)
@@ -68,7 +68,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_the_details_row_is_created_when_the_employee_has_none()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = $this->colleague();
 
         $this->actingAs($admin)
@@ -80,7 +80,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_empty_optional_fields_are_accepted()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -107,7 +107,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_invalid_data_is_rejected()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -122,7 +122,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_an_admin_files_the_employee_under_a_role_position_and_department()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
         $position = Position::firstOrFail();
         $department = Department::create(['name' => 'Отдел продаж']);
@@ -143,7 +143,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_a_department_head_keeps_the_flag_when_the_card_is_saved_again()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
         $department = Department::create(['name' => 'Отдел продаж']);
         $employee->departments()->attach($department, ['is_head' => true]);
@@ -155,15 +155,18 @@ class EmployeePersonalDataTest extends TestCase
         $this->assertTrue((bool) $employee->refresh()->departments->first()->pivot->is_head);
     }
 
-    public function test_an_admin_cannot_drop_their_own_admin_role()
+    public function test_the_one_position_cannot_be_dropped_from_its_own_card()
     {
-        $admin = User::factory()->has(UserDetail::factory(), 'details')->create()->assignRole('admin');
+        // Positions on one's own card are an ordinary line, opened by an ordinary
+        // right — except this one, which cannot be given up because nobody could
+        // hand it back.
+        $sysadmin = User::factory()->has(UserDetail::factory(), 'details')->create()->assignRole('sysadmin');
 
-        $this->actingAs($admin)
-            ->put("/employees/{$admin->id}/personal", $this->payload(['roles' => ['specialist']]))
+        $this->actingAs($sysadmin)
+            ->put("/employees/{$sysadmin->id}/personal", $this->payload(['roles' => ['specialist']]))
             ->assertSessionHasErrors('roles');
 
-        $this->assertTrue($admin->fresh()->hasRole('admin'));
+        $this->assertTrue($sysadmin->fresh()->hasRole('sysadmin'));
     }
 
     public function test_an_employee_cannot_edit_anyones_personal_data()
@@ -182,7 +185,7 @@ class EmployeePersonalDataTest extends TestCase
 
     public function test_the_edit_button_and_suggestions_reach_only_editors()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create(['sex' => 'male']);
         $employee->details()->update(['nationality' => 'таджик']);
 

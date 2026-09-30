@@ -30,9 +30,13 @@ class EquipmentJournalTest extends TestCase
         $this->seed([RoleSeeder::class, EquipmentTypeSeeder::class]);
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function type(string $name = 'Ноутбуки'): EquipmentType
@@ -42,7 +46,7 @@ class EquipmentJournalTest extends TestCase
 
     public function test_putting_a_unit_on_the_books_is_the_first_entry()
     {
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post('/equipment', [
             'equipment_type_id' => $this->type()->id,
@@ -60,7 +64,7 @@ class EquipmentJournalTest extends TestCase
     {
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $employee->id, 'issued_at' => '2026-03-14']);
         $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке', 'returned_at' => now()->toDateString()]);
@@ -79,7 +83,7 @@ class EquipmentJournalTest extends TestCase
     public function test_a_correction_is_named_by_the_block_it_was_made_in()
     {
         $unit = Equipment::factory()->ofType($this->type())->create(['condition' => 'Новое, в упаковке', 'name' => 'Ноутбук Dell']);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->put("/equipment/{$unit->id}/state", [
             'condition' => 'Рабочее, следы эксплуатации',
@@ -109,7 +113,7 @@ class EquipmentJournalTest extends TestCase
     public function test_the_accessories_are_recorded_as_lists_on_both_sides()
     {
         $unit = Equipment::factory()->ofType($this->type())->create(['accessories' => ['Блок питания 65 Вт', 'Сумка', 'Док-станция WD19S']]);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         // One item swapped for another: the entry keeps both lists whole, so
         // the card can say what came and what went rather than printing JSON.
@@ -134,7 +138,7 @@ class EquipmentJournalTest extends TestCase
     {
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/repairs", [
             'kind' => 'Замена картриджа',
@@ -159,7 +163,7 @@ class EquipmentJournalTest extends TestCase
         Storage::fake('public');
         $unit = Equipment::factory()->ofType($this->type())->create();
 
-        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/repairs", [
+        $this->actingAs($this->sysadmin())->post("/equipment/{$unit->id}/repairs", [
             'kind' => 'Замена клавиатуры',
             'started_at' => '2026-09-01',
             'photos' => [UploadedFile::fake()->image('before.jpg', 1600, 1200)],
@@ -180,7 +184,7 @@ class EquipmentJournalTest extends TestCase
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
-        $this->actingAs($this->admin())->post("/equipment/{$unit->id}/take", [
+        $this->actingAs($this->sysadmin())->post("/equipment/{$unit->id}/take", [
             'condition_on_return' => 'Царапина на крышке',
             'returned_at' => now()->toDateString(),
             'photos' => [UploadedFile::fake()->image('lid.jpg', 1600, 1200)],
@@ -197,7 +201,7 @@ class EquipmentJournalTest extends TestCase
         Storage::fake('public');
         $employee = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", [
             'holder_user_id' => $employee->id,
@@ -221,7 +225,7 @@ class EquipmentJournalTest extends TestCase
         $unit = Equipment::factory()->ofType($this->type())->create();
         $repair = $unit->repairs()->create(['kind' => 'Диагностика', 'started_at' => '2026-09-01']);
 
-        $this->actingAs($this->admin())->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
+        $this->actingAs($this->sysadmin())->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
             'kind' => 'Замена клавиатуры',
             'started_at' => '2026-09-01',
             'note' => 'По заявке сотрудника',
@@ -233,7 +237,7 @@ class EquipmentJournalTest extends TestCase
         $this->assertSame([null, 'По заявке сотрудника'], $event->diff['note']);
 
         // Finishing the work is named as such, with the date it ended.
-        $this->actingAs($this->admin())->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
+        $this->actingAs($this->sysadmin())->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
             'kind' => 'Замена клавиатуры',
             'started_at' => '2026-09-01',
             'ended_at' => '2026-09-05',
@@ -248,7 +252,7 @@ class EquipmentJournalTest extends TestCase
     {
         Storage::fake('public');
         $unit = Equipment::factory()->ofType($this->type())->create(['condition' => 'Новое, в упаковке']);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $check = fn (string $condition, int $count) => $this->actingAs($admin)->post("/equipment/{$unit->id}/state", [
             // Multipart, so the upload is a POST that says it is a PUT.
@@ -286,7 +290,7 @@ class EquipmentJournalTest extends TestCase
         $fresh->save();
 
         // No period asked for, so the journal opens on the whole of it.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment/journal')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('equipment/journal')
@@ -296,7 +300,7 @@ class EquipmentJournalTest extends TestCase
             );
 
         // Narrowed to the last month, the six-month-old entry drops out.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment/journal?from='.now()->subDays(29)->toDateString().'&to='.now()->toDateString())
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('events.data', 1)
@@ -304,14 +308,14 @@ class EquipmentJournalTest extends TestCase
             );
 
         // One end alone is a period too: everything since a date.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment/journal?from='.now()->subYear()->toDateString())
             ->assertInertia(fn (AssertableInertia $page) => $page->has('events.data', 2));
     }
 
     public function test_the_journal_narrows_by_operation_unit_and_who_did_it()
     {
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
         $employee = User::factory()->create();
         $laptop = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук Acer', 'inventory_number' => 'EV-0001']);
         $monitor = Equipment::factory()->ofType($this->type('Мониторы'))->create(['name' => 'Монитор Dell', 'inventory_number' => 'EV-0002']);
@@ -334,7 +338,7 @@ class EquipmentJournalTest extends TestCase
     {
         $employee = User::factory()->create(['surname' => 'Рахимов', 'name' => 'Фарход']);
         $unit = Equipment::factory()->ofType($this->type())->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", [
             'holder_user_id' => $employee->id,
@@ -355,7 +359,7 @@ class EquipmentJournalTest extends TestCase
     {
         $unit = Equipment::factory()->ofType($this->type())->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get("/equipment/{$unit->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page->has('events', 1)->where('events.0.kind', 'created'));
     }
@@ -363,7 +367,7 @@ class EquipmentJournalTest extends TestCase
     public function test_the_journal_keeps_to_whoever_manages_the_fleet()
     {
         $this->actingAs($this->colleague())->get('/equipment/journal')->assertForbidden();
-        $this->actingAs($this->admin())->get('/equipment/journal')->assertOk();
+        $this->actingAs($this->sysadmin())->get('/equipment/journal')->assertOk();
     }
 
     public function test_every_kind_the_journal_can_record_has_a_name()

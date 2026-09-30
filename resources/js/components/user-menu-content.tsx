@@ -16,12 +16,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
         <>
             {/* The name is the way to one's own profile, as it is everywhere else. */}
             <DropdownMenuItem asChild className="p-0 font-normal">
-                <Link
-                    className="flex w-full items-center gap-2 px-1 py-1.5 text-left text-sm"
-                    href={route('employees.show', user.id)}
-                    prefetch
-                    onClick={cleanup}
-                >
+                <Link className="flex w-full items-center gap-2 px-1 py-1.5 text-left text-sm" href={route('profile')} prefetch onClick={cleanup}>
                     <UserInfo user={user} showEmail={true} />
                 </Link>
             </DropdownMenuItem>

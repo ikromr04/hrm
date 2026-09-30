@@ -23,7 +23,7 @@ class DirectoriesTest extends TestCase
 
         $this->seed(RoleSeeder::class);
         $this->admin = User::factory()->create();
-        $this->admin->assignRole('admin');
+        $this->admin->assignRole('sysadmin');
     }
 
     public function test_only_admins_can_open_or_change_directories()
@@ -39,8 +39,9 @@ class DirectoriesTest extends TestCase
         $this->post('/directories/positions', ['name' => 'Хакер'])->assertForbidden();
         $this->assertSame(0, Position::count());
 
-        // The rights travel with every page, keyed the way they are named.
-        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.edit.positions'] === false));
+        // The rights travel with every page, keyed the way they are named — asked
+        // here of the one page everybody can open.
+        $this->get('/profile')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.edit.positions'] === false));
         $this->actingAs($this->admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.edit.positions'] === true));
     }
 
@@ -54,7 +55,9 @@ class DirectoriesTest extends TestCase
         $this->get('/directories/roles')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('directories/roles')
             ->has('items', 25)
-            ->where('items', fn ($items) => collect($items)->firstWhere('name', 'admin')['protected'] === true)
+            // The one position the system relies on; the rest, «Администратор»
+            // included, are ordinary entries of the list.
+            ->where('items', fn ($items) => collect($items)->where('protected', true)->pluck('name')->all() === ['sysadmin'])
         );
         $this->get('/directories/positions')->assertInertia(fn (Assert $page) => $page
             ->component('directories/positions')
@@ -90,8 +93,8 @@ class DirectoriesTest extends TestCase
         $this->assertNull(Role::find($intern->id));
         $this->assertCount(0, $employee->fresh()->roles);
 
-        $this->delete('/directories/roles/'.Role::findByName('admin')->id)->assertForbidden();
-        $this->assertTrue($this->admin->fresh()->hasRole('admin'));
+        $this->delete('/directories/roles/'.Role::findByName('sysadmin')->id)->assertForbidden();
+        $this->assertTrue($this->admin->fresh()->hasRole('sysadmin'));
     }
 
     public function test_positions_can_be_added_renamed_and_deleted()

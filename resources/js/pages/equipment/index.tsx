@@ -11,7 +11,8 @@ import {
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
 import { Pagination, type Paginated } from '@/components/pagination';
-import { PersonAvatar } from '@/components/person-avatar';
+import { PersonFace } from '@/components/person-face';
+import { PersonLink } from '@/components/person-link';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -235,18 +236,14 @@ function DeleteDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
 function Holder({ unit }: { unit: Unit }) {
     if (unit.holder) {
         return (
-            <Link
-                href={route('employees.show', unit.holder.id)}
+            <PersonLink
+                id={unit.holder.id}
                 title={`Открыть профиль: ${unit.holder.name}`}
                 className="text-brand-strong flex items-center gap-2 hover:underline dark:text-[#C5E27A]"
             >
-                {unit.holder.avatar ? (
-                    <img src={unit.holder.avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
-                ) : (
-                    <PersonAvatar name={unit.holder.name} className="size-7 text-[11px]" />
-                )}
+                <PersonFace id={unit.holder.id} name={unit.holder.name} avatar={unit.holder.avatar} className="size-7 text-[11px]" />
                 <span className="truncate">{unit.holder.name}</span>
-            </Link>
+            </PersonLink>
         );
     }
 

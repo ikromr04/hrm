@@ -23,9 +23,13 @@ class EmployeeEducationTest extends TestCase
         $this->seed([RoleSeeder::class, PositionSeeder::class]);
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function payload(array $overrides = []): array
@@ -46,7 +50,7 @@ class EmployeeEducationTest extends TestCase
         $employee = $this->colleague();
         $kept = UserEducation::factory()->for($employee)->create(['institution' => 'Курсы']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/educations", $this->payload())
             ->assertSessionHasNoErrors()
             ->assertRedirect();
@@ -63,7 +67,7 @@ class EmployeeEducationTest extends TestCase
         $employee = $this->colleague();
         $education = UserEducation::factory()->for($employee)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/employees/{$employee->id}/educations/{$education->id}", $this->payload(['faculty' => 'Юридический']))
             ->assertSessionHasNoErrors();
 
@@ -76,7 +80,7 @@ class EmployeeEducationTest extends TestCase
         $education = UserEducation::factory()->for($employee)->create();
         $kept = UserEducation::factory()->for($employee)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->delete("/employees/{$employee->id}/educations/{$education->id}")
             ->assertSessionHasNoErrors();
 
@@ -89,7 +93,7 @@ class EmployeeEducationTest extends TestCase
         $employee = $this->colleague();
 
         // Still studying: no graduation year and no diploma yet.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/educations", $this->payload(['graduated_year' => '', 'diploma_number' => '']))
             ->assertSessionHasNoErrors();
 
@@ -102,7 +106,7 @@ class EmployeeEducationTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/educations", $this->payload([
                 'institution' => '',
                 // Nobody graduates before enrolling.
@@ -119,11 +123,11 @@ class EmployeeEducationTest extends TestCase
         $education = UserEducation::factory()->for($owner)->create(['faculty' => 'Экономический']);
 
         // The id is real, but it belongs to somebody else.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/employees/{$stranger->id}/educations/{$education->id}", $this->payload())
             ->assertNotFound();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->delete("/employees/{$stranger->id}/educations/{$education->id}")
             ->assertNotFound();
 

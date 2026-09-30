@@ -27,9 +27,13 @@ class EmployeeWizardStepsTest extends TestCase
         $this->seed([RoleSeeder::class, EquipmentTypeSeeder::class]);
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function employee(): User
@@ -41,7 +45,7 @@ class EmployeeWizardStepsTest extends TestCase
     {
         $employee = $this->employee();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/educations/many", [
                 'records' => [
                     ['institution' => 'ТНУ', 'faculty' => 'Экономический', 'specialty' => 'Финансы', 'started_year' => 2010, 'graduated_year' => 2014],
@@ -57,7 +61,7 @@ class EmployeeWizardStepsTest extends TestCase
     {
         $employee = $this->employee();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/educations/many", [
                 'records' => [
                     ['institution' => 'ТНУ', 'faculty' => 'Экономический', 'specialty' => 'Финансы', 'started_year' => 2010],
@@ -74,7 +78,7 @@ class EmployeeWizardStepsTest extends TestCase
     public function test_previous_jobs_are_filed_together_and_checked_row_by_row()
     {
         $employee = $this->employee();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)
             ->post("/employees/{$employee->id}/experiences/many", [
@@ -115,7 +119,7 @@ class EmployeeWizardStepsTest extends TestCase
     public function test_an_empty_step_is_simply_skipped()
     {
         $employee = $this->employee();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/employees/{$employee->id}/educations/many", ['records' => []])->assertSessionHasNoErrors();
         $this->actingAs($admin)->post("/employees/{$employee->id}/experiences/many", ['records' => []])->assertSessionHasNoErrors();
@@ -135,7 +139,7 @@ class EmployeeWizardStepsTest extends TestCase
         // Somebody else already has this one, so it stays with them.
         $taken = Equipment::factory()->ofType($type)->issuedTo(User::factory()->create()->id)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/equipment", [
                 'equipment' => [$laptop->id, $monitor->id, $taken->id],
                 'issued_at' => '2026-03-02',

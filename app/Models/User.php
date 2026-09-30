@@ -16,6 +16,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Contracts\Permission;
 use Spatie\Permission\Contracts\Permission as PermissionContract;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -212,7 +213,16 @@ class User extends Authenticatable
             }
         }
 
-        return $this->hasPermissionViaPositions($permission, $guardName);
+        try {
+            return $this->hasPermissionViaPositions($permission, $guardName);
+        } catch (PermissionDoesNotExist) {
+            // What rights exist is decided in code; the database is only told the
+            // same list by a seeder. Until it is told, an unknown right answers
+            // "no" rather than bringing the page down — the way Spatie's own
+            // checkPermissionTo() answers it. A right in the catalogue with no row
+            // behind it is caught by PermissionsTest, not by a visitor.
+            return false;
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ interface RoleItem {
     title: string;
     users_count: number;
     protected: boolean;
+    everything: boolean;
     /** What the position opens, by right key. */
     permissions: string[];
 }
@@ -61,6 +62,7 @@ export default function Roles({
                     label: item.title,
                     users_count: item.users_count,
                     protected: item.protected,
+                    everything: item.everything,
                     permissions: item.permissions,
                 }))}
                 canEdit={canEdit}
@@ -68,6 +70,7 @@ export default function Roles({
                 route="directories.roles"
                 labels={{ add: 'Добавить позицию', create: 'Новая позиция', edit: 'Изменить позицию', accusative: 'позицию' }}
                 employeesUrl={(item) => route('employees.index', { role: [byId.get(item.id)!.name] })}
+                employeesField="employees.field.roles"
                 // A position is no use until somebody says what it opens, so the
                 // rights are ticked in the same dialog — for whoever may decide.
                 rights={canManageAccess ? sections : undefined}

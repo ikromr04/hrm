@@ -27,7 +27,7 @@ class EmployeeLanguagesTest extends TestCase
 
     public function test_an_admin_sets_languages_and_levels()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $english = Language::create(['name' => 'Английский']);
         $russian = Language::create(['name' => 'Русский']);
         $german = Language::create(['name' => 'Немецкий']);
@@ -54,7 +54,7 @@ class EmployeeLanguagesTest extends TestCase
 
     public function test_the_card_may_be_emptied()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = $this->colleague();
         $employee->languages()->attach(Language::create(['name' => 'Английский']), ['level' => 'beginner']);
 
@@ -67,7 +67,7 @@ class EmployeeLanguagesTest extends TestCase
 
     public function test_invalid_data_is_rejected()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $english = Language::create(['name' => 'Английский']);
         $employee = $this->colleague();
 
@@ -84,7 +84,7 @@ class EmployeeLanguagesTest extends TestCase
 
     public function test_the_language_list_reaches_editors_only()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         Language::create(['name' => 'Английский']);
         $employee = $this->colleague();
 

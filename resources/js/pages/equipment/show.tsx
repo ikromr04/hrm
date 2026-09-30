@@ -4,7 +4,8 @@ import { ChangeLines } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
 import InputError from '@/components/input-error';
-import { PersonAvatar } from '@/components/person-avatar';
+import { PersonFace } from '@/components/person-face';
+import { PersonLink } from '@/components/person-link';
 import { PhotoInput } from '@/components/photo-input';
 import { Photos, type Photo } from '@/components/photo-viewer';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -170,14 +171,19 @@ function Section({ title, children, action }: { title: string; children: ReactNo
     );
 }
 
-/** Fields in newspaper columns: they read top to bottom, up to three across. */
+/**
+ * The lines of a block, read across and then down, up to three across.
+ *
+ * A grid rather than CSS columns: columns fill themselves top to bottom, so the
+ * order on the page would not be the order the card is written in.
+ */
 function Fields({ children, columns }: { children: ReactNode; columns?: 1 }) {
-    return <dl className={cn('gap-x-6', columns === 1 ? 'columns-1' : 'columns-1 sm:columns-2 lg:columns-3')}>{children}</dl>;
+    return <dl className={cn('grid gap-x-6 gap-y-4', columns === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3')}>{children}</dl>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <div className="mb-4 flex min-w-0 break-inside-avoid flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
             <dt className="text-muted-foreground text-[13px]">{label}</dt>
             <dd className="text-sm font-medium break-words">{children ?? <span className="text-muted-foreground font-normal">—</span>}</dd>
         </div>
@@ -897,18 +903,14 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                 return <StatusBadge tone={eventTone[event.kind]}>{eventLabel[event.kind]}</StatusBadge>;
             case 'actor':
                 return event.actor ? (
-                    <Link
-                        href={route('employees.show', event.actor.id)}
+                    <PersonLink
+                        id={event.actor.id}
                         title={`Открыть профиль: ${event.actor.name}`}
                         className="text-brand-strong flex items-center gap-2 hover:underline dark:text-[#C5E27A]"
                     >
-                        {event.actor.avatar ? (
-                            <img src={event.actor.avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
-                        ) : (
-                            <PersonAvatar name={event.actor.name} className="size-7 text-[11px]" />
-                        )}
+                        <PersonFace id={event.actor.id} name={event.actor.name} avatar={event.actor.avatar} className="size-7 text-[11px]" />
                         <span className="truncate">{event.actor.name}</span>
-                    </Link>
+                    </PersonLink>
                 ) : (
                     <span className="text-muted-foreground">Система</span>
                 );
@@ -1067,18 +1069,16 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                 {unit.holder ? (
                                     <>
                                         <div className="flex items-center gap-3">
-                                            {unit.holder.avatar ? (
-                                                <img src={unit.holder.avatar} alt="" className="size-10 shrink-0 rounded-full object-cover" />
-                                            ) : (
-                                                <PersonAvatar name={unit.holder.name} className="size-10 text-[13px]" />
-                                            )}
+                                            <PersonFace
+                                                id={unit.holder.id}
+                                                name={unit.holder.name}
+                                                avatar={unit.holder.avatar}
+                                                className="size-10 text-[13px]"
+                                            />
                                             <div className="flex min-w-0 flex-col">
-                                                <Link
-                                                    href={route('employees.show', unit.holder.id)}
-                                                    className="truncate text-sm font-semibold hover:underline"
-                                                >
+                                                <PersonLink id={unit.holder.id} className="truncate text-sm font-semibold hover:underline">
                                                     {unit.holder.name}
-                                                </Link>
+                                                </PersonLink>
                                                 {unit.holder.department && (
                                                     <span className="text-muted-foreground truncate text-[13px]">{unit.holder.department}</span>
                                                 )}

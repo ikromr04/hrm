@@ -10,13 +10,12 @@ use Spatie\Permission\PermissionRegistrar;
 class RoleSeeder extends Seeder
 {
     /**
-     * Access roles: key used in code => title shown in the UI.
+     * Positions: key used in code => title shown in the UI.
      *
-     * Neither "admin" nor "sysadmin" needs rights of its own: Gate::before in
-     * AppServiceProvider lets both through every check. What separates them is
-     * that only a system administrator decides who else gets access. Every other
-     * position starts with the rights in Access::DEFAULTS and is given the rest
-     * on the access page.
+     * All of them are ordinary, «Администратор» included: each starts with the
+     * rights in Access::DEFAULTS and is given the rest on the access page. The one
+     * exception is "sysadmin", which needs no rights of its own — Gate::before in
+     * AppServiceProvider lets that single account through every check.
      */
     public const ROLES = [
         'department-head' => 'Руководитель Департамента',
@@ -56,11 +55,15 @@ class RoleSeeder extends Seeder
         foreach (self::ROLES as $name => $title) {
             $role = Role::updateOrCreate(['name' => $name, 'guard_name' => 'web'], ['title' => $title]);
 
+            // The system administrator holds no rights at all: it passes every
+            // check through Gate::before, and a list beside it would only lie.
+            if ($name === Access::SOLE_ROLE) {
+                continue;
+            }
+
             // Looking around comes with the job; anything more is handed out
             // deliberately on the access page, so a re-seed leaves it alone.
-            if (! in_array($name, ['admin', 'sysadmin'], true)) {
-                $role->givePermissionTo(Access::defaults());
-            }
+            $role->givePermissionTo(Access::defaults());
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();

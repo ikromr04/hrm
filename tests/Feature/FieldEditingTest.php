@@ -142,7 +142,9 @@ class FieldEditingTest extends TestCase
             ->get("/employees/{$employee->id}")
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['home_address', 'phone'])
+                // The surname and the name are read without a right, so they are on
+                // every card whatever the position says.
+                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['home_address', 'name', 'phone', 'surname'])
                 ->where('editableFields', ['phone'])
             );
     }
@@ -226,6 +228,7 @@ class FieldEditingTest extends TestCase
                 ->where('fields', fn ($groups) => collect($groups)->firstWhere('key', 'contacts')['fields'][1] === [
                     'key' => 'phone',
                     'title' => 'Телефон',
+                    'always' => false,
                     'permission' => 'employees.field.phone',
                     'editPermission' => 'employees.edit.phone',
                 ])

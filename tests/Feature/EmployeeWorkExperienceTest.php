@@ -23,9 +23,13 @@ class EmployeeWorkExperienceTest extends TestCase
         $this->seed([RoleSeeder::class, PositionSeeder::class]);
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function payload(array $overrides = []): array
@@ -47,7 +51,7 @@ class EmployeeWorkExperienceTest extends TestCase
         $employee = $this->colleague();
         $kept = UserWorkExperience::factory()->for($employee)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/experiences", $this->payload())
             ->assertSessionHasNoErrors()
             ->assertRedirect();
@@ -61,7 +65,7 @@ class EmployeeWorkExperienceTest extends TestCase
         $employee = $this->colleague();
         $job = UserWorkExperience::factory()->for($employee)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/employees/{$employee->id}/experiences/{$job->id}", $this->payload(['position' => 'Аналитик']))
             ->assertSessionHasNoErrors();
 
@@ -74,7 +78,7 @@ class EmployeeWorkExperienceTest extends TestCase
         $job = UserWorkExperience::factory()->for($employee)->create();
         $kept = UserWorkExperience::factory()->for($employee)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->delete("/employees/{$employee->id}/experiences/{$job->id}")
             ->assertSessionHasNoErrors();
 
@@ -86,7 +90,7 @@ class EmployeeWorkExperienceTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/experiences", $this->payload(['ended_month' => '', 'ended_year' => '']))
             ->assertSessionHasNoErrors();
 
@@ -100,7 +104,7 @@ class EmployeeWorkExperienceTest extends TestCase
         $employee = $this->colleague();
 
         // A month without a year says nothing about when the job ended.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/employees/{$employee->id}/experiences", $this->payload(['ended_year' => '']))
             ->assertSessionHasErrors('ended_year');
     }
@@ -108,7 +112,7 @@ class EmployeeWorkExperienceTest extends TestCase
     public function test_dates_must_make_sense()
     {
         $employee = $this->colleague();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         // Left before joining.
         $this->actingAs($admin)
@@ -138,11 +142,11 @@ class EmployeeWorkExperienceTest extends TestCase
         $job = UserWorkExperience::factory()->for($owner)->create(['position' => 'Фармацевт']);
 
         // The id is real, but it belongs to somebody else.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/employees/{$stranger->id}/experiences/{$job->id}", $this->payload())
             ->assertNotFound();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->delete("/employees/{$stranger->id}/experiences/{$job->id}")
             ->assertNotFound();
 

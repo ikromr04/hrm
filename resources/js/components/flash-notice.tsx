@@ -1,0 +1,31 @@
+import { type SharedData } from '@/types';
+import { usePage } from '@inertiajs/react';
+import { Info, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+/**
+ * A sentence the server left for the next page: something went sideways on the
+ * way — an expired session, say — and the person should know why they are back
+ * where they were. It stays until closed or until the next page replaces it.
+ */
+export function FlashNotice() {
+    const { flash } = usePage<SharedData>().props;
+    const [shown, setShown] = useState(flash.notice);
+
+    // A new visit brings a new notice, or none.
+    useEffect(() => setShown(flash.notice), [flash.notice]);
+
+    if (!shown) {
+        return null;
+    }
+
+    return (
+        <div role="status" className="bg-muted text-foreground mx-3 mt-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm md:mx-5">
+            <Info className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+            <p className="flex-1">{shown}</p>
+            <button type="button" onClick={() => setShown(null)} aria-label="Закрыть" className="text-muted-foreground hover:text-foreground">
+                <X className="size-4" />
+            </button>
+        </div>
+    );
+}

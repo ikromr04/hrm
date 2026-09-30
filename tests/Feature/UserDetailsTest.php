@@ -17,7 +17,7 @@ class UserDetailsTest extends TestCase
         $user = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($user)
-            ->get('/dashboard')
+            ->get('/profile')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('auth.user.surname', $user->surname)
                 ->where('auth.user.sex', $user->sex)

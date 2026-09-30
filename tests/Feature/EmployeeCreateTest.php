@@ -55,14 +55,18 @@ class EmployeeCreateTest extends TestCase
         ];
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     public function test_the_form_is_a_page_of_its_own_open_to_managers_only()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/employees/create')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('employees/create')
@@ -80,7 +84,7 @@ class EmployeeCreateTest extends TestCase
         $position = Position::query()->firstOrFail();
         $department = Department::create(['name' => 'Отдел разработки']);
 
-        $response = $this->actingAs($this->admin())->post('/employees', $this->payload([
+        $response = $this->actingAs($this->sysadmin())->post('/employees', $this->payload([
             'roles' => ['specialist'],
             'positions' => [$position->id],
             'departments' => [$department->id],
@@ -110,7 +114,7 @@ class EmployeeCreateTest extends TestCase
 
         // A password sent from the browser is ignored: the one that works is
         // the one generated here and mailed to the new colleague.
-        $this->actingAs($this->admin())->post('/employees', $this->payload(['password' => 'подсунутый-пароль']));
+        $this->actingAs($this->sysadmin())->post('/employees', $this->payload(['password' => 'подсунутый-пароль']));
 
         $employee = User::firstWhere('email', 'nilufar@evolet.tj');
         $this->assertFalse(Hash::check('подсунутый-пароль', $employee->password));
@@ -131,7 +135,7 @@ class EmployeeCreateTest extends TestCase
     public function test_the_form_needs_a_name_and_a_free_address()
     {
         $taken = User::factory()->create(['email' => 'taken@evolet.tj']);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post('/employees', [])
             ->assertSessionHasErrors(['surname', 'name', 'sex', 'email']);
@@ -152,24 +156,24 @@ class EmployeeCreateTest extends TestCase
 
         // The first step of the wizard asks to continue: it stays where it is
         // and is handed whom it has just created, to fill the rest in.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->from('/employees')
             ->post('/employees', $this->payload(['continue' => true]))
             ->assertRedirect('/employees')
             ->assertSessionHas('employee', fn (array $employee) => $employee['name'] === 'Азимова Нилуфар');
     }
 
-    public function test_only_a_system_administrator_appoints_an_administrator()
+    public function test_the_one_position_that_cannot_be_handed_out()
     {
-        // An administrator can do everything else, but not hand out access:
-        // otherwise any of them could quietly appoint a colleague.
-        $this->actingAs($this->admin())
-            ->post('/employees', $this->payload(['roles' => ['admin']]))
+        // Every position is given like any other, and one is given to nobody:
+        // there is a single system administrator and never a second.
+        $this->actingAs($this->sysadmin())
+            ->post('/employees', $this->payload(['roles' => ['sysadmin']]))
             ->assertSessionHasErrors('roles.0');
 
         $this->assertNull(User::firstWhere('email', 'nilufar@evolet.tj'));
 
-        $this->actingAs($this->colleague()->assignRole('sysadmin'))
+        $this->actingAs($this->sysadmin())
             ->post('/employees', $this->payload(['roles' => ['admin']]))
             ->assertSessionHasNoErrors();
 
@@ -178,7 +182,7 @@ class EmployeeCreateTest extends TestCase
 
     public function test_an_unknown_role_position_or_department_is_refused()
     {
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post('/employees', $this->payload(['roles' => ['ceo']]))->assertSessionHasErrors('roles.0');
         $this->actingAs($admin)->post('/employees', $this->payload(['positions' => [9999]]))->assertSessionHasErrors('positions.0');

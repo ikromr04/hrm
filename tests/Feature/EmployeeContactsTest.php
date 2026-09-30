@@ -35,9 +35,24 @@ class EmployeeContactsTest extends TestCase
         ];
     }
 
+    public function test_a_phone_is_saved_by_somebody_who_cannot_see_the_email()
+    {
+        // The form sends no address it does not show; the save must not fail on it.
+        $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
+        $clerk = User::factory()->create()->givePermissionTo([
+            'employees.view', 'employees.field.phone', 'employees.edit.phone',
+        ]);
+
+        $this->actingAs($clerk)
+            ->put("/employees/{$employee->id}/contacts", ['phone' => '900000000'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('+992900000000', $employee->details->fresh()->phone);
+    }
+
     public function test_an_admin_edits_the_contacts()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -55,7 +70,7 @@ class EmployeeContactsTest extends TestCase
 
     public function test_the_email_is_lowercased_and_must_be_free()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
         $colleague = User::factory()->create(['email' => 'taken@evolet.tj']);
 
@@ -78,7 +93,7 @@ class EmployeeContactsTest extends TestCase
     #[DataProvider('phonesAsTyped')]
     public function test_a_phone_is_stored_in_e164_however_it_was_typed(string $typed)
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -103,7 +118,7 @@ class EmployeeContactsTest extends TestCase
 
     public function test_every_field_but_the_email_may_stay_empty()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -121,7 +136,7 @@ class EmployeeContactsTest extends TestCase
 
     public function test_a_phone_that_is_too_short_is_rejected()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)

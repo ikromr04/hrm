@@ -11,7 +11,8 @@ import {
 import { ChangeLines } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
 import { Pagination, type Paginated } from '@/components/pagination';
-import { PersonAvatar } from '@/components/person-avatar';
+import { PersonFace } from '@/components/person-face';
+import { PersonLink } from '@/components/person-link';
 import { Photos, type Photo } from '@/components/photo-viewer';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
@@ -201,18 +202,14 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                 return <span className="text-muted-foreground">{event.unit?.type ?? '—'}</span>;
             case 'actor':
                 return event.actor ? (
-                    <Link
-                        href={route('employees.show', event.actor.id)}
+                    <PersonLink
+                        id={event.actor.id}
                         title={`Открыть профиль: ${event.actor.name}`}
                         className="text-brand-strong flex items-center gap-2 hover:underline dark:text-[#C5E27A]"
                     >
-                        {event.actor.avatar ? (
-                            <img src={event.actor.avatar} alt="" className="size-7 shrink-0 rounded-full object-cover" />
-                        ) : (
-                            <PersonAvatar name={event.actor.name} className="size-7 text-[11px]" />
-                        )}
+                        <PersonFace id={event.actor.id} name={event.actor.name} avatar={event.actor.avatar} className="size-7 text-[11px]" />
                         <span className="truncate">{event.actor.name}</span>
-                    </Link>
+                    </PersonLink>
                 ) : (
                     <span className="text-muted-foreground">Система</span>
                 );

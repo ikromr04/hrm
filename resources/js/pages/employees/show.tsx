@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
-import { accessNotice, grantableRoles, holdsAccess } from '@/lib/access';
+import { seesEquipment, useCan } from '@/lib/access';
 import {
     age,
     capitalize,
@@ -40,9 +40,9 @@ import {
 } from '@/lib/employee';
 import { eventLabel, eventTone, type EventChanges, type EventKind, type NameLookup } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Camera, ChevronLeft, ChevronRight, Construction, Laptop, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Camera, ChevronLeft, ChevronRight, Laptop, LoaderCircle, Lock, Mail, Pencil, Phone, Plus, Trash2, Upload } from 'lucide-react';
 import { createContext, useContext, useEffect, useRef, useState, type FormEventHandler, type ReactNode } from 'react';
 
 /** Every right, what the positions give and what was decided for this person. */
@@ -56,7 +56,7 @@ interface AccessPicture {
 /** One line of the equipment journal, narrowed to this colleague's spells. */
 interface HistoryEvent {
     id: number;
-    unit: { id: number; name: string; inventory_number: string; type: string | null } | null;
+    unit: { id: number; name: string; inventory_number: string; type: string | null; open: boolean } | null;
     kind: EventKind;
     changes: EventChanges;
     note: string | null;
@@ -118,9 +118,6 @@ const TABS = [
     { key: 'education', title: 'Образование', private: true, field: 'educations' },
     { key: 'experience', title: 'Трудовая деятельность', private: true, field: 'work_experiences' },
     { key: 'equipment', title: 'Оборудование', private: true, field: 'equipment' },
-    { key: 'pir', title: 'ПИР', soon: true },
-    { key: 'kpi', title: 'KPI', soon: true },
-    { key: 'attendance', title: 'Посещаемость', soon: true },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -236,9 +233,7 @@ function AccessSection({ employee, access }: { employee: Employee; access: Acces
                 }
             >
                 {access.everything ? (
-                    <p className="text-muted-foreground text-sm">
-                        Все доступы: сотрудник проходит любую проверку, потому что среди его позиций есть администратор.
-                    </p>
+                    <p className="text-muted-foreground text-sm">Все доступы: сотрудник — системный администратор и проходит любую проверку.</p>
                 ) : (
                     <Fields columns={1}>
                         <Field label="Открыто">
@@ -334,6 +329,7 @@ function AccessSection({ employee, access }: { employee: Employee; access: Acces
 
 /** The "Основные данные" card in a form; sex sits on the user, the rest on the details. */
 function PersonalDialog({
+    rolesLocked,
     employee,
     details,
     options,
@@ -341,17 +337,18 @@ function PersonalDialog({
     onClose,
 }: {
     employee: Employee;
-    details: ProfilePrivate;
+    /**
+     * Null when no private line of this card is open to the viewer — the form is
+     * still worth opening, because the public lines of the block may be theirs to
+     * change and the dialog shows only what they may save anyway.
+     */
+    details: ProfilePrivate | null;
     options: EditOptions;
     assigned: Assigned;
+    /** Why the positions are not this viewer's to change, or null when they are. */
+    rolesLocked: string | null;
     onClose: () => void;
 }) {
-    const { auth } = usePage<SharedData>().props;
-
-    // A card that carries access is the system administrator's to re-file, roles
-    // and all: otherwise an administrator could strip the one who appointed them.
-    const rolesLocked = holdsAccess(assigned.roles) && !auth.manageAccess;
-
     // This card is made of lines that are allowed one by one, so the form shows
     // only the ones this viewer may actually save.
     const canEdit = useCanEdit();
@@ -361,11 +358,11 @@ function PersonalDialog({
         name: employee.name,
         patronymic: employee.patronymic ?? '',
         sex: employee.sex,
-        birth_date: details.birth_date ?? '',
-        birth_place: details.birth_place ?? '',
-        citizenship: details.citizenship ?? '',
-        nationality: details.nationality ?? '',
-        home_address: details.home_address ?? '',
+        birth_date: details?.birth_date ?? '',
+        birth_place: details?.birth_place ?? '',
+        citizenship: details?.citizenship ?? '',
+        nationality: details?.nationality ?? '',
+        home_address: details?.home_address ?? '',
         roles: assigned.roles,
         positions: assigned.positions,
         departments: assigned.departments,
@@ -406,29 +403,35 @@ function PersonalDialog({
                     </datalist>
 
                     <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-surname">Фамилия</Label>
-                            <Input
-                                id="personal-surname"
-                                required
-                                value={form.data.surname}
-                                onChange={(e) => form.setData('surname', e.target.value)}
-                                aria-invalid={!!form.errors.surname}
-                            />
-                            <InputError message={form.errors.surname} />
-                        </div>
+                        {/* Everybody reads these two; retyping them is a right like any
+                        other, and the server drops them from a save without it. */}
+                        {canEdit('surname') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-surname">Фамилия</Label>
+                                <Input
+                                    id="personal-surname"
+                                    required
+                                    value={form.data.surname}
+                                    onChange={(e) => form.setData('surname', e.target.value)}
+                                    aria-invalid={!!form.errors.surname}
+                                />
+                                <InputError message={form.errors.surname} />
+                            </div>
+                        )}
 
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="personal-name">Имя</Label>
-                            <Input
-                                id="personal-name"
-                                required
-                                value={form.data.name}
-                                onChange={(e) => form.setData('name', e.target.value)}
-                                aria-invalid={!!form.errors.name}
-                            />
-                            <InputError message={form.errors.name} />
-                        </div>
+                        {canEdit('name') && (
+                            <div className="grid content-start gap-2">
+                                <Label htmlFor="personal-name">Имя</Label>
+                                <Input
+                                    id="personal-name"
+                                    required
+                                    value={form.data.name}
+                                    onChange={(e) => form.setData('name', e.target.value)}
+                                    aria-invalid={!!form.errors.name}
+                                />
+                                <InputError message={form.errors.name} />
+                            </div>
+                        )}
 
                         {canEdit('patronymic') && (
                             <div className="grid content-start gap-2">
@@ -533,17 +536,17 @@ function PersonalDialog({
                                 <Label htmlFor="personal-roles">Позиция</Label>
                                 <MultiSelect
                                     id="personal-roles"
-                                    // A locked field still shows what the person holds, so access
-                                    // stays readable even where it is untouchable.
-                                    options={(rolesLocked ? options.roles : grantableRoles(options.roles, auth.manageAccess)).map((role) => ({
+                                    // A locked field still shows what the person holds, so the
+                                    // positions stay readable even where they are untouchable.
+                                    options={options.roles.map((role) => ({
                                         value: role.name,
                                         label: role.title,
                                     }))}
                                     value={form.data.roles}
                                     onChange={(value) => form.setData('roles', value)}
-                                    disabled={rolesLocked}
+                                    disabled={rolesLocked !== null}
                                 />
-                                {rolesLocked && <p className="text-muted-foreground text-sm">{accessNotice}</p>}
+                                {rolesLocked !== null && <p className="text-muted-foreground text-sm">{rolesLocked}</p>}
                                 <InputError message={listError('roles')} />
                             </div>
                         )}
@@ -981,7 +984,10 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
         spouse_name: details.spouse_name ?? '',
         spouse_birth_date: details.spouse_birth_date ?? '',
         has_children: details.has_children,
-        children: details.children.map((child) => ({ full_name: child.full_name, birth_date: child.birth_date ?? '' })),
+        // The block opens for whoever may change any of its lines, and the payload
+        // leaves out the lines they may not read — so the children may be absent
+        // even here. The server drops what they may not save in any case.
+        children: (details.children ?? []).map((child) => ({ full_name: child.full_name, birth_date: child.birth_date ?? '' })),
     });
 
     /** Ticked, the card states there are none; unticked with no rows, it stays unanswered. */
@@ -1504,16 +1510,6 @@ function DeleteRecordDialog({
     );
 }
 
-/** Stands in for a section that has no data behind it yet. */
-function Soon({ title }: { title: string }) {
-    return (
-        <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-6 py-5 text-sm">
-            <Construction className="mt-0.5 size-5 shrink-0" />
-            <p>Раздел «{title}» пока в разработке.</p>
-        </Card>
-    );
-}
-
 /**
  * A block of the profile. A title always becomes a header strip ruled off from
  * the body — with the action on the right where there is one, and the same
@@ -1591,7 +1587,20 @@ const EditableFields = createContext<string[] | null>(null);
  * of that block's lines can be changed.
  */
 const BLOCK_FIELDS = {
-    personal: ['patronymic', 'sex', 'birth_date', 'birth_place', 'citizenship', 'nationality', 'home_address', 'roles', 'positions', 'departments'],
+    personal: [
+        'surname',
+        'name',
+        'patronymic',
+        'sex',
+        'birth_date',
+        'birth_place',
+        'citizenship',
+        'nationality',
+        'home_address',
+        'roles',
+        'positions',
+        'departments',
+    ],
     passport: ['passport_number', 'passport_issued_at', 'passport_issued_by'],
     contacts: ['email', 'phone', 'sos_phone'],
     family: ['marital_status', 'spouse', 'children'],
@@ -1629,10 +1638,17 @@ function ProfileFields({ visible, editable, children }: { visible: string[]; edi
     );
 }
 
+/**
+ * The lines of a block, read across and then down.
+ *
+ * A grid rather than CSS columns: columns fill themselves top to bottom, so the
+ * second line of a block would land under the first instead of beside it, and the
+ * order on the page would not be the order the card is written in.
+ */
 function Fields({ children, columns }: { children: ReactNode; columns?: 1 | 2 }) {
-    const fixed = { 1: 'columns-1', 2: 'columns-2' } as const;
+    const fixed = { 1: 'grid-cols-1', 2: 'grid-cols-1 sm:grid-cols-2' } as const;
 
-    return <dl className={cn('gap-x-6', columns ? fixed[columns] : 'columns-1 sm:columns-2 lg:columns-3')}>{children}</dl>;
+    return <dl className={cn('grid gap-x-6 gap-y-4', columns ? fixed[columns] : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3')}>{children}</dl>;
 }
 
 /** One line of a card. Named after a field, it disappears when that is hidden. */
@@ -1642,7 +1658,7 @@ function Field({ label, field, children }: { label: string; field?: string; chil
     }
 
     return (
-        <div className="mb-4 flex min-w-0 break-inside-avoid flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
             <dt className="text-muted-foreground text-[13px]">{label}</dt>
             <dd className="text-sm font-medium break-words">{children ?? <span className="text-muted-foreground font-normal">—</span>}</dd>
         </div>
@@ -1795,11 +1811,14 @@ function EquipmentJournal({ events, names }: { events: HistoryEvent[]; names: Na
                                 <span className="text-muted-foreground text-[13px] tabular-nums">{formatDate(event.at)}</span>
                             </div>
 
-                            {event.unit && (
-                                <Link href={route('equipment.show', event.unit.id)} className="text-sm font-medium hover:underline">
-                                    {event.unit.name}
-                                </Link>
-                            )}
+                            {event.unit &&
+                                (event.unit.open ? (
+                                    <Link href={route('equipment.show', event.unit.id)} className="text-sm font-medium hover:underline">
+                                        {event.unit.name}
+                                    </Link>
+                                ) : (
+                                    <span className="text-sm font-medium">{event.unit.name}</span>
+                                ))}
 
                             <ChangeLines changes={event.changes} kind={event.kind} names={names} note={event.note} />
 
@@ -1820,9 +1839,14 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
             {items.map((unit) => (
                 <li key={unit.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <Link href={route('equipment.show', unit.id)} className="text-sm font-medium hover:underline">
-                            {unit.name}
-                        </Link>
+                        {/* The unit's own card is a matter of the fleet, not of this card. */}
+                        {unit.open ? (
+                            <Link href={route('equipment.show', unit.id)} className="text-sm font-medium hover:underline">
+                                {unit.name}
+                            </Link>
+                        ) : (
+                            <span className="text-sm font-medium">{unit.name}</span>
+                        )}
                         <span className="text-muted-foreground text-[13px]">{[unit.type, unit.details].filter(Boolean).join(' · ')}</span>
                         <span className="text-muted-foreground text-[13px] tabular-nums">
                             Инв. № {unit.inventory_number}
@@ -1839,9 +1863,32 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
  * The photo, and the ways to change it. The thumbnail is what the interface
  * shows; the upload itself opens in a new tab, so a face can be seen properly.
  */
+/**
+ * The photograph, or the place where one would be.
+ *
+ * A card with no photograph shows the initials — that is somebody who never
+ * uploaded one. A photograph this viewer may not see is a different answer, and
+ * says so: a closed square rather than a face, so nobody reads "no photo" into a
+ * line that is simply not theirs to read.
+ */
+function LockedFace() {
+    return (
+        <div
+            className="bg-muted text-muted-foreground flex size-28 shrink-0 items-center justify-center rounded-full"
+            title="Фотография закрыта"
+            aria-label="Фотография закрыта"
+        >
+            <Lock className="size-8" />
+        </div>
+    );
+}
+
 function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: boolean; onDelete: () => void }) {
     const picker = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
+    // Why the last upload was refused — too large, not a picture — said under the
+    // photograph, since there is no form here for the message to sit in.
+    const [error, setError] = useState<string | null>(null);
 
     const upload = (file: File) =>
         router.post(
@@ -1850,7 +1897,11 @@ function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: 
             {
                 preserveScroll: true,
                 forceFormData: true,
-                onStart: () => setUploading(true),
+                onStart: () => {
+                    setError(null);
+                    setUploading(true);
+                },
+                onError: (errors) => setError(errors.avatar ?? Object.values(errors)[0] ?? 'Не удалось загрузить фотографию.'),
                 onFinish: () => setUploading(false),
             },
         );
@@ -1862,64 +1913,71 @@ function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: 
     );
 
     return (
-        <div className="relative shrink-0 self-start sm:self-auto">
-            {employee.avatar_original ? (
-                <a href={employee.avatar_original} target="_blank" rel="noopener" title="Открыть оригинал" className="block">
-                    {face}
-                </a>
-            ) : (
-                face
-            )}
+        <div className="flex max-w-56 shrink-0 flex-col gap-2 self-start sm:self-auto">
+            <div className="relative self-start">
+                {employee.avatar_original ? (
+                    <a href={employee.avatar_original} target="_blank" rel="noopener" title="Открыть оригинал" className="block">
+                        {face}
+                    </a>
+                ) : (
+                    face
+                )}
 
-            {uploading && (
-                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
-                    <LoaderCircle className="size-6 animate-spin text-white" />
-                </span>
-            )}
+                {uploading && (
+                    <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                        <LoaderCircle className="size-6 animate-spin text-white" />
+                    </span>
+                )}
 
-            {canEdit && (
-                <>
-                    <input
-                        ref={picker}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            // Cleared so picking the same file twice fires again.
-                            event.target.value = '';
-                            if (file) upload(file);
-                        }}
-                    />
+                {canEdit && (
+                    <>
+                        <input
+                            ref={picker}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                // Cleared so picking the same file twice fires again.
+                                event.target.value = '';
+                                if (file) upload(file);
+                            }}
+                        />
 
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="absolute right-0 bottom-0 size-8 rounded-full shadow-sm"
-                                aria-label="Изменить фотографию"
-                            >
-                                <Camera className="size-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-52">
-                            <DropdownMenuItem onSelect={() => picker.current?.click()}>
-                                <Upload />
-                                {employee.avatar ? 'Заменить фотографию' : 'Загрузить фотографию'}
-                            </DropdownMenuItem>
-                            {employee.avatar && (
-                                <DropdownMenuItem
-                                    onSelect={onDelete}
-                                    className="text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!"
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="absolute right-0 bottom-0 size-8 rounded-full shadow-sm"
+                                    aria-label="Изменить фотографию"
                                 >
-                                    <Trash2 />
-                                    Удалить фотографию
+                                    <Camera className="size-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-52">
+                                <DropdownMenuItem onSelect={() => picker.current?.click()}>
+                                    <Upload />
+                                    {employee.avatar ? 'Заменить фотографию' : 'Загрузить фотографию'}
                                 </DropdownMenuItem>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </>
+                                {employee.avatar && (
+                                    <DropdownMenuItem
+                                        onSelect={onDelete}
+                                        className="text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_svg]:text-current!"
+                                    >
+                                        <Trash2 />
+                                        Удалить фотографию
+                                    </DropdownMenuItem>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </>
+                )}
+            </div>
+            {error && (
+                <p role="alert" className="text-destructive text-[13px] leading-snug">
+                    {error}
+                </p>
             )}
         </div>
     );
@@ -1935,9 +1993,13 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+            if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
             const target = event.target as HTMLElement;
-            if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+            if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)) return;
+            // An open window — a form, a menu, the photo viewer — owns the arrows:
+            // leaving for the next colleague from inside one would throw away
+            // whatever was being typed, and the photo viewer pages with them.
+            if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]')) return;
             const to = event.key === 'ArrowLeft' ? prev : event.key === 'ArrowRight' ? next : null;
             if (to) router.visit(href(to));
         };
@@ -1981,6 +2043,7 @@ export default function EmployeeProfile({
     neighbours,
     canEdit,
     isSelf,
+    rolesLocked,
     options,
     assigned,
     access,
@@ -1988,10 +2051,13 @@ export default function EmployeeProfile({
     editableFields,
 }: {
     employee: Employee;
-    neighbours: { prev: Neighbour; next: Neighbour };
+    /** Absent on one’s own profile: a profile has no previous and no next. */
+    neighbours: { prev: Neighbour; next: Neighbour } | null;
     /** Whether anything at all is theirs to change; the photograph hangs on this. */
     canEdit: boolean;
     isSelf: boolean;
+    /** Why the positions of this card are locked, or null when they are not. */
+    rolesLocked: string | null;
     /** Choices for the edit dialogs; null for viewers who may not edit. */
     options: EditOptions | null;
     assigned: Assigned | null;
@@ -2002,6 +2068,7 @@ export default function EmployeeProfile({
     /** Which of them they may change; the rest are shown without a pencil. */
     editableFields: string[];
 }) {
+    const can = useCan();
     const [editing, setEditing] = useState<'personal' | 'passport' | 'contacts' | 'languages' | 'employment' | 'family' | null>(null);
     // Education is edited one record at a time, so these hold a record, not a card name.
     const [education, setEducation] = useState<EducationRecord | 'new' | null>(null);
@@ -2022,10 +2089,15 @@ export default function EmployeeProfile({
     const tabs = TABS.filter((tab) => !('field' in tab) || (details !== null && visibleFields.includes(tab.field)));
     const [tab, setTab] = useTab(tabs.map((t) => t.key));
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Сотрудники', href: '/employees' },
-        { title: shortName, href: `/employees/${employee.id}` },
-    ];
+    // One's own card is not a page of the staff list — it is reached from the
+    // name in the corner, not by walking through «Сотрудники».
+    const breadcrumbs: BreadcrumbItem[] =
+        neighbours === null
+            ? [{ title: 'Профиль', href: '/profile' }]
+            : [
+                  { title: 'Сотрудники', href: '/employees' },
+                  { title: shortName, href: `/employees/${employee.id}` },
+              ];
 
     return (
         <ProfileFields visible={visibleFields} editable={editableFields}>
@@ -2035,7 +2107,14 @@ export default function EmployeeProfile({
                 {/* The header and tabs stay put; each column below scrolls on its own. */}
                 <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
                     <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:items-end">
-                        <Avatar employee={employee} canEdit={canEdit} onDelete={() => setDeletingAvatar(true)} />
+                        {/* The photograph is a line of the card: closed, it says so, and
+                        changing it takes that line rather than the right to change
+                        anything at all. */}
+                        {visibleFields.includes('avatar') ? (
+                            <Avatar employee={employee} canEdit={editableFields.includes('avatar')} onDelete={() => setDeletingAvatar(true)} />
+                        ) : (
+                            <LockedFace />
+                        )}
 
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
                             <div className="flex flex-wrap items-center gap-3">
@@ -2095,9 +2174,11 @@ export default function EmployeeProfile({
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 self-start sm:self-end">
-                            <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
-                        </div>
+                        {neighbours !== null && (
+                            <div className="flex items-center gap-2 self-start sm:self-end">
+                                <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
+                            </div>
+                        )}
                     </div>
 
                     <Tabs tabs={tabs} active={tab} onChange={setTab} />
@@ -2105,8 +2186,6 @@ export default function EmployeeProfile({
                     {/* One card per tab, in a pane of its own that takes the height left over. */}
                     {tab !== 'profile' && (
                         <div className="scroll-soft flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto">
-                            {TABS.find((t) => t.key === tab && 'soon' in t) && <Soon title={TABS.find((t) => t.key === tab)!.title} />}
-
                             {tab === 'education' && details && (
                                 <>
                                     <Section>
@@ -2164,7 +2243,8 @@ export default function EmployeeProfile({
                                         <Section
                                             title="Текущие оборудования"
                                             action={
-                                                canEditBlock('equipment') && (
+                                                // The list it opens is the fleet's, so it takes seeing the fleet.
+                                                seesEquipment(can) && (
                                                     // A text link rather than a button: the strip keeps the
                                                     // height it has without one.
                                                     <Link
@@ -2217,8 +2297,12 @@ export default function EmployeeProfile({
                                         }
                                     >
                                         <Fields>
-                                            <Field label="Фамилия">{employee.surname}</Field>
-                                            <Field label="Имя">{employee.name}</Field>
+                                            <Field label="Фамилия" field="surname">
+                                                {employee.surname}
+                                            </Field>
+                                            <Field label="Имя" field="name">
+                                                {employee.name}
+                                            </Field>
                                             <Field label="Отчество" field="patronymic">
                                                 {employee.patronymic}
                                             </Field>
@@ -2327,35 +2411,40 @@ export default function EmployeeProfile({
                                             </Field>
                                         </Fields>
 
-                                        <h3 className="text-muted-foreground text-[13px]">Дети</h3>
-                                        {details.children.length === 0 ? (
-                                            // A dash while nobody has filled this in; "Нет" only once HR says so.
-                                            <p className="text-muted-foreground text-sm">{details.has_children === false ? 'Нет' : '—'}</p>
-                                        ) : (
-                                            <ul className="flex flex-col">
-                                                {details.children.map((child) => (
-                                                    <li
-                                                        key={child.full_name + child.birth_date}
-                                                        className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0"
-                                                    >
-                                                        <span className="text-sm font-medium">{child.full_name}</span>
-                                                        {child.birth_date && (
-                                                            <span className="text-muted-foreground text-[13px]">
-                                                                {formatDate(child.birth_date)} · {age(child.birth_date)}
-                                                            </span>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                        {/* Not a Field but a heading and a list, so it has to ask about
+                                        its line itself: the payload leaves out what the viewer may
+                                        not read, and the block above it may well be readable. */}
+                                        {visibleFields.includes('children') && (
+                                            <>
+                                                <h3 className="text-muted-foreground text-[13px]">Дети</h3>
+                                                {details.children.length === 0 ? (
+                                                    // A dash while nobody has filled this in; "Нет" only once HR says so.
+                                                    <p className="text-muted-foreground text-sm">{details.has_children === false ? 'Нет' : '—'}</p>
+                                                ) : (
+                                                    <ul className="flex flex-col">
+                                                        {details.children.map((child) => (
+                                                            <li
+                                                                key={child.full_name + child.birth_date}
+                                                                className="flex flex-col gap-0.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0"
+                                                            >
+                                                                <span className="text-sm font-medium">{child.full_name}</span>
+                                                                {child.birth_date && (
+                                                                    <span className="text-muted-foreground text-[13px]">
+                                                                        {formatDate(child.birth_date)} · {age(child.birth_date)}
+                                                                    </span>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </>
                                         )}
                                     </Section>
                                 </div>
 
                                 <aside className={pane}>
-                                    {/* Bare, without a card of its own: two facts that need no heading.
-                                    Two fields across two columns end level, so the gap below one
-                                    field is the gap below both, and trimming it is exact. */}
-                                    <div className="-mb-4 px-1">
+                                    {/* Bare, without a card of its own: two facts that need no heading. */}
+                                    <div className="px-1">
                                         <Fields columns={2}>
                                             <Field label="Начало работы" field="hired_at">
                                                 {/* The pencil sits by the value it edits, not by the block. */}
@@ -2461,8 +2550,40 @@ export default function EmployeeProfile({
                         ) : (
                             <div className={cn(paneGrid, 'scroll-soft md:overflow-y-auto lg:overflow-hidden')}>
                                 <div className={pane}>
-                                    <Section title="Основное">
+                                    <Section
+                                        // The same block under the same name: what is in it depends
+                                        // on what this viewer may read, which is not a different
+                                        // block and should not read as one.
+                                        title="Основные данные"
+                                        // The block is short here, but a line of it may still be
+                                        // this viewer's to change — their own «Пол», say — and a
+                                        // right that shows up nowhere is a right nobody has.
+                                        action={
+                                            canEditBlock('personal') && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    aria-label="Редактировать основные данные"
+                                                    onClick={() => setEditing('personal')}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                            )
+                                        }
+                                    >
                                         <Fields>
+                                            {/* Read by everybody, so they open the block here as they do
+                                            on a card whose private lines are open too. */}
+                                            <Field label="Фамилия" field="surname">
+                                                {employee.surname}
+                                            </Field>
+                                            <Field label="Имя" field="name">
+                                                {employee.name}
+                                            </Field>
+                                            <Field label="Отчество" field="patronymic">
+                                                {employee.patronymic}
+                                            </Field>
                                             <Field label={(employee.roles ?? []).length > 1 ? 'Позиции' : 'Позиция'} field="roles">
                                                 {employee.roles?.length ? employee.roles.join(', ') : null}
                                             </Field>
@@ -2480,10 +2601,9 @@ export default function EmployeeProfile({
 
                                     <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-6 py-5 text-sm">
                                         <Lock className="mt-0.5 size-5 shrink-0" />
-                                        <p>
-                                            Личные данные, контакты, паспорт и семья закрыты. Их видят только сам сотрудник, его руководитель, HR и
-                                            администратор.
-                                        </p>
+                                        {/* Who exactly sees them is no longer a sentence to write down:
+                                        it is whatever the access page says, line by line. */}
+                                        <p>Личные данные, контакты, паспорт и семья закрыты.</p>
                                     </Card>
                                 </div>
 
@@ -2518,8 +2638,17 @@ export default function EmployeeProfile({
                         ))}
                 </div>
 
-                {editing === 'personal' && details && options && assigned && (
-                    <PersonalDialog employee={employee} details={details} options={options} assigned={assigned} onClose={() => setEditing(null)} />
+                {/* Not gated on the private lines: the block may be open to this viewer
+                by its public ones alone. */}
+                {editing === 'personal' && options && assigned && (
+                    <PersonalDialog
+                        employee={employee}
+                        details={details}
+                        options={options}
+                        assigned={assigned}
+                        rolesLocked={rolesLocked}
+                        onClose={() => setEditing(null)}
+                    />
                 )}
 
                 {editing === 'passport' && details && <PassportDialog employee={employee} details={details} onClose={() => setEditing(null)} />}

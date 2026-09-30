@@ -56,14 +56,14 @@ class OwnProfileFieldsTest extends TestCase
         );
 
         $this->actingAs($employee)
-            ->get("/employees/{$employee->id}")
+            ->get('/profile')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('employee.private.phone', '905554433')
                 ->where('employee.private.passport.number', '1234567')
                 // Not asked for, so not sent — their own card is no exception.
                 ->missing('employee.private.home_address')
-                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['passport_number', 'phone'])
+                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['name', 'passport_number', 'phone', 'surname'])
             );
     }
 
@@ -78,10 +78,11 @@ class OwnProfileFieldsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('employee.private.home_address', 'Хуҷанд, Ленина 1'));
 
         $this->actingAs($employee)
-            ->get("/employees/{$employee->id}")
+            ->get('/profile')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->missing('employee.private.home_address')
-                ->where('visibleFields', [])
+                // Only the two lines nobody can close.
+                ->where('visibleFields', fn ($fields) => collect($fields)->sort()->values()->all() === ['name', 'surname'])
             );
     }
 
@@ -131,14 +132,19 @@ class OwnProfileFieldsTest extends TestCase
         // Taking a person's own card away from them is a decision somebody makes
         // on purpose, so a new position starts with all of it.
         foreach (EmployeeFields::keys() as $field) {
-            $this->assertContains(EmployeeFields::permission($field, EmployeeFields::OWN), Access::defaults(), $field);
+            // The surname and the name are read without a right at all, so there is
+            // none of them to start with either.
+            if (! in_array($field, EmployeeFields::ALWAYS_VISIBLE, true)) {
+                $this->assertContains(EmployeeFields::permission($field, EmployeeFields::OWN), Access::defaults(), $field);
+            }
+
             $this->assertNotContains(EmployeeFields::editPermission($field, EmployeeFields::OWN), Access::defaults(), $field);
         }
 
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create()->assignRole('analyst');
 
         $this->actingAs($employee)
-            ->get("/employees/{$employee->id}")
+            ->get('/profile')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('visibleFields', fn ($fields) => count($fields) === count(EmployeeFields::keys()))
                 ->where('editableFields', [])
@@ -147,10 +153,10 @@ class OwnProfileFieldsTest extends TestCase
 
     public function test_an_administrator_reads_and_changes_their_own_card_whole()
     {
-        $admin = User::factory()->has(UserDetail::factory(), 'details')->create()->assignRole('admin');
+        $admin = User::factory()->has(UserDetail::factory(), 'details')->create()->assignRole('sysadmin');
 
         $this->actingAs($admin)
-            ->get("/employees/{$admin->id}")
+            ->get('/profile')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('visibleFields', fn ($fields) => count($fields) === count(EmployeeFields::keys()))
                 ->where('editableFields', fn ($fields) => count($fields) === count(EmployeeFields::keys()))

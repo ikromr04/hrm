@@ -144,7 +144,7 @@ class DirectoryRightsTest extends TestCase
             ->get('/directories')
             ->assertRedirect('/directories/departments');
 
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
+        $this->actingAs(User::factory()->create()->assignRole('sysadmin'))
             ->get('/directories')
             ->assertRedirect('/directories/roles');
     }
@@ -188,16 +188,16 @@ class DirectoryRightsTest extends TestCase
             ->assertRedirect();
     }
 
-    public function test_an_administrator_keeps_every_list_without_a_single_right()
+    public function test_the_one_account_keeps_every_list_without_a_single_right()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $sysadmin = User::factory()->create()->assignRole('sysadmin');
 
-        $this->assertSame(array_keys(self::READABLE), Directories::visibleTo($admin));
-        $this->assertSame(array_keys(self::READABLE), Directories::editableBy($admin));
+        $this->assertSame(array_keys(self::READABLE), Directories::visibleTo($sysadmin));
+        $this->assertSame(array_keys(self::READABLE), Directories::editableBy($sysadmin));
 
         foreach (self::LISTS as [$url, $payload]) {
-            $this->actingAs($admin)->get($url)->assertOk();
-            $this->actingAs($admin)->post($url, $payload)->assertRedirect();
+            $this->actingAs($sysadmin)->get($url)->assertOk();
+            $this->actingAs($sysadmin)->post($url, $payload)->assertRedirect();
         }
     }
 

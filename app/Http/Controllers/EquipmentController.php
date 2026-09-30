@@ -10,6 +10,7 @@ use App\Models\EquipmentField;
 use App\Models\EquipmentPhoto;
 use App\Models\EquipmentType;
 use App\Models\User;
+use App\Support\EmployeeFields;
 use App\Support\EquipmentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -110,7 +111,9 @@ class EquipmentController extends Controller
                 'holder' => $unit->holder ? [
                     'id' => $unit->holder->id,
                     'name' => "{$unit->holder->surname} {$unit->holder->name}",
-                    'avatar' => $unit->holder->avatar,
+                    // Who holds it is the point of the column; their face is a line
+                    // of their card, and travels only when that line is open.
+                    'avatar' => EmployeeFields::showsAvatar($request->user(), $unit->holder) ? $unit->holder->avatar : null,
                 ] : null,
                 // Marked in the list, because it cuts across the statuses.
                 'in_service' => (bool) $unit->repairs_exists,
@@ -309,7 +312,7 @@ class EquipmentController extends Controller
                 'holder' => $equipment->holder ? [
                     'id' => $equipment->holder->id,
                     'name' => "{$equipment->holder->surname} {$equipment->holder->name}",
-                    'avatar' => $equipment->holder->avatar,
+                    'avatar' => EmployeeFields::showsAvatar($request->user(), $equipment->holder) ? $equipment->holder->avatar : null,
                     'department' => $holderDepartment?->name,
                 ] : null,
             ],
@@ -339,7 +342,7 @@ class EquipmentController extends Controller
                 'actor' => $event->user === null ? null : [
                     'id' => $event->user->id,
                     'name' => "{$event->user->surname} {$event->user->name}",
-                    'avatar' => $event->user->avatar,
+                    'avatar' => EmployeeFields::showsAvatar($request->user(), $event->user) ? $event->user->avatar : null,
                 ],
                 'photos' => $event->photos->map(fn ($photo) => [
                     'id' => $photo->id,

@@ -33,9 +33,13 @@ class EquipmentTest extends TestCase
         $this->seed([RoleSeeder::class, PositionSeeder::class, EquipmentTypeSeeder::class]);
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function type(string $name = 'Ноутбуки'): EquipmentType
@@ -55,7 +59,7 @@ class EquipmentTest extends TestCase
         Equipment::factory(2)->ofType($this->type())->issuedTo($holder->id)->create();
         Equipment::factory(1)->ofType($this->type())->writtenOff()->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('counts.all', 3)
@@ -75,7 +79,7 @@ class EquipmentTest extends TestCase
         $done = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук после ТО']);
         $done->repairs()->create(['kind' => 'Плановое ТО', 'started_at' => '2026-08-01', 'ended_at' => '2026-08-03']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment?tab=service')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('counts.service', 1)
@@ -94,7 +98,7 @@ class EquipmentTest extends TestCase
 
         $this->assertSame(1, Equipment::query()->underService()->count());
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/repairs/{$repair->id}", [
                 'kind' => 'Замена клавиатуры',
                 'started_at' => '2026-09-01',
@@ -116,7 +120,7 @@ class EquipmentTest extends TestCase
         Equipment::factory()->ofType($this->type())->create(['name' => 'Свободный ноутбук']);
 
         // No tab in the query means the one the list opens on, not everything.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('tab', 'issued')
@@ -126,7 +130,7 @@ class EquipmentTest extends TestCase
             );
 
         // Все says so, and then nothing is left out.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment?tab=all')
             ->assertInertia(fn (AssertableInertia $page) => $page->has('equipment.data', 2));
     }
@@ -137,7 +141,7 @@ class EquipmentTest extends TestCase
         Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Ноутбук A']);
         Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук C']);
 
-        $this->actingAs($this->admin())->get('/equipment?tab=stock')
+        $this->actingAs($this->sysadmin())->get('/equipment?tab=stock')
             ->assertInertia(fn (AssertableInertia $page) => $page->has('equipment.data', 1)->where('equipment.data.0.name', 'Ноутбук C'));
     }
 
@@ -151,7 +155,7 @@ class EquipmentTest extends TestCase
             ->create(['name' => 'Монитор B', 'inventory_number' => 'EV-0002', 'issued_at' => '2026-01-05']);
         Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук C', 'inventory_number' => 'EV-0003']);
 
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $only = fn (string $query, string $name) => $this->actingAs($admin)->get("/equipment?tab=all&{$query}")
             ->assertInertia(fn (AssertableInertia $page) => $page->has('equipment.data', 1)->where('equipment.data.0.name', $name));
@@ -173,7 +177,7 @@ class EquipmentTest extends TestCase
         Equipment::factory()->ofType($this->type())->create(['name' => 'Б', 'inventory_number' => 'EV-0002']);
         Equipment::factory()->ofType($this->type())->create(['name' => 'А', 'inventory_number' => 'EV-0001']);
 
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         // A column of the table, and the same one turned around.
         $this->actingAs($admin)->get('/equipment?tab=all&sort=name')
@@ -200,7 +204,7 @@ class EquipmentTest extends TestCase
         $other = Equipment::factory()->ofType($type)->create(['name' => 'Монитор', 'inventory_number' => 'EV-9999']);
         $other->fieldValues()->updateOrCreate(['equipment_field_id' => $serial->id], ['value' => 'ZZZ']);
 
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         foreach (['Latitude', 'EV-0421', '7K2L9P3'] as $term) {
             $this->actingAs($admin)->get('/equipment?tab=all&q='.urlencode($term))
@@ -213,7 +217,7 @@ class EquipmentTest extends TestCase
 
     public function test_an_admin_puts_a_new_unit_on_the_books()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
                 'name' => 'Ноутбук Dell Latitude 5440',
@@ -233,7 +237,7 @@ class EquipmentTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
                 'name' => 'Ноутбук для нового бухгалтера',
@@ -254,7 +258,7 @@ class EquipmentTest extends TestCase
 
     public function test_saving_and_adding_another_keeps_the_form_open()
     {
-        $response = $this->actingAs($this->admin())
+        $response = $this->actingAs($this->sysadmin())
             ->from('/equipment/create')
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
@@ -272,7 +276,7 @@ class EquipmentTest extends TestCase
 
     public function test_the_form_for_a_new_unit_is_a_page_of_its_own()
     {
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/equipment/create')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('equipment/create')
@@ -288,7 +292,7 @@ class EquipmentTest extends TestCase
     {
         Storage::fake('public');
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
                 'name' => 'Ноутбук в заводской плёнке',
@@ -315,7 +319,7 @@ class EquipmentTest extends TestCase
     {
         $employee = $this->colleague();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post('/equipment', [
                 'equipment_type_id' => $this->type()->id,
                 'name' => 'Ноутбук без даты',
@@ -330,7 +334,7 @@ class EquipmentTest extends TestCase
     public function test_a_new_unit_needs_a_name_a_category_and_a_free_inventory_number()
     {
         Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0421']);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post('/equipment', [])
             ->assertSessionHasErrors(['equipment_type_id', 'name', 'inventory_number']);
@@ -349,7 +353,7 @@ class EquipmentTest extends TestCase
         $unit = Equipment::factory()->ofType($this->type())->writtenOff()->create();
         $unit->repairs()->create(['kind' => 'Диагностика', 'started_at' => '2026-09-01']);
 
-        $this->actingAs($this->admin())->delete("/equipment/{$unit->id}")->assertRedirect('/equipment');
+        $this->actingAs($this->sysadmin())->delete("/equipment/{$unit->id}")->assertRedirect('/equipment');
 
         $this->assertNull(Equipment::find($unit->id));
         // Nothing is left pointing at a unit that no longer exists.
@@ -365,7 +369,7 @@ class EquipmentTest extends TestCase
 
         // Part of the fleet is somebody's to account for: a mistake is written
         // off first, and only then removed.
-        $this->actingAs($this->admin())->delete("/equipment/{$inService->id}")->assertStatus(422);
+        $this->actingAs($this->sysadmin())->delete("/equipment/{$inService->id}")->assertStatus(422);
         $this->assertNotNull(Equipment::find($inService->id));
 
         $this->actingAs($employee)->delete("/equipment/{$written->id}")->assertForbidden();
@@ -390,7 +394,7 @@ class EquipmentTest extends TestCase
         $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/equipment/{$unit->id}/issue", [
                 'holder_user_id' => $employee->id,
                 'issued_at' => '2026-03-14',
@@ -417,7 +421,7 @@ class EquipmentTest extends TestCase
         $first = User::factory()->create();
         $second = User::factory()->create();
         $unit = Equipment::factory()->ofType($this->type())->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)->post("/equipment/{$unit->id}/issue", ['holder_user_id' => $first->id, 'issued_at' => '2026-01-10']);
         $this->actingAs($admin)->post("/equipment/{$unit->id}/take", ['condition_on_return' => 'Царапина на крышке', 'returned_at' => now()->toDateString()]);
@@ -448,7 +452,7 @@ class EquipmentTest extends TestCase
         $at = $unit->type->fields->search(fn ($row) => $row->id === $field->id);
         $unit->repairs()->create(['kind' => 'Замена аккумулятора', 'started_at' => '2024-11-02', 'ended_at' => '2024-11-06']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get("/equipment/{$unit->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('equipment/show')
@@ -465,7 +469,7 @@ class EquipmentTest extends TestCase
         $first = Equipment::factory()->ofType($this->type())->create(['name' => 'Монитор Dell P2422H']);
         $middle = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук Acer Aspire 5']);
         $last = Equipment::factory()->ofType($this->type())->create(['name' => 'Телефон Xiaomi Redmi 12']);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)
             ->get("/equipment/{$middle->id}")
@@ -494,7 +498,7 @@ class EquipmentTest extends TestCase
 
         $later = Equipment::factory()->ofType($this->type())->issuedTo($holder->id)->create(['name' => 'Я, тоже выдан']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get("/equipment/{$issued->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 // Nothing issued comes before it, whatever sits there in stock.
@@ -507,7 +511,7 @@ class EquipmentTest extends TestCase
     {
         $unit = Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0421']);
         $taken = Equipment::factory()->ofType($this->type())->create(['inventory_number' => 'EV-0999']);
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $monitors = $this->type('Мониторы');
         $model = $monitors->fields()->firstWhere('name', 'Модель');
@@ -555,7 +559,7 @@ class EquipmentTest extends TestCase
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
         // Somebody checks a unit where it stands, without moving it.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/state", [
                 'condition' => 'Рабочее, следы эксплуатации',
                 'checked_at' => '2026-09-01',
@@ -575,7 +579,7 @@ class EquipmentTest extends TestCase
         $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/equipment/{$unit->id}/repairs", ['kind' => 'Диагностика', 'started_at' => '2026-09-01'])
             ->assertSessionHasNoErrors();
 
@@ -586,7 +590,7 @@ class EquipmentTest extends TestCase
         $this->assertCount(1, $unit->repairs);
 
         $stock = Equipment::factory()->ofType($this->type())->create();
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/equipment/{$stock->id}/repairs", ['kind' => 'Плановое ТО', 'started_at' => '2026-09-01', 'ended_at' => '2026-09-03']);
         $this->assertSame('stock', $stock->refresh()->status);
     }
@@ -605,7 +609,7 @@ class EquipmentTest extends TestCase
         $unit = Equipment::factory()->ofType($this->type())->create();
 
         // Hardware is signed out by name: there is no department to hand it to.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/equipment/{$unit->id}/issue", ['issued_at' => '2026-03-14'])
             ->assertSessionHasErrors('holder_user_id');
 
@@ -617,7 +621,7 @@ class EquipmentTest extends TestCase
         $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->issuedTo($employee->id)->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/equipment/{$unit->id}/take", ['returned_at' => now()->toDateString()])
             ->assertSessionHasNoErrors();
 
@@ -631,7 +635,7 @@ class EquipmentTest extends TestCase
     {
         $unit = Equipment::factory()->ofType($this->type())->create(['condition' => 'Рабочее']);
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->post("/equipment/{$unit->id}/write-off", [
                 'written_off_at' => '2026-09-20',
                 'condition' => 'Не подлежит ремонту',
@@ -644,7 +648,7 @@ class EquipmentTest extends TestCase
 
         // Left alone when nothing was said, rather than wiped.
         $other = Equipment::factory()->ofType($this->type())->create(['condition' => 'Рабочее']);
-        $this->actingAs($this->admin())->post("/equipment/{$other->id}/write-off", ['written_off_at' => '2026-09-20']);
+        $this->actingAs($this->sysadmin())->post("/equipment/{$other->id}/write-off", ['written_off_at' => '2026-09-20']);
         $this->assertSame('Рабочее', $other->refresh()->condition);
     }
 
@@ -652,7 +656,7 @@ class EquipmentTest extends TestCase
     {
         $employee = $this->colleague();
         $unit = Equipment::factory()->ofType($this->type())->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)
             ->post("/equipment/{$unit->id}/write-off", ['written_off_at' => '2026-02-02'])
@@ -685,7 +689,7 @@ class EquipmentTest extends TestCase
         Equipment::factory()->ofType($this->type())->issuedTo(User::factory()->create()->id)->create();
 
         $this->actingAs($employee)
-            ->get("/employees/{$employee->id}")
+            ->get('/profile')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('employee.private.equipment', 1)
                 ->where('employee.private.equipment.0.inventory_number', 'EV-0421')
@@ -696,7 +700,7 @@ class EquipmentTest extends TestCase
     {
         $first = User::factory()->create();
         $second = User::factory()->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
         $laptop = Equipment::factory()->ofType($this->type())->create(['name' => 'Ноутбук Dell']);
         $untouched = Equipment::factory()->ofType($this->type())->create(['name' => 'Чужой монитор']);
 
@@ -720,7 +724,7 @@ class EquipmentTest extends TestCase
 
     public function test_a_category_is_drawn_by_the_icon_it_was_given()
     {
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         // The form offers the drawings the interface has, and takes one of them.
         $this->actingAs($admin)
@@ -752,7 +756,7 @@ class EquipmentTest extends TestCase
         Equipment::factory(2)->ofType($this->type())->create();
         Equipment::factory()->ofType($this->type())->writtenOff()->create();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->get('/directories/equipment')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('items', fn ($items) => collect($items)->firstWhere('name', 'Ноутбуки')['users_count'] === 2)

@@ -27,9 +27,11 @@ const breadcrumbs: BreadcrumbItem[] = [
  */
 export default function Profile({ pendingEmail, status }: { pendingEmail: string | null; status?: string }) {
     const { auth } = usePage<SharedData>().props;
+    // Everything in the shell is behind the door, so there is somebody here.
+    const user = auth.user!;
 
     const { data, setData, patch, errors, processing } = useForm({
-        email: pendingEmail ?? auth.user.email,
+        email: pendingEmail ?? user.email,
     });
 
     const submit: FormEventHandler = (event) => {
@@ -64,7 +66,7 @@ export default function Profile({ pendingEmail, status }: { pendingEmail: string
                             <InputError message={errors.email} />
 
                             <p className="text-muted-foreground text-[13px]">
-                                Сейчас вход по адресу <span className="font-medium">{auth.user.email}</span>.
+                                Сейчас вход по адресу <span className="font-medium">{user.email}</span>.
                             </p>
                         </div>
 

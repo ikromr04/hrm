@@ -2,6 +2,10 @@
 
 namespace App\Support;
 
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Spatie\Permission\Models\Role;
+
 /**
  * Every right the system knows about.
  *
@@ -16,6 +20,20 @@ namespace App\Support;
  */
 final class Access
 {
+    /**
+     * The one position that is not decided by this list.
+     *
+     * Everything a person may do is a right ticked on the access page — with a
+     * single exception, because somebody has to be able to reach that page and
+     * everything behind it. The system administrator holds no rights of their own
+     * and passes every check through Gate::before. There is exactly one: the
+     * position is offered in no picker, cannot be handed to anybody, and cannot be
+     * taken off its own card, since there would be nobody left to hand it back.
+     *
+     * Every other position, whatever it is called, is an ordinary one.
+     */
+    public const SOLE_ROLE = 'sysadmin';
+
     /** The sections, in the order the table shows them. */
     public const SECTIONS = [
         // Its own card comes first: everybody has one, and a position is read from
@@ -110,6 +128,48 @@ final class Access
      * @var list<string>
      */
     public const ACTIONS = ['employees.transfer', 'employees.fire', 'employees.delete'];
+
+    /**
+     * The roles a picker may offer: everything but the one there is only ever one
+     * of. The directory still lists it — it exists, and its holder is countable —
+     * but nowhere is it offered as a choice.
+     *
+     * @return Builder<Role>
+     */
+    public static function offeredRoles(): Builder
+    {
+        return Role::query()->whereNot('name', self::SOLE_ROLE)->orderBy('title');
+    }
+
+    /**
+     * Why this person may not change that person's positions, or null when they
+     * may.
+     *
+     * There is one rule, and it protects whoever hands rights out. A person who
+     * may change the access table is the one person whose positions must not be
+     * rearranged from outside: take their positions away and you have taken away
+     * what they may do. So their positions are theirs alone, and the system
+     * administrator's — nobody else, however much they were granted.
+     *
+     * Everybody else's positions are an ordinary line of a card, opened by the
+     * ordinary right to that line. One's own card is the same: if the line is open
+     * on the access page, it is open.
+     *
+     * The reason is a sentence rather than a flag, because the card shows it
+     * beside the locked field and the form repeats it if a request comes anyway.
+     */
+    public static function rolesLockedReason(User $actor, User $employee): ?string
+    {
+        if ($actor->hasRole(self::SOLE_ROLE) || $actor->is($employee)) {
+            return null;
+        }
+
+        if (Directories::canEdit($employee, 'access')) {
+            return 'Позиции сотрудника, который сам распоряжается доступами, меняет только он или системный администратор.';
+        }
+
+        return null;
+    }
 
     public static function has(string $key): bool
     {

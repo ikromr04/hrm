@@ -6,11 +6,10 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { grantableRoles } from '@/lib/access';
 import { languageLevelLabels, languageLevels, sexLabels, type LanguageLevel, type Sex } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { Check, ChevronLeft, ChevronRight, LoaderCircle, Plus, Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 
@@ -163,7 +162,6 @@ type SpokenLanguage = { id: string; level: LanguageLevel };
  * a dialog so that half-finished work cannot be lost to a stray key.
  */
 export default function CreateEmployee({ options }: { options: Options }) {
-    const { auth } = usePage<SharedData>().props;
     const today = new Date().toISOString().slice(0, 10);
     const [step, setStep] = useState(0);
     const [employee, setEmployee] = useState<NewEmployee | null>(null);
@@ -588,7 +586,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     <div className="grid gap-4 sm:grid-cols-3">
                                         <Field label="Позиция" error={at(main.errors, 'roles')}>
                                             <MultiSelect
-                                                options={grantableRoles(options.roles, auth.manageAccess).map((role) => ({
+                                                options={options.roles.map((role) => ({
                                                     value: role.name,
                                                     label: role.title,
                                                 }))}

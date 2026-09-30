@@ -1,5 +1,6 @@
 import { EvoletMark } from '@/components/evolet-logo';
-import { PersonAvatar } from '@/components/person-avatar';
+import { PersonFace } from '@/components/person-face';
+import { PersonLink } from '@/components/person-link';
 import { Button } from '@/components/ui/button';
 import { peopleLabel } from '@/lib/employee';
 import { cn } from '@/lib/utils';
@@ -51,17 +52,10 @@ function Count({ value }: { value: number }) {
 function PersonLine({ person, head }: { person: OrgPerson; head?: boolean }) {
     return (
         <li className="flex min-w-0 items-center gap-1.5">
-            {person.avatar ? (
-                <img src={person.avatar} alt="" className="size-5 shrink-0 rounded-full object-cover" />
-            ) : (
-                <PersonAvatar name={person.name} className="size-5 text-[8px]" />
-            )}
-            <Link
-                href={route('employees.show', person.id)}
-                className={cn('truncate text-xs hover:underline', head ? 'font-medium' : 'text-muted-foreground')}
-            >
+            <PersonFace id={person.id} name={person.name} avatar={person.avatar} className="size-5 text-[8px]" />
+            <PersonLink id={person.id} className={cn('truncate text-xs hover:underline', head ? 'font-medium' : 'text-muted-foreground')}>
                 {person.name}
-            </Link>
+            </PersonLink>
             {head && <Crown className="size-2.5 shrink-0 text-[#9A4A06] dark:text-[#F8C471]" aria-label="Руководитель" />}
         </li>
     );

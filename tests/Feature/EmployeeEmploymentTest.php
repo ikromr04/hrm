@@ -25,7 +25,7 @@ class EmployeeEmploymentTest extends TestCase
 
     public function test_an_admin_sets_the_hire_date()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -38,7 +38,7 @@ class EmployeeEmploymentTest extends TestCase
 
     public function test_the_details_row_is_created_when_the_employee_has_none()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = $this->colleague();
 
         $this->actingAs($admin)
@@ -50,7 +50,7 @@ class EmployeeEmploymentTest extends TestCase
 
     public function test_the_date_may_be_cleared()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -62,7 +62,7 @@ class EmployeeEmploymentTest extends TestCase
 
     public function test_a_date_in_the_future_is_rejected()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         // Tenure counts from this date, so a future one would read as negative service.

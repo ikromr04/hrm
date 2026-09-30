@@ -388,7 +388,10 @@ export default function AccessPage({
                                 <tr key={role.id} className="hover:bg-muted/40 group border-t">
                                     <th
                                         scope="row"
-                                        className="bg-background group-hover:bg-muted/40 sticky left-0 z-10 px-6 py-2.5 text-left font-normal shadow-[1px_0_0_var(--border)]"
+                                        // The tint of a hovered row has to be opaque here: this cell
+                                        // stands still while the table scrolls under it, and a
+                                        // see-through background shows the counters passing behind.
+                                        className="bg-background sticky left-0 z-10 px-6 py-2.5 text-left font-normal shadow-[1px_0_0_var(--border)] group-hover:bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))]"
                                     >
                                         <span className="flex items-center gap-2">
                                             <span>{role.title}</span>
@@ -598,8 +601,8 @@ export default function AccessPage({
             </Card>
 
             <p className="text-muted-foreground text-sm">
-                Администратор и системный администратор проходят любую проверку, поэтому их строки отмечены целиком. Отдельному сотруднику доступ
-                можно выдать или снять в его карточке.
+                Системный администратор проходит любую проверку, поэтому его строка отмечена целиком. Все остальные позиции, включая «Администратор»,
+                получают ровно то, что отмечено в таблице. Отдельному сотруднику доступ можно выдать или снять в его карточке.
             </p>
 
             {picking && picked && picking.scope === EMPLOYEES && picking.mode === 'actions' && (

@@ -107,6 +107,8 @@ export interface Equipment {
     /** Category from the directory, e.g. "Ноутбуки". */
     type: string | null;
     issued_at: string | null;
+    /** Whether its own card is this viewer's to open; absent where nobody asked. */
+    open?: boolean;
 }
 
 export const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];

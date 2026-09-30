@@ -21,8 +21,12 @@ use Spatie\Permission\PermissionRegistrar;
  */
 class RoleController extends Controller
 {
-    /** Roles the system relies on; they can be renamed but never deleted. */
-    public const PROTECTED = ['sysadmin', 'admin'];
+    /**
+     * The one position the system relies on: it can be renamed but never deleted,
+     * and there is nothing to tick beside it. Everything else here is an ordinary
+     * position, whatever it happens to be called.
+     */
+    public const PROTECTED = [Access::SOLE_ROLE];
 
     public function index(Request $request): Response
     {
@@ -58,6 +62,8 @@ class RoleController extends Controller
                     'title' => $role->title,
                     'users_count' => $role->users_count,
                     'protected' => in_array($role->name, self::PROTECTED, true),
+                    // Only the system administrator has nothing to tick.
+                    'everything' => $role->name === Access::SOLE_ROLE,
                     'permissions' => $role->permissions->pluck('name')->values(),
                 ]),
         ]);
@@ -84,9 +90,9 @@ class RoleController extends Controller
         // The key stays: code and permissions refer to it.
         $role->update(['title' => $data['title']]);
 
-        // An access role answers yes to everything through Gate::before, so its
-        // rights are not a list anybody edits.
-        if (isset($data['permissions']) && ! in_array($role->name, self::PROTECTED, true)) {
+        // The system administrator answers yes to everything through
+        // Gate::before, so its rights are not a list anybody edits.
+        if (isset($data['permissions']) && $role->name !== Access::SOLE_ROLE) {
             $role->syncPermissions($data['permissions']);
         }
 

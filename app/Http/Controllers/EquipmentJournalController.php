@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EquipmentEvent;
 use App\Models\EquipmentType;
 use App\Models\User;
+use App\Support\EmployeeFields;
 use App\Support\EquipmentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -92,7 +93,8 @@ class EquipmentJournalController extends Controller
             'actor' => $event->user === null ? null : [
                 'id' => $event->user->id,
                 'name' => "{$event->user->surname} {$event->user->name}",
-                'avatar' => $event->user->avatar,
+                // Who did it is the journal's business; their face is their card's.
+                'avatar' => EmployeeFields::showsAvatar($request->user(), $event->user) ? $event->user->avatar : null,
             ],
             'photos' => $event->photos->map(fn ($photo) => [
                 'id' => $photo->id,

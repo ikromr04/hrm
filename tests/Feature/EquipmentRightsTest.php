@@ -250,7 +250,7 @@ class EquipmentRightsTest extends TestCase
 
     public function test_an_administrator_needs_none_of_these_rights()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $unit = $this->unit();
 
         foreach ($this->blockRequests($unit) as [$method, $url, $payload]) {

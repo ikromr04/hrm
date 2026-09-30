@@ -3,6 +3,7 @@ import { CategoryFieldsEditor } from '@/components/category-fields-editor';
 import { IconChip } from '@/components/equipment-icon';
 import { countEquipmentScopes, EquipmentScopes, type EquipmentScope } from '@/components/equipment-scopes';
 import InputError from '@/components/input-error';
+import { PersonLink } from '@/components/person-link';
 import { PeoplePicker, type PickablePerson } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { type AccessRight, type AccessSection } from '@/lib/access';
+import { useCan, type AccessRight, type AccessSection, type Permission } from '@/lib/access';
 import { type CategoryField, type FieldTypeOption } from '@/lib/equipment-fields';
 import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { plural } from '@/lib/plural';
@@ -29,6 +30,8 @@ export interface DirectoryItem {
     total_count?: number;
     /** System records that can be renamed but not deleted. */
     protected?: boolean;
+    /** Passes every check whatever the list says, so there is nothing to tick. */
+    everything?: boolean;
     /** Departments only: the tree is built from these. */
     parent_id?: number | null;
     /** Departments only: who leads it; there can be several. */
@@ -72,6 +75,12 @@ interface DirectoryManagerProps {
     labels: Labels;
     /** Link to the employee list filtered by this record; without it the count is plain text. */
     employeesUrl?: (item: DirectoryItem) => string;
+    /**
+     * The line of a card that link narrows the staff list by. Without it the list
+     * refuses the filter — nobody narrows a list by what they may not read — so
+     * the number is shown as a number rather than as a way into a refusal.
+     */
+    employeesField?: Permission;
     /** Header over the count; equipment categories count units, not people. */
     countLabel?: string;
     /** Show and edit the parent/child structure (departments). */
@@ -174,6 +183,7 @@ export function DirectoryManager({
     route: routeName,
     labels,
     employeesUrl,
+    employeesField,
     countLabel = 'Сотрудников',
     tree = false,
     people,
@@ -190,6 +200,8 @@ export function DirectoryManager({
     directoryEdits,
     defaultRights,
 }: DirectoryManagerProps) {
+    const can = useCan();
+    const opensList = can('employees.view') && (employeesField === undefined || can(employeesField));
     const [query, setQuery] = useState('');
     const [editing, setEditing] = useState<DirectoryItem | 'new' | null>(null);
     const [deleting, setDeleting] = useState<DirectoryItem | null>(null);
@@ -262,13 +274,13 @@ export function DirectoryManager({
                                             {row.heads?.length ? (
                                                 <span className="flex flex-col gap-0.5">
                                                     {row.heads.map((head) => (
-                                                        <Link
+                                                        <PersonLink
                                                             key={head.id}
-                                                            href={route('employees.show', head.id)}
+                                                            id={head.id}
                                                             className="hover:text-brand-strong hover:underline dark:hover:text-[#C5E27A]"
                                                         >
                                                             {head.name}
-                                                        </Link>
+                                                        </PersonLink>
                                                     ))}
                                                 </span>
                                             ) : (
@@ -278,7 +290,9 @@ export function DirectoryManager({
                                     )}
                                     <td className="px-4 py-2.5 tabular-nums">
                                         {(row.total_count ?? row.users_count) > 0 ? (
-                                            employeesUrl ? (
+                                            // The number is a count; following it means reading the
+                                            // staff, which is a right of its own.
+                                            employeesUrl && opensList ? (
                                                 <Link href={employeesUrl(row)} className="text-brand-strong hover:underline dark:text-[#C5E27A]">
                                                     {row.total_count ?? row.users_count}
                                                 </Link>
@@ -572,7 +586,7 @@ function EditorDialog({
             ...(tree ? { parent_id: data.parent_id } : {}),
             ...(people ? { head_ids: data.head_ids, member_ids: data.member_ids } : {}),
             ...(icons ? { icon: data.icon } : {}),
-            ...(rights && !item?.protected ? { permissions: withViewRight(data.permissions) } : {}),
+            ...(rights && !item?.everything ? { permissions: withViewRight(data.permissions) } : {}),
             ...(fieldTypes
                 ? {
                       has_accessories: hasAccessories,
@@ -629,7 +643,7 @@ function EditorDialog({
                     {rights && (
                         <div className="grid content-start gap-2">
                             <Label>Доступы</Label>
-                            {item?.protected ? (
+                            {item?.everything ? (
                                 <p className="text-muted-foreground text-[13px]">
                                     У этой позиции есть все доступы: она проходит любую проверку, и список здесь ничего не решает.
                                 </p>

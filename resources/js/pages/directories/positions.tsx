@@ -18,6 +18,7 @@ export default function Positions({ items, canEdit }: { items: PositionItem[]; c
                 route="directories.positions"
                 labels={{ add: 'Добавить должность', create: 'Новая должность', edit: 'Изменить должность', accusative: 'должность' }}
                 employeesUrl={(item) => route('employees.index', { position: [item.id] })}
+                employeesField="employees.field.positions"
             />
         </DirectoriesLayout>
     );

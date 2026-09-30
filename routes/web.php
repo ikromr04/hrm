@@ -22,6 +22,7 @@ use App\Http\Controllers\SearchController;
 use App\Support\Directories as DirectoryLists;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::redirect('/', '/dashboard')->name('home');
 
@@ -34,6 +35,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('employees/create', [EmployeeController::class, 'create'])
         ->middleware('can:employees.edit.any')
         ->name('employees.create');
+    // One's own card, at an address of its own: everybody has one and nobody needs
+    // a right to read it, so there is no id to guard.
+    Route::get('profile', [EmployeeController::class, 'profile'])->name('profile');
     // Everybody reaches their own card, whatever rights they hold.
     Route::get('employees/{employee}', [EmployeeController::class, 'show'])
         ->middleware('can:view,employee')
@@ -73,8 +77,8 @@ Route::post('employees', [EmployeeController::class, 'store'])
 // whoever may change a passport is not thereby allowed to rewrite a family.
 Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')->group(function () {
     // Multipart, so the upload is a POST rather than a PUT.
-    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->middleware('can:employees.edit.any,employee')->name('avatar.update');
-    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->middleware('can:employees.edit.any,employee')->name('avatar.destroy');
+    Route::post('avatar', [EmployeeAvatarController::class, 'update'])->middleware('can:employees.photo,employee')->name('avatar.update');
+    Route::delete('avatar', [EmployeeAvatarController::class, 'destroy'])->middleware('can:employees.photo,employee')->name('avatar.destroy');
 
     Route::put('personal', [EmployeeDetailsController::class, 'personal'])->middleware('can:employees.edit.block.main,employee')->name('personal');
     Route::put('passport', [EmployeeDetailsController::class, 'passport'])->middleware('can:employees.edit.block.passport,employee')->name('passport');
@@ -217,3 +221,18 @@ Route::put('employees/{employee}/access', EmployeeAccessController::class)
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
+
+// Anything else. A route rather than only an exception handler, because an
+// address that matches nothing is refused before the session is even started, and
+// the page would then have no idea who is looking at it. Last in the file, as a
+// fallback must be.
+// Registered for every method, not only GET: with a GET-only catch-all a stray
+// POST to a wrong address would be told "method not allowed", as if the page were
+// there and merely fussy about how it is asked.
+Route::any('{fallbackPlaceholder}', function (Request $request) {
+    // A page is for a person, and for a GET; anything else — data asked for, a
+    // form posted into the void — is answered by the plain 404.
+    abort_if($request->expectsJson() || ! $request->isMethod('GET'), 404);
+
+    return Inertia::render('errors/404')->toResponse($request)->setStatusCode(404);
+})->where('fallbackPlaceholder', '.*')->fallback();

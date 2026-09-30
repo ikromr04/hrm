@@ -101,7 +101,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_admin_sees_everyones_private_details()
     {
         $admin = $this->colleague(['surname' => 'Яхёев']);
-        $admin->assignRole('admin');
+        $admin->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create(['surname' => 'Азимов']);
 
         $this->actingAs($admin)
@@ -162,7 +162,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_admin_search_also_matches_private_fields()
     {
         $admin = $this->colleague();
-        $admin->assignRole('admin');
+        $admin->assignRole('sysadmin');
         $target = User::factory()->has(UserDetail::factory([
             'home_address' => 'г. Душанбе, ул. Уникальная 7',
             'phone' => '+992905554433',
@@ -280,7 +280,10 @@ class EmployeeDirectoryTest extends TestCase
 
         $this->get('/employees')
             ->assertInertia(fn (Assert $page) => $page
-                ->has('options.roles', 25)
+                // Every seeded position but the system administrator, which is
+                // offered in no picker: there is only ever one of them.
+                ->has('options.roles', 24)
+                ->where('options.roles', fn ($roles) => ! collect($roles)->contains('name', 'sysadmin'))
                 ->where('employees.data', fn ($rows) => collect($rows)->firstWhere('id', $user->id)['roles'] === ['Аналитик', 'Переводчик'])
             );
 
@@ -334,7 +337,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_admin_can_sort_by_private_columns()
     {
         $admin = User::factory()->has(UserDetail::factory(['birth_date' => '1990-01-01']), 'details')->create();
-        $admin->assignRole('admin');
+        $admin->assignRole('sysadmin');
         $oldest = User::factory()->has(UserDetail::factory(['birth_date' => '1970-05-05']), 'details')->create();
         $youngest = User::factory()->has(UserDetail::factory(['birth_date' => '2001-02-02']), 'details')->create();
         UserChild::factory(3)->for($youngest)->create();
@@ -395,7 +398,7 @@ class EmployeeDirectoryTest extends TestCase
     public function test_admin_can_filter_by_private_fields()
     {
         $admin = User::factory()->has(UserDetail::factory(['birth_date' => '1960-01-01', 'nationality' => 'узбек', 'hired_at' => '2015-05-01', 'phone' => '+992500000000', 'sos_phone' => '+992500000001']), 'details')->create();
-        $admin->assignRole('admin');
+        $admin->assignRole('sysadmin');
         $young = User::factory()->has(UserDetail::factory([
             'birth_date' => '2000-06-15',
             'nationality' => 'таджичка',

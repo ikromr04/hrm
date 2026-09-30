@@ -1,5 +1,5 @@
 import { CategoryChip } from '@/components/equipment-icon';
-import { PersonAvatar } from '@/components/person-avatar';
+import { PersonFace } from '@/components/person-face';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { readsEquipmentJournal, seesDirectories, seesEquipment, useCan } from '@/lib/access';
 import { type EquipmentStatus, statusLabel } from '@/lib/equipment';
@@ -144,11 +144,7 @@ export function GlobalSearch() {
                 label: person.name,
                 hint: person.positions.length ? person.positions.join(', ') : person.email,
                 href: route('employees.show', person.id),
-                icon: person.avatar ? (
-                    <img src={person.avatar} alt="" className="size-8 shrink-0 rounded-full object-cover" />
-                ) : (
-                    <PersonAvatar name={person.name} className="size-8 text-[11px]" />
-                ),
+                icon: <PersonFace id={person.id} name={person.name} avatar={person.avatar} className="size-8 text-[11px]" />,
             })),
             ...results.equipment.map((unit) => ({
                 key: `equipment-${unit.id}`,

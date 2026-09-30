@@ -18,6 +18,7 @@ export default function Languages({ items, canEdit }: { items: LanguageItem[]; c
                 route="directories.languages"
                 labels={{ add: 'Добавить язык', create: 'Новый язык', edit: 'Изменить язык', accusative: 'язык' }}
                 employeesUrl={(item) => route('employees.index', { language: [item.id] })}
+                employeesField="employees.field.languages"
             />
         </DirectoriesLayout>
     );

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Support\Access;
 use App\Support\Directories;
 use App\Support\EmployeeFields;
 use App\Support\EquipmentAccess;
@@ -32,11 +33,18 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
-        // Administrators pass every authorization check, including rights added
-        // later. A system administrator is one too; what only they can do —
-        // appoint an administrator, or take the rights away — is guarded where
-        // roles are assigned, since it is a rule about roles, not an ability.
-        Gate::before(fn (User $user) => $user->hasAnyRole(['sysadmin', 'admin']) ? true : null);
+        // One account passes every authorization check, including rights added
+        // later: the system administrator. There is exactly one of them, and
+        // somebody has to be able to reach everything — not least the page where
+        // rights are handed out.
+        //
+        // «Администратор» is not that: it is an ordinary position whose rights are
+        // ticked in the access table like any other, so what an administrator may
+        // do is what somebody decided they may do. What only a system
+        // administrator can do — appoint an administrator, or take the role away —
+        // is guarded where roles are assigned, since it is a rule about roles
+        // rather than an ability.
+        Gate::before(fn (User $user) => $user->hasRole(Access::SOLE_ROLE) ? true : null);
 
         // Every other right is a permission from App\Support\Access, carried by
         // a position or given to one person on their card. Spatie answers "can"
@@ -76,10 +84,17 @@ class AppServiceProvider extends ServiceProvider
             Gate::define("directories.manage.{$list}", fn (User $user) => Directories::canEdit($user, $list));
         }
 
-        // A photograph belongs to no block of the card, and adding a colleague is
-        // editing a card that does not exist yet. Both ask the same question:
-        // whoever may change something here may do this. Given the card, the
-        // question is asked of that card — a person's own photograph is theirs.
+        // Adding a colleague is editing a card that does not exist yet, so it asks
+        // whether this person may change anything on a card at all.
         Gate::define('employees.edit.any', fn (User $user, ?User $employee = null) => EmployeeFields::editableBy($user, $employee) !== []);
+
+        // The photograph is a line of the card, and the line has a right of its
+        // own. The gate is needed because the right alone cannot tell whose card it
+        // is: one's own photograph is a different right from a colleague's, and a
+        // permission answers before any gate of the same name would.
+        Gate::define(
+            'employees.photo',
+            fn (User $user, ?User $employee = null) => in_array('avatar', EmployeeFields::editableBy($user, $employee), true),
+        );
     }
 }

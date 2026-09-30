@@ -59,8 +59,9 @@ class AccessController extends Controller
                 'name' => $role->name,
                 'title' => $role->title,
                 'users_count' => $role->users_count,
-                // An access role answers yes to everything, whatever its rows say.
-                'everything' => in_array($role->name, RoleController::PROTECTED, true),
+                // One position answers yes to everything whatever its rows say:
+                // the system administrator, who passes through Gate::before.
+                'everything' => $role->name === Access::SOLE_ROLE,
                 'permissions' => $role->permissions->pluck('name')->values(),
             ]),
         ]);
@@ -71,7 +72,7 @@ class AccessController extends Controller
      */
     public function update(Request $request, Role $role): RedirectResponse
     {
-        abort_if(in_array($role->name, RoleController::PROTECTED, true), 403, 'У этой позиции есть все доступы.');
+        abort_if($role->name === Access::SOLE_ROLE, 403, 'У этой позиции есть все доступы.');
 
         $data = $request->validate([
             'permissions' => ['present', 'array'],

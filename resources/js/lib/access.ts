@@ -11,6 +11,16 @@ import { usePage } from '@inertiajs/react';
  */
 export type Permission =
     | 'employees.view'
+    // The lines of a card are read from the list a page is sent, not asked for one
+    // by one — except these, which are asked far from any card: the photograph
+    // turns up beside a name everywhere, and the other four decide whether a link
+    // into the staff list filtered by them would lead anywhere but a refusal.
+    | 'employees.field.avatar'
+    | 'profile.field.avatar'
+    | 'employees.field.departments'
+    | 'employees.field.positions'
+    | 'employees.field.roles'
+    | 'employees.field.languages'
     | 'employees.transfer'
     | 'employees.fire'
     | 'employees.delete'
@@ -135,23 +145,8 @@ export const directoryLists: DirectoryList[] = [
 /** Whether at least one list is open, which is what opens the section itself. */
 export const seesDirectories = (can: (permission: Permission) => boolean): boolean => directoryLists.some((list) => can(list.view));
 
-/**
- * Two roles are not ordinary ones: an administrator can do everything here, and
- * a system administrator decides who gets to. The server refuses the rest, and
- * these helpers keep the forms from offering what it would refuse.
+/*
+ * Which positions a form may offer is not decided here: the server sends the list
+ * it is willing to accept, without the single system administrator, and a card
+ * whose positions are not this viewer's to change arrives with the reason why.
  */
-
-/** The roles that carry access to the whole system rather than naming a job. */
-export const accessRoles = ['sysadmin', 'admin'];
-
-export const accessNotice = 'Доступы администратора меняет только системный администратор.';
-
-/** Whether a set of roles carries access, so its owner's card is off limits. */
-export function holdsAccess(roles: string[]): boolean {
-    return roles.some((role) => accessRoles.includes(role));
-}
-
-/** The roles a viewer may put on somebody's card. */
-export function grantableRoles<T extends { name: string }>(roles: T[], manageAccess: boolean): T[] {
-    return manageAccess ? roles : roles.filter((role) => !accessRoles.includes(role.name));
-}

@@ -33,9 +33,13 @@ class PhotoUploadTest extends TestCase
         Storage::fake('public');
     }
 
-    private function admin(): User
+    /**
+     * The one account that passes every check, whatever the rights say: these
+     * tests are not about what a position may do.
+     */
+    private function sysadmin(): User
     {
-        return User::factory()->create()->assignRole('admin');
+        return User::factory()->create()->assignRole('sysadmin');
     }
 
     private function unit(): Equipment
@@ -47,7 +51,7 @@ class PhotoUploadTest extends TestCase
     {
         $unit = $this->unit();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/state", [
                 'condition' => 'Рабочее',
                 'photos' => [UploadedFile::fake()->create('IMG_0421.heic', 600, 'image/heic')],
@@ -64,7 +68,7 @@ class PhotoUploadTest extends TestCase
         // Passes the format rules — it is called .jpg and says image/jpeg — and
         // has nothing inside that GD could open. Before the check at the door
         // this reached the resizing and answered with a blank error page.
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/state", [
                 'condition' => 'Рабочее',
                 'photos' => [UploadedFile::fake()->create('IMG_0421.jpg', 20, 'image/jpeg')],
@@ -76,7 +80,7 @@ class PhotoUploadTest extends TestCase
     {
         $unit = $this->unit();
 
-        $this->actingAs($this->admin())
+        $this->actingAs($this->sysadmin())
             ->put("/equipment/{$unit->id}/state", [
                 'condition' => 'Рабочее, следы эксплуатации',
                 'photos' => [UploadedFile::fake()->image('IMG_0421.jpg', 1200, 900)],
@@ -92,7 +96,7 @@ class PhotoUploadTest extends TestCase
     public function test_an_avatar_goes_by_the_same_rules()
     {
         $employee = User::factory()->create();
-        $admin = $this->admin();
+        $admin = $this->sysadmin();
 
         $this->actingAs($admin)
             ->post("/employees/{$employee->id}/avatar", ['avatar' => UploadedFile::fake()->create('me.heic', 600, 'image/heic')])

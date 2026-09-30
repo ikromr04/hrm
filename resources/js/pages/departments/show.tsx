@@ -1,10 +1,12 @@
 import { OrgChart, type OrgDepartment } from '@/components/org-chart';
-import { PersonAvatar } from '@/components/person-avatar';
+import { PersonFace } from '@/components/person-face';
+import { PersonLink } from '@/components/person-link';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import AppLayout from '@/layouts/app-layout';
+import { useCan } from '@/lib/access';
 import { peopleLabel } from '@/lib/employee';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -67,11 +69,7 @@ function Section({ title, count, children, className }: { title: string; count?:
 }
 
 function Avatar({ person, className }: { person: Person; className?: string }) {
-    return person.avatar ? (
-        <img src={person.avatar} alt="" className={cn('size-9 shrink-0 rounded-full object-cover', className)} />
-    ) : (
-        <PersonAvatar name={person.name} className={className} />
-    );
+    return <PersonFace id={person.id} name={person.name} avatar={person.avatar} className={className} />;
 }
 
 /** One colleague: avatar, name linking to the profile, positions and email; `compact` fits a narrow column. */
@@ -92,9 +90,9 @@ function ColleagueRow({ person, compact }: { person: Colleague; compact?: boolea
         <li className="flex items-center gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
             <Avatar person={person} />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <Link href={route('employees.show', person.id)} className="self-start text-sm font-medium hover:underline">
+                <PersonLink id={person.id} className="self-start text-sm font-medium hover:underline">
                     {person.name}
-                </Link>
+                </PersonLink>
                 {compact && email}
                 {person.positions.length > 0 && (
                     <div className="flex flex-wrap gap-1">
@@ -112,6 +110,7 @@ function ColleagueRow({ person, compact }: { person: Colleague; compact?: boolea
 }
 
 export default function DepartmentPage({ department, chart }: { department: Department; chart: OrgDepartment[] }) {
+    const can = useCan();
     const [view, setView] = useState<View>(savedView);
 
     const changeView = (next: string) => {
@@ -149,7 +148,7 @@ export default function DepartmentPage({ department, chart }: { department: Depa
                                 ))}
                             </nav>
                         )}
-                        <h1 className="text-[28px] leading-tight font-bold tracking-tight">{department.name}</h1>
+                        <h1 className="text-xl font-semibold tracking-tight">{department.name}</h1>
                         <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
                             <Users className="size-4" />
                             {peopleLabel(department.total_count)}
@@ -158,7 +157,10 @@ export default function DepartmentPage({ department, chart }: { department: Depa
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-                        {department.total_count > 0 && (
+                        {/* The structure of the company is open to everybody; the list of
+                        the staff is not, and narrowing it by department takes reading
+                        that line of a card. A link into a refusal is worse than none. */}
+                        {department.total_count > 0 && can('employees.view') && can('employees.field.departments') && (
                             <Button variant="outline" asChild>
                                 <Link href={route('employees.index', { department: [department.id] })}>
                                     <List />

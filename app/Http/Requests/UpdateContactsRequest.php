@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\EmployeeFields;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -51,10 +52,17 @@ class UpdateContactsRequest extends FormRequest
     {
         $phone = ['nullable', 'string', 'regex:/^\+\d{11,15}$/'];
 
+        // An address this viewer may not change is not one the form shows, so it
+        // cannot be demanded here: the controller drops it from the save anyway,
+        // and requiring it would fail on a field nobody can see.
+        $editsEmail = in_array('email', EmployeeFields::editableBy($this->user(), $this->route('employee')), true);
+
         return [
             // The email is how the employee signs in, so it is required and
             // must stay unique; their own address is not a clash.
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->route('employee'))],
+            'email' => $editsEmail
+                ? ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->route('employee'))]
+                : ['nullable'],
             'phone' => $phone,
             'sos_phone' => $phone,
             'sos_contact' => ['nullable', 'string', 'max:100'],

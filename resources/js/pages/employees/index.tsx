@@ -279,7 +279,17 @@ function buildColumns(options: EmployeesProps['options'], visible: string[]): Co
                 filter: { type: 'text', param: 'search', placeholder: 'ФИО или почта' },
                 cell: (row) => (
                     <div className="flex items-center gap-3">
-                        {row.avatar ? (
+                        {/* Initials mean nobody uploaded a photograph; a lock means the
+                        line is not this viewer's to read, which is not the same thing. */}
+                        {!visible.includes('avatar') ? (
+                            <span
+                                className="bg-muted text-muted-foreground flex size-[38px] shrink-0 items-center justify-center rounded-full"
+                                title="Фотография закрыта"
+                                aria-label="Фотография закрыта"
+                            >
+                                <Lock className="size-4" />
+                            </span>
+                        ) : row.avatar ? (
                             <img src={row.avatar} alt="" className="size-[38px] shrink-0 rounded-full object-cover" />
                         ) : (
                             <PersonAvatar name={`${row.name} ${row.surname}`} className="size-[38px] text-[13px]" />
@@ -674,7 +684,7 @@ export default function Employees({
                     onPin={pin}
                     onHide={(key) => toggleHidden(key, true)}
                     lockedKey="name"
-                    actions={canManage ? (row) => <EmployeeActions employee={row} isSelf={row.id === auth.user.id} /> : undefined}
+                    actions={canManage ? (row) => <EmployeeActions employee={row} isSelf={row.id === auth.user?.id} /> : undefined}
                     empty={<Empty />}
                     footer={
                         <>

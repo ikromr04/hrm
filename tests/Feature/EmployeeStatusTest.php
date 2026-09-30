@@ -21,7 +21,7 @@ class EmployeeStatusTest extends TestCase
 
         $this->seed(RoleSeeder::class);
         $this->admin = User::factory()->create();
-        $this->admin->assignRole('admin');
+        $this->admin->assignRole('sysadmin');
     }
 
     public function test_employees_cannot_act_on_colleagues_or_see_who_left()
@@ -137,12 +137,13 @@ class EmployeeStatusTest extends TestCase
 
     public function test_someone_fired_while_signed_in_is_signed_out()
     {
+        // Their own card, which is the one page everybody can open.
         $employee = $this->colleague();
-        $this->actingAs($employee)->get('/dashboard')->assertOk();
+        $this->actingAs($employee)->get('/profile')->assertOk();
 
         $employee->update(['status' => 'fired']);
 
-        $this->get('/dashboard')->assertRedirect('/login');
+        $this->get('/profile')->assertRedirect('/login');
         $this->assertGuest();
     }
 }

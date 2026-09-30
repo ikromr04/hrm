@@ -34,6 +34,9 @@ class EmployeeDetailsController extends Controller
      * @var array<string, list<string>>
      */
     private const LINES = [
+        // Always readable, not always theirs to retype.
+        'surname' => ['surname'],
+        'name' => ['name'],
         'patronymic' => ['patronymic'],
         'sex' => ['sex'],
         'birth_date' => ['birth_date'],
@@ -127,9 +130,9 @@ class EmployeeDetailsController extends Controller
     }
 
     /**
-     * The part of a save the viewer is allowed to make. The surname and the name
-     * are not on the list of lines at all — they are always readable and always
-     * theirs to correct — so they pass through untouched.
+     * The part of a save the viewer is allowed to make. Every line of the card is
+     * on the list, the name and the surname included: those two are always
+     * readable, which is not the same as always theirs to retype.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>

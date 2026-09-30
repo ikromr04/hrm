@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Department;
 use App\Models\User;
+use App\Support\EmployeeFields;
 use Illuminate\Database\Eloquent\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -119,7 +120,8 @@ class DepartmentController extends Controller
         return [
             'id' => $user->id,
             'name' => "{$user->surname} {$user->name}",
-            'avatar' => $user->avatar,
+            // A name is nobody's secret; a face is a line of a card like any other.
+            'avatar' => EmployeeFields::showsAvatar(request()->user(), $user) ? $user->avatar : null,
             ...($details ? [
                 'email' => $user->email,
                 'positions' => $user->positions->pluck('name')->sort()->values(),

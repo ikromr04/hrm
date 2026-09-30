@@ -60,7 +60,14 @@ final class EmployeeFields
      * @var array<string, array{string, string}>
      */
     public const FIELDS = [
+        // A card with no name on it answers nothing, so these two are never closed
+        // — but changing them is a right like any other.
+        'surname' => ['main', 'Фамилия'],
+        'name' => ['main', 'Имя'],
         'patronymic' => ['main', 'Отчество'],
+        // The photograph is a line of the card like any other: it can be closed to
+        // a position, and then the card shows the initials instead.
+        'avatar' => ['main', 'Фотография'],
         'sex' => ['main', 'Пол'],
         'birth_date' => ['main', 'Дата рождения'],
         'birth_place' => ['main', 'Место рождения'],
@@ -100,7 +107,7 @@ final class EmployeeFields
      *
      * @var list<string>
      */
-    public const PUBLIC_FIELDS = ['patronymic', 'sex', 'roles', 'positions', 'departments', 'email', 'languages'];
+    public const PUBLIC_FIELDS = ['avatar', 'patronymic', 'sex', 'roles', 'positions', 'departments', 'email', 'languages'];
 
     /**
      * The fields kept beside the account rather than on it: the row a card loads
@@ -160,13 +167,30 @@ final class EmployeeFields
      *
      * @return list<string>
      */
+    /**
+     * The lines that are never closed to anybody.
+     *
+     * A list of blank rows would be no list, and a card with no name on it answers
+     * nothing — so these are read without a right. Changing them is another matter
+     * and has one.
+     *
+     * @var list<string>
+     */
+    public const ALWAYS_VISIBLE = ['surname', 'name'];
+
     public static function permissions(): array
     {
         $rights = [];
 
         foreach (self::SCOPES as $scope) {
             foreach (self::keys() as $field) {
-                $rights[] = self::permission($field, $scope);
+                // No right to read what everybody reads: the box beside those lines
+                // is ticked and cannot be untucked, so a right behind it would only
+                // be something to get wrong.
+                if (! in_array($field, self::ALWAYS_VISIBLE, true)) {
+                    $rights[] = self::permission($field, $scope);
+                }
+
                 $rights[] = self::editPermission($field, $scope);
             }
         }
@@ -186,9 +210,13 @@ final class EmployeeFields
      */
     public static function defaultPermissions(): array
     {
+        // The lines nobody can close have no right to read them, so there is
+        // nothing to hand out for those.
+        $chosen = array_diff(self::keys(), self::ALWAYS_VISIBLE);
+
         return [
-            ...array_map(fn (string $field) => self::permission($field), self::PUBLIC_FIELDS),
-            ...array_map(fn (string $field) => self::permission($field, self::OWN), self::keys()),
+            ...array_map(fn (string $field) => self::permission($field), array_diff(self::PUBLIC_FIELDS, self::ALWAYS_VISIBLE)),
+            ...array_map(fn (string $field) => self::permission($field, self::OWN), $chosen),
         ];
     }
 
@@ -217,6 +245,9 @@ final class EmployeeFields
                     $fields[] = [
                         'key' => $key,
                         'title' => $label,
+                        // Never closed: the dialog shows the box ticked and untouchable
+                        // rather than pretending there is a choice.
+                        'always' => in_array($key, self::ALWAYS_VISIBLE, true),
                         'permission' => self::permission($key, $scope),
                         'editPermission' => self::editPermission($key, $scope),
                     ];
@@ -241,11 +272,26 @@ final class EmployeeFields
      *
      * @return list<string>
      */
+    /**
+     * Whether a photograph of this person is theirs to look at.
+     *
+     * Faces turn up far from the card — beside a laptop's holder, in the tree of
+     * the company, in the journal of who moved what — and all of them are the same
+     * line of the same card, so all of them ask the same question here.
+     */
+    public static function showsAvatar(User $viewer, ?User $employee = null): bool
+    {
+        return in_array('avatar', self::visibleTo($viewer, $employee), true);
+    }
+
     public static function visibleTo(User $viewer, ?User $employee = null): array
     {
         $scope = self::scopeFor($viewer, $employee);
 
-        return array_values(array_filter(self::keys(), fn (string $field) => $viewer->can(self::permission($field, $scope))));
+        return array_values(array_filter(
+            self::keys(),
+            fn (string $field) => in_array($field, self::ALWAYS_VISIBLE, true) || $viewer->can(self::permission($field, $scope)),
+        ));
     }
 
     /**

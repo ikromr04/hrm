@@ -43,7 +43,7 @@ class EmployeeFamilyTest extends TestCase
      */
     public function test_an_untouched_card_is_not_the_same_as_having_no_children()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
         $employee->details()->update(['has_children' => null]);
 
@@ -62,7 +62,7 @@ class EmployeeFamilyTest extends TestCase
 
     public function test_rows_on_file_always_mean_there_are_children()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         // Even told otherwise, the rows win: the two cannot drift apart.
@@ -78,7 +78,7 @@ class EmployeeFamilyTest extends TestCase
 
     public function test_an_admin_saves_the_spouse_and_the_children()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -105,7 +105,7 @@ class EmployeeFamilyTest extends TestCase
 
     public function test_the_children_are_replaced_wholesale()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
         UserChild::factory(3)->for($employee)->create();
 
@@ -120,7 +120,7 @@ class EmployeeFamilyTest extends TestCase
 
     public function test_an_unmarried_employee_may_leave_the_card_empty()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -140,7 +140,7 @@ class EmployeeFamilyTest extends TestCase
 
     public function test_invalid_data_is_rejected()
     {
-        $admin = User::factory()->create()->assignRole('admin');
+        $admin = User::factory()->create()->assignRole('sysadmin');
         $employee = User::factory()->has(UserDetail::factory(), 'details')->create();
 
         $this->actingAs($admin)
@@ -164,7 +164,7 @@ class EmployeeFamilyTest extends TestCase
         $employee->details()->update(['marital_status' => 'married', 'spouse_name' => 'Азимова Нигина']);
 
         $this->actingAs($employee)
-            ->get("/employees/{$employee->id}")
+            ->get('/profile')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('employee.private.spouse_name', 'Азимова Нигина'));
 
         // A colleague gets no private block at all, spouse included.
