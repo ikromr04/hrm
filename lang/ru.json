@@ -250,5 +250,6 @@
     "Yes": "Да",
     "You are receiving this email because we received a password reset request for your account.": "Вы получили это письмо, потому что мы получили запрос на сброс пароля для Вашей учётной записи.",
     "You left the team \":name\"": "You left the team \":name\"",
-    "You've been invited to join :teamName": "Вас пригласили присоединиться к :teamName"
+    "You've been invited to join :teamName": "Вас пригласили присоединиться к :teamName",
+    "A reset link will be sent if the account exists.": "Если такой аккаунт есть, мы отправим на почту ссылку для сброса пароля."
 }

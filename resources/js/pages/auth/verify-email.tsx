@@ -1,4 +1,3 @@
-// Components
 import { Head, useForm } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 import { FormEventHandler } from 'react';
@@ -12,28 +11,27 @@ export default function VerifyEmail({ status }: { status?: string }) {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-
         post(route('verification.send'));
     };
 
     return (
-        <AuthLayout title="Verify email" description="Please verify your email address by clicking on the link we just emailed to you.">
-            <Head title="Email verification" />
+        <AuthLayout title="Подтвердите почту" description="Мы отправили вам письмо со ссылкой — перейдите по ней, чтобы подтвердить адрес">
+            <Head title="Подтверждение почты" />
 
             {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
-                    A new verification link has been sent to the email address you provided during registration.
+                <div className="bg-brand-soft text-brand-strong rounded-md px-3 py-2 text-center text-sm font-medium">
+                    Мы отправили новую ссылку на вашу почту.
                 </div>
             )}
 
-            <form onSubmit={submit} className="space-y-6 text-center">
-                <Button disabled={processing} variant="secondary">
+            <form className="flex flex-col gap-6" onSubmit={submit}>
+                <Button type="submit" variant="secondary" className="w-full" disabled={processing}>
                     {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                    Resend verification email
+                    Отправить письмо ещё раз
                 </Button>
 
                 <TextLink href={route('logout')} method="post" className="mx-auto block text-sm">
-                    Log out
+                    Выйти
                 </TextLink>
             </form>
         </AuthLayout>
