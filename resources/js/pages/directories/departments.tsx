@@ -12,7 +12,7 @@ interface DepartmentItem {
     member_ids: number[];
 }
 
-export default function Departments({ items, employees }: { items: DepartmentItem[]; employees: PickablePerson[] }) {
+export default function Departments({ items, employees, canEdit }: { items: DepartmentItem[]; employees: PickablePerson[]; canEdit: boolean }) {
     return (
         <DirectoriesLayout title="Отделы">
             <DirectoryManager
@@ -25,6 +25,7 @@ export default function Departments({ items, employees }: { items: DepartmentIte
                     heads: item.heads,
                     member_ids: item.member_ids,
                 }))}
+                canEdit={canEdit}
                 field="name"
                 route="directories.departments"
                 labels={{ add: 'Добавить отдел', create: 'Новый отдел', edit: 'Изменить отдел', accusative: 'отдел' }}

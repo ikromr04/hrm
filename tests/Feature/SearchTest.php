@@ -98,7 +98,9 @@ class SearchTest extends TestCase
             ['value' => 'ZZZ'],
         );
 
-        $this->actingAs($this->colleague(['surname' => 'Холов', 'name' => 'Бахром']));
+        // Somebody who sees the whole fleet: search reaches exactly as far as
+        // the list does, and a colleague only ever holds their own units.
+        $this->actingAs($this->colleague(['surname' => 'Холов', 'name' => 'Бахром'])->givePermissionTo('equipment.view.all'));
 
         // The sticker, the serial, and the two words somebody would actually type.
         foreach (['EV-0421', '7K2L9P3', 'Latitude'] as $term) {

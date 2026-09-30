@@ -17,6 +17,10 @@ use App\Http\Controllers\EquipmentJournalController;
 use App\Http\Controllers\EquipmentRepairController;
 use App\Http\Controllers\EquipmentStatusController;
 use App\Http\Controllers\SearchController;
+// The reference lists themselves, under a name of their own: "Directories" here
+// already stands for the controllers that serve them.
+use App\Support\Directories as DirectoryLists;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
@@ -37,19 +41,21 @@ Route::middleware(['auth'])->group(function () {
     // Open to everybody: it only ever searches the sections the viewer may see.
     Route::get('search', SearchController::class)->name('search');
     Route::get('equipment', [EquipmentController::class, 'index'])
-        ->middleware('can:equipment.view')
+        ->middleware('can:equipment.view.any')
         ->name('equipment.index');
     // Before the card, or "journal" would be read as a unit's id. What went on
     // over a period is a right of its own.
     Route::get('equipment/journal', EquipmentJournalController::class)
-        ->middleware('can:equipment.journal')
+        ->middleware('can:equipment.journal.any')
         ->name('equipment.journal');
     // Before the card too, for the same reason as the journal.
     Route::get('equipment/create', [EquipmentController::class, 'create'])
-        ->middleware('can:equipment.manage')
+        ->middleware('can:equipment.create')
         ->name('equipment.create');
+    // The card of a unit outside what this person may see is not theirs to
+    // open; the gate takes the unit itself and says so.
     Route::get('equipment/{equipment}', [EquipmentController::class, 'show'])
-        ->middleware('can:equipment.view')
+        ->middleware('can:view,equipment')
         ->name('equipment.show');
 
     // Who works where is nobody's secret: the structure of the company is open
@@ -95,8 +101,10 @@ Route::middleware(['auth'])->prefix('employees/{employee}')->name('employees.')-
         Route::delete('experiences/{experience}', [EmployeeWorkExperienceController::class, 'destroy'])->name('experiences.destroy');
     });
 
+    // Handing units over from a card is still handing units over, so it takes
+    // both the block of the card and the right to issue equipment.
     Route::post('equipment', [EmployeeEquipmentController::class, 'store'])
-        ->middleware('can:employees.edit.block.equipment,employee')
+        ->middleware(['can:employees.edit.block.equipment,employee', 'can:equipment.issue'])
         ->name('equipment.store');
 
     Route::put('family', [EmployeeDetailsController::class, 'family'])->middleware('can:employees.edit.block.family,employee')->name('family');
@@ -117,68 +125,94 @@ Route::delete('employees/{employee}', [EmployeeStatusController::class, 'destroy
     ->middleware(['auth', 'can:employees.delete'])
     ->name('employees.destroy');
 
-// Putting a new unit on the books.
+// Putting a new unit on the books: no unit named yet, so this one right stands
+// on its own rather than being asked of a row.
 Route::post('equipment', [EquipmentController::class, 'store'])
-    ->middleware(['auth', 'can:equipment.manage'])
+    ->middleware(['auth', 'can:equipment.create'])
     ->name('equipment.store');
 
-// A unit's life: handed out, taken back, written off.
-Route::middleware(['auth', 'can:equipment.manage'])->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
-    Route::post('issue', [EquipmentStatusController::class, 'issue'])->name('issue');
-    Route::post('take', [EquipmentStatusController::class, 'take'])->name('take');
-    Route::post('write-off', [EquipmentStatusController::class, 'writeOff'])->name('write-off');
+// A unit's life: handed out, taken back, written off. Three separate rights,
+// each asked of the very unit — a move is refused on a unit one cannot see.
+Route::middleware('auth')->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
+    Route::post('issue', [EquipmentStatusController::class, 'issue'])->middleware('can:issue,equipment')->name('issue');
+    Route::post('take', [EquipmentStatusController::class, 'take'])->middleware('can:take,equipment')->name('take');
+    Route::post('write-off', [EquipmentStatusController::class, 'writeOff'])->middleware('can:writeOff,equipment')->name('write-off');
 });
 
 // Struck off the books: for a duplicate or a mistake, not for wear, which is
 // why it is a right of its own rather than a part of managing the fleet.
 Route::delete('equipment/{equipment}', [EquipmentController::class, 'destroy'])
-    ->middleware(['auth', 'can:equipment.delete'])
+    ->middleware(['auth', 'can:delete,equipment'])
     ->name('equipment.destroy');
 
-// The card and its service records, edited one block at a time.
-Route::middleware(['auth', 'can:equipment.manage'])->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
-    Route::put('specs', [EquipmentDetailsController::class, 'specs'])->name('specs');
-    Route::put('accessories', [EquipmentDetailsController::class, 'accessories'])->name('accessories');
-    Route::put('state', [EquipmentDetailsController::class, 'state'])->name('state');
+// The card and its service records, edited one block at a time — and each block
+// is a right of its own, so renaming a unit and keeping its inventory dates are
+// not the same permission.
+Route::middleware('auth')->prefix('equipment/{equipment}')->name('equipment.')->group(function () {
+    Route::put('specs', [EquipmentDetailsController::class, 'specs'])->middleware('can:editSpecs,equipment')->name('specs');
+    Route::put('accessories', [EquipmentDetailsController::class, 'accessories'])->middleware('can:editAccessories,equipment')->name('accessories');
+    Route::put('state', [EquipmentDetailsController::class, 'state'])->middleware('can:editState,equipment')->name('state');
 
-    // What has been done to it.
-    Route::post('repairs', [EquipmentRepairController::class, 'store'])->name('repairs.store');
-    Route::put('repairs/{repair}', [EquipmentRepairController::class, 'update'])->name('repairs.update');
-    Route::delete('repairs/{repair}', [EquipmentRepairController::class, 'destroy'])->name('repairs.destroy');
+    // What has been done to it: all four under one right, because a record of
+    // repair is opened, corrected and closed by the same hands.
+    Route::middleware('can:service,equipment')->group(function () {
+        Route::post('repairs', [EquipmentRepairController::class, 'store'])->name('repairs.store');
+        Route::put('repairs/{repair}', [EquipmentRepairController::class, 'update'])->name('repairs.update');
+        Route::delete('repairs/{repair}', [EquipmentRepairController::class, 'destroy'])->name('repairs.destroy');
+    });
 });
 
 // Directories: roles ("Позиция"), positions ("Должность"), departments, languages and equipment categories.
 Route::middleware(['auth'])->prefix('directories')->name('directories.')->group(function () {
-    Route::redirect('/', '/directories/roles');
+    // The section opens on the first list this person may read rather than always
+    // on the positions, which not everybody who keeps a directory may see.
+    Route::get('/', function (Request $request) {
+        $first = DirectoryLists::firstFor($request->user());
 
-    // Reading the lists is one right; adding to them and renaming is another.
-    Route::middleware('can:directories.view')->group(function () {
-        Route::resource('roles', Directories\RoleController::class)->only(['index']);
-        Route::resource('positions', Directories\PositionController::class)->only(['index']);
-        Route::resource('departments', Directories\DepartmentController::class)->only(['index']);
-        Route::resource('languages', Directories\LanguageController::class)->only(['index']);
-        Route::resource('equipment', Directories\EquipmentTypeController::class)->only(['index']);
+        abort_if($first === null, 403);
+
+        return redirect("/directories/{$first}");
     });
 
-    Route::middleware('can:directories.manage')->group(function () {
-        Route::resource('roles', Directories\RoleController::class)->only(['store', 'update', 'destroy']);
-        Route::resource('positions', Directories\PositionController::class)->only(['store', 'update', 'destroy']);
-        Route::resource('departments', Directories\DepartmentController::class)->only(['store', 'update', 'destroy']);
-        Route::resource('languages', Directories\LanguageController::class)->only(['store', 'update', 'destroy']);
-        Route::resource('equipment', Directories\EquipmentTypeController::class)->only(['store', 'update', 'destroy']);
-    });
+    // Lists kept by different people, so each is a right of its own — reading it,
+    // and adding to it and renaming in it. "Доступы" is one of them too, further
+    // down: it is a page of its own rather than a resource.
+    $lists = [
+        'roles' => Directories\RoleController::class,
+        'positions' => Directories\PositionController::class,
+        'departments' => Directories\DepartmentController::class,
+        'languages' => Directories\LanguageController::class,
+        'equipment' => Directories\EquipmentTypeController::class,
+    ];
 
-    // Who may do what. Not a right that can be handed out: only a system
-    // administrator decides on access, so the middleware names the role.
-    Route::middleware('role:sysadmin')->group(function () {
-        Route::get('access', [Directories\AccessController::class, 'index'])->name('access.index');
-        Route::put('access/{role}', [Directories\AccessController::class, 'update'])->name('access.update');
-    });
+    foreach ($lists as $list => $controller) {
+        Route::resource($list, $controller)
+            ->only(['index'])
+            ->middleware('can:'.DirectoryLists::viewPermission($list));
+
+        // Changing a list takes reading it too, so the gate asks for the pair
+        // rather than the bare right.
+        Route::resource($list, $controller)
+            ->only(['store', 'update', 'destroy'])
+            ->middleware("can:directories.manage.{$list}");
+    }
+
+    // Who may do what: a list of the section like any other, read and kept by its
+    // own pair of rights. The two access roles are still not editable in it —
+    // they answer yes to everything whatever the table says.
+    Route::get('access', [Directories\AccessController::class, 'index'])
+        ->middleware('can:'.DirectoryLists::viewPermission('access'))
+        ->name('access.index');
+    Route::put('access/{role}', [Directories\AccessController::class, 'update'])
+        ->middleware('can:directories.manage.access')
+        ->name('access.update');
 });
 
-// A right given to, or taken from, one colleague in particular.
+// A right given to, or taken from, one colleague in particular. The same duty as
+// the access table, so the same right: an exception on a card and a tick in the
+// table are two ways of doing one thing.
 Route::put('employees/{employee}/access', EmployeeAccessController::class)
-    ->middleware(['auth', 'role:sysadmin'])
+    ->middleware(['auth', 'can:directories.manage.access'])
     ->name('employees.access');
 
 require __DIR__.'/settings.php';

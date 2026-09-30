@@ -8,11 +8,12 @@ interface PositionItem {
 }
 
 /** Positions, shown in the UI as "Должность". */
-export default function Positions({ items }: { items: PositionItem[] }) {
+export default function Positions({ items, canEdit }: { items: PositionItem[]; canEdit: boolean }) {
     return (
         <DirectoriesLayout title="Должности">
             <DirectoryManager
                 items={items.map((item) => ({ id: item.id, label: item.name, users_count: item.users_count }))}
+                canEdit={canEdit}
                 field="name"
                 route="directories.positions"
                 labels={{ add: 'Добавить должность', create: 'Новая должность', edit: 'Изменить должность', accusative: 'должность' }}

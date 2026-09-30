@@ -6,7 +6,9 @@ import {
     RightsDialog,
     type CardFieldGroup,
     type CardFieldsMode,
+    type PlainRight,
 } from '@/components/card-fields';
+import { EquipmentScopesButton, EquipmentScopesDialog, type EquipmentScope } from '@/components/equipment-scopes';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -44,6 +46,12 @@ const EMPLOYEES = 'employees';
 
 /** The same lines of a card, but the ones a person holds over their own. */
 const PROFILE = 'profile';
+
+/** Where the view is not one right either, but three parts of the fleet. */
+const EQUIPMENT = 'equipment';
+
+/** And where one section is really five lists, each opened and changed on its own. */
+const DIRECTORIES = 'directories';
 
 /**
  * Whether the section opens at all. It is never ticked by hand: a position that
@@ -110,6 +118,56 @@ const PROFILE_COLUMNS: Column[] = [
     },
 ];
 
+/**
+ * The three columns of «Оборудование». Not one of them is a box to tick: how
+ * much of the fleet is open is three answers rather than one, the card of a unit
+ * is edited by whole blocks, and what one does to a unit is half a dozen
+ * operations. So all three are counters, each with a window behind it.
+ */
+const EQUIPMENT_VIEW_COLUMN: Column = {
+    key: 'view',
+    title: 'Просмотр',
+    hint: 'Техника видна по частям: своё, оборудование своего отдела — это для руководителя — и всё сразу. У каждой части отдельно решается журнал операций: одно дело знать, что у тебя на руках, другое — кто держал эту единицу до тебя.',
+    width: 'w-36',
+};
+
+const EQUIPMENT_COLUMNS: Column[] = [
+    EQUIPMENT_VIEW_COLUMN,
+    {
+        key: 'blocks',
+        title: 'Изменение',
+        hint: 'Карточка единицы правится блоками: характеристики, комплектация, состояние и инвентаризация. Блок открывают целиком, а не построчно, и править можно только то, что видно в «Просмотре».',
+        width: 'w-36',
+    },
+    {
+        key: 'actions',
+        title: 'Действия',
+        hint: 'Операции над самой единицей, а не строки её карточки: постановка на баланс, выдача и возврат, списание, обслуживание и удаление.',
+        width: 'w-40',
+    },
+];
+
+/**
+ * The two columns of «Справочники». The section looks like one page, but it is
+ * five lists kept by five different people, so «Просмотр» and «Изменение» are
+ * counters here too: a column of ten boxes would say nothing about who keeps
+ * what.
+ */
+const DIRECTORY_COLUMNS: Column[] = [
+    {
+        key: 'lists',
+        title: 'Просмотр',
+        hint: 'Справочники — это пять отдельных списков, и ведут их разные люди: должности и языки — кадровик, категории техники — тот, кто отвечает за парк. Раздел появляется в меню, если позиция открывает хотя бы один список.',
+        width: 'w-36',
+    },
+    {
+        key: 'edits',
+        title: 'Изменение',
+        hint: 'Что позиция добавляет, переименовывает и удаляет в этих списках. Менять можно только тот список, который открыт в «Просмотре».',
+        width: 'w-36',
+    },
+];
+
 /** What the section spans across the table: its rights, or the counters of the two card sections. */
 const columnsOf = (section: Section): Column[] => {
     if (section.key === EMPLOYEES) {
@@ -120,8 +178,33 @@ const columnsOf = (section: Section): Column[] => {
         return PROFILE_COLUMNS;
     }
 
+    if (section.key === EQUIPMENT) {
+        // The section has no plain rights left, but the spread keeps the header,
+        // the group span and the row counting the same thing if one comes back.
+        return [...EQUIPMENT_COLUMNS, ...section.rights.map((right) => ({ ...right, width: 'w-28' }))];
+    }
+
+    if (section.key === DIRECTORIES) {
+        // Same story: nothing plain is left here either, and the spread keeps the
+        // span of the group and of the empty row counted from one place.
+        return [...DIRECTORY_COLUMNS, ...section.rights.map((right) => ({ ...right, width: 'w-28' }))];
+    }
+
     return section.rights.map((right) => ({ ...right, width: 'w-28' }));
 };
+
+/**
+ * What a window is open over. The mode says which window it is, so the scope it
+ * makes sense with comes with it: there is no such thing as the actions of a
+ * profile, nor parts of a fleet inside a card. Two sections both call a window
+ * "actions" — what one does to a colleague and what one does to a unit are not
+ * the same list — so the scope, not the mode alone, decides which one opens.
+ */
+type Picking =
+    | { id: number; scope: typeof EMPLOYEES | typeof PROFILE; mode: CardFieldsMode }
+    | { id: number; scope: typeof EMPLOYEES; mode: 'actions' }
+    | { id: number; scope: typeof EQUIPMENT; mode: 'scopes' | 'blocks' | 'actions' }
+    | { id: number; scope: typeof DIRECTORIES; mode: 'lists' | 'edits' };
 
 /**
  * Who may do what: positions down the side, rights across the top.
@@ -135,6 +218,11 @@ export default function AccessPage({
     roles,
     fields,
     profileFields,
+    equipmentScopes,
+    equipmentBlocks,
+    equipmentActions,
+    directoryLists,
+    directoryEdits,
 }: {
     sections: Section[];
     roles: RoleRow[];
@@ -142,13 +230,23 @@ export default function AccessPage({
     fields: CardFieldGroup[];
     /** The same lines, carrying the rights one holds over one's own card. */
     profileFields: CardFieldGroup[];
+    /** The three parts of the fleet, each with its own view and its own journal. */
+    equipmentScopes: EquipmentScope[];
+    /** The blocks a unit's card is edited by, as a plain list of rights. */
+    equipmentBlocks: PlainRight[];
+    /** The operations over a unit, in the same shape. */
+    equipmentActions: PlainRight[];
+    /** Which of the five reference lists a position opens. */
+    directoryLists: PlainRight[];
+    /** And which it keeps: each one names the list it cannot be held without. */
+    directoryEdits: PlainRight[];
 }) {
     const [query, setQuery] = useState('');
-    // Whose card fields are being chosen, whose card they belong to, and which
-    // half of them. The position is kept by id rather than as the row it was
-    // opened from, so the window shows what has just been saved instead of the
-    // copy that is now stale.
-    const [picking, setPicking] = useState<{ id: number; scope: typeof EMPLOYEES | typeof PROFILE; mode: CardFieldsMode | 'actions' } | null>(null);
+    // Which window is open over which position: a half of somebody's card, a half
+    // of one's own, the actions, or the parts of the fleet. The position is kept
+    // by id rather than as the row it was opened from, so the window shows what
+    // has just been saved instead of the copy that is now stale.
+    const [picking, setPicking] = useState<Picking | null>(null);
     // What the table shows while a save is in flight, so a tick answers at once.
     const [pending, setPending] = useState<Record<number, string[]>>({});
 
@@ -206,6 +304,21 @@ export default function AccessPage({
 
         save(role, countCardFields(fields, rest, 'view').chosen > 0 ? [...rest, EMPLOYEES_VIEW] : rest);
     };
+
+    /**
+     * Closing a reference list takes the right to change it away with it. A
+     * "directories.edit.roles" left behind without the view beside it answers no
+     * to every check anyway, and the counter would go on promising something the
+     * position cannot do — the same reason a part of the fleet closes its journal.
+     */
+    const saveLists = (role: RoleRow, permissions: string[]) =>
+        save(
+            role,
+            permissions.filter(
+                (name) =>
+                    !directoryEdits.some((right) => right.key === name && right.requires !== undefined && !permissions.includes(right.requires.key)),
+            ),
+        );
 
     return (
         <DirectoriesLayout title="Доступы">
@@ -337,6 +450,116 @@ export default function AccessPage({
                                                     </td>
                                                 ))}
                                             </Fragment>
+                                        ) : section.key === EQUIPMENT ? (
+                                            <Fragment key={section.key}>
+                                                <td className="border-l px-2 py-2.5 text-center">
+                                                    {role.everything ? (
+                                                        <span className="text-muted-foreground text-[13px]">все</span>
+                                                    ) : (
+                                                        // Behind a counter like the card sections beside it: what
+                                                        // is visible here is three parts of the fleet and a
+                                                        // journal for each, not a box one either ticks or not.
+                                                        <EquipmentScopesButton
+                                                            scopes={equipmentScopes}
+                                                            held={held(role)}
+                                                            onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'scopes' })}
+                                                        />
+                                                    )}
+                                                </td>
+
+                                                <td className="px-2 py-2.5 text-center">
+                                                    {role.everything ? (
+                                                        <span className="text-muted-foreground text-[13px]">все</span>
+                                                    ) : (
+                                                        <RightsButton
+                                                            chosen={equipmentBlocks.filter((right) => held(role).includes(right.key)).length}
+                                                            total={equipmentBlocks.length}
+                                                            title="Блоки карточки единицы"
+                                                            onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'blocks' })}
+                                                        />
+                                                    )}
+                                                </td>
+
+                                                <td className="px-2 py-2.5 text-center">
+                                                    {role.everything ? (
+                                                        <span className="text-muted-foreground text-[13px]">все</span>
+                                                    ) : (
+                                                        <RightsButton
+                                                            chosen={equipmentActions.filter((right) => held(role).includes(right.key)).length}
+                                                            total={equipmentActions.length}
+                                                            title="Операции с единицей"
+                                                            onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'actions' })}
+                                                        />
+                                                    )}
+                                                </td>
+
+                                                {section.rights.map((right) => (
+                                                    <td key={right.key} className="px-2 py-2.5 text-center">
+                                                        {role.everything ? (
+                                                            <Check
+                                                                className="text-muted-foreground mx-auto size-4"
+                                                                aria-label={`${role.title}: ${right.title} — есть всегда`}
+                                                            />
+                                                        ) : (
+                                                            <Checkbox
+                                                                checked={held(role).includes(right.key)}
+                                                                onCheckedChange={() => toggle(role, right.key)}
+                                                                aria-label={`${role.title}: ${section.title} — ${right.title}`}
+                                                                className="mx-auto"
+                                                            />
+                                                        )}
+                                                    </td>
+                                                ))}
+                                            </Fragment>
+                                        ) : section.key === DIRECTORIES ? (
+                                            <Fragment key={section.key}>
+                                                <td className="border-l px-2 py-2.5 text-center">
+                                                    {role.everything ? (
+                                                        <span className="text-muted-foreground text-[13px]">все</span>
+                                                    ) : (
+                                                        // Two counters instead of the pair of boxes this section used
+                                                        // to hold: «Справочники» is five lists, and a position
+                                                        // usually keeps one of them and only reads the rest.
+                                                        <RightsButton
+                                                            chosen={directoryLists.filter((right) => held(role).includes(right.key)).length}
+                                                            total={directoryLists.length}
+                                                            title="Какие справочники видно"
+                                                            onOpen={() => setPicking({ id: role.id, scope: DIRECTORIES, mode: 'lists' })}
+                                                        />
+                                                    )}
+                                                </td>
+
+                                                <td className="px-2 py-2.5 text-center">
+                                                    {role.everything ? (
+                                                        <span className="text-muted-foreground text-[13px]">все</span>
+                                                    ) : (
+                                                        <RightsButton
+                                                            chosen={directoryEdits.filter((right) => held(role).includes(right.key)).length}
+                                                            total={directoryEdits.length}
+                                                            title="Какие справочники позиция ведёт"
+                                                            onOpen={() => setPicking({ id: role.id, scope: DIRECTORIES, mode: 'edits' })}
+                                                        />
+                                                    )}
+                                                </td>
+
+                                                {section.rights.map((right) => (
+                                                    <td key={right.key} className="px-2 py-2.5 text-center">
+                                                        {role.everything ? (
+                                                            <Check
+                                                                className="text-muted-foreground mx-auto size-4"
+                                                                aria-label={`${role.title}: ${right.title} — есть всегда`}
+                                                            />
+                                                        ) : (
+                                                            <Checkbox
+                                                                checked={held(role).includes(right.key)}
+                                                                onCheckedChange={() => toggle(role, right.key)}
+                                                                aria-label={`${role.title}: ${section.title} — ${right.title}`}
+                                                                className="mx-auto"
+                                                            />
+                                                        )}
+                                                    </td>
+                                                ))}
+                                            </Fragment>
                                         ) : (
                                             <Fragment key={section.key}>
                                                 {section.rights.map((right, index) => (
@@ -379,7 +602,7 @@ export default function AccessPage({
                 можно выдать или снять в его карточке.
             </p>
 
-            {picking && picked && picking.mode === 'actions' && (
+            {picking && picked && picking.scope === EMPLOYEES && picking.mode === 'actions' && (
                 <RightsDialog
                     title={`Действия с сотрудником: ${picked.title}`}
                     description="Что эта позиция делает с самим сотрудником, а не со строкой его карточки. Восстановить уволенного может тот, кто может уволить."
@@ -390,7 +613,61 @@ export default function AccessPage({
                 />
             )}
 
-            {picking && picked && picking.mode !== 'actions' && (
+            {picking && picked && picking.scope === EQUIPMENT && picking.mode === 'scopes' && (
+                <EquipmentScopesDialog
+                    subject={picked.title}
+                    scopes={equipmentScopes}
+                    held={held(picked)}
+                    onChange={(permissions) => save(picked, permissions)}
+                    onClose={() => setPicking(null)}
+                />
+            )}
+
+            {picking && picked && picking.scope === EQUIPMENT && picking.mode === 'blocks' && (
+                <RightsDialog
+                    title={`Изменение оборудования: ${picked.title}`}
+                    description="Карточка единицы правится блоками целиком. Открытый блок позиция меняет у любой единицы, которую видит: закрытая в «Просмотре» техника не правится и здесь."
+                    rights={equipmentBlocks}
+                    held={held(picked)}
+                    onChange={(permissions) => save(picked, permissions)}
+                    onClose={() => setPicking(null)}
+                />
+            )}
+
+            {picking && picked && picking.scope === EQUIPMENT && picking.mode === 'actions' && (
+                <RightsDialog
+                    title={`Действия с оборудованием: ${picked.title}`}
+                    description="Что эта позиция делает с самой единицей, а не со строкой её карточки. Каждая операция оставляет запись в журнале, так что видно, кто её провёл."
+                    rights={equipmentActions}
+                    held={held(picked)}
+                    onChange={(permissions) => save(picked, permissions)}
+                    onClose={() => setPicking(null)}
+                />
+            )}
+
+            {picking && picked && picking.scope === DIRECTORIES && picking.mode === 'lists' && (
+                <RightsDialog
+                    title={`Какие справочники видно: ${picked.title}`}
+                    description="Пять списков живут на одной странице, но открываются по одному: у каждого свои хозяева. Раздел «Справочники» появляется в меню, если открыт хотя бы один список, а закрытый список уносит с собой и право его менять."
+                    rights={directoryLists}
+                    held={held(picked)}
+                    onChange={(permissions) => saveLists(picked, permissions)}
+                    onClose={() => setPicking(null)}
+                />
+            )}
+
+            {picking && picked && picking.scope === DIRECTORIES && picking.mode === 'edits' && (
+                <RightsDialog
+                    title={`Изменение справочников: ${picked.title}`}
+                    description="Что позиция добавляет, переименовывает и удаляет в этих списках. Вести можно только то, что видно: список, закрытый в «Просмотре», недоступен и здесь."
+                    rights={directoryEdits}
+                    held={held(picked)}
+                    onChange={(permissions) => save(picked, permissions)}
+                    onClose={() => setPicking(null)}
+                />
+            )}
+
+            {picking && picked && picking.scope !== EQUIPMENT && picking.scope !== DIRECTORIES && picking.mode !== 'actions' && (
                 // The two windows hold the same list of lines, so the heading has
                 // to say whose card it is about, or the wrong half gets ticked.
                 <CardFieldsDialog
@@ -398,7 +675,7 @@ export default function AccessPage({
                     subject={picking.scope === PROFILE ? `свой профиль — ${picked.title}` : picked.title}
                     groups={picking.scope === PROFILE ? profileFields : fields}
                     held={held(picked)}
-                    onChange={(permissions) => saveFields(picked, picking.scope, picking.mode as CardFieldsMode, permissions)}
+                    onChange={(permissions) => saveFields(picked, picking.scope, picking.mode, permissions)}
                     onClose={() => setPicking(null)}
                 />
             )}

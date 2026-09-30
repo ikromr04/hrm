@@ -47,8 +47,9 @@ class HandleInertiaRequests extends Middleware
                 // Every right in the catalogue with a yes or a no, so a page can
                 // hide what it must without asking a second question.
                 'can' => $request->user()?->accessMap() ?? [],
-                // Not a right that can be handed out: an administrator holds
-                // every one of those and still may not decide who else gets them.
+                // Whether the two access roles may be put on somebody's card. Not
+                // a right that can be handed out: an administrator holds every one
+                // of those and still may not appoint another administrator.
                 'manageAccess' => (bool) $request->user()?->hasRole('sysadmin'),
             ],
             // What a form hands back to itself: the colleague the "new

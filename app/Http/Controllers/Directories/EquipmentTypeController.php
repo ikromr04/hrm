@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Directories;
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentField;
 use App\Models\EquipmentType;
+use App\Support\Directories;
 use App\Support\EquipmentIcons;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +24,7 @@ use Inertia\Response;
  */
 class EquipmentTypeController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('directories/equipment', [
             // What a category may be drawn by; the form offers exactly these.
@@ -37,6 +38,9 @@ class EquipmentTypeController extends Controller
                 ->all(),
             // Units in the category, written-off ones aside: the directory
             // counts hardware, and the number links nowhere else.
+            // Reading a list and keeping it are two rights, so the page says
+            // which one it is looking at.
+            'canEdit' => Directories::canEdit($request->user(), 'equipment'),
             'items' => EquipmentType::query()
                 ->with('fields')
                 ->withCount(['equipment as users_count' => fn ($q) => $q->inService()])

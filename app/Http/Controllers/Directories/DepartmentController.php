@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Directories;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\User;
+use App\Support\Directories;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Inertia\Response;
 
 class DepartmentController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $departments = Department::query()
             ->with(['heads:id,name,surname', 'users' => fn ($q) => $q->active()->select('users.id')])
@@ -25,6 +26,9 @@ class DepartmentController extends Controller
         $totals = Department::staffTotals($departments);
 
         return Inertia::render('directories/departments', [
+            // Reading a list and keeping it are two rights, so the page says
+            // which one it is looking at.
+            'canEdit' => Directories::canEdit($request->user(), 'departments'),
             'items' => $departments
                 ->map(fn (Department $d) => [
                     'id' => $d->id,

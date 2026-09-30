@@ -277,6 +277,44 @@ export interface PlainRight {
     key: string;
     title: string;
     hint: string;
+    /**
+     * A right this one is no use without — changing a list takes reading it. When
+     * that one is missing the box is greyed out and says why, the way a line of a
+     * card cannot be made editable before it is made visible.
+     */
+    requires?: { key: string; hint: string };
+}
+
+/**
+ * A short list of rights as checkboxes, greying out whatever depends on a right
+ * that is not held. Shared by the window over a position's row and by the dialog
+ * of the position itself, so both refuse the same ticks.
+ */
+export function PlainRights({ rights, held, onToggle }: { rights: PlainRight[]; held: string[]; onToggle: (key: string) => void }) {
+    return (
+        <ul className="grid gap-2">
+            {rights.map((right) => {
+                const blocked = right.requires !== undefined && !held.includes(right.requires.key);
+
+                return (
+                    <li key={right.key}>
+                        <label className={cn('flex items-start gap-2 text-sm', blocked && 'opacity-60')}>
+                            <Checkbox
+                                checked={held.includes(right.key)}
+                                disabled={blocked}
+                                onCheckedChange={() => onToggle(right.key)}
+                                className="mt-0.5"
+                            />
+                            <span className="min-w-0">
+                                {right.title}
+                                <span className="text-muted-foreground block text-[13px]">{blocked ? right.requires!.hint : right.hint}</span>
+                            </span>
+                        </label>
+                    </li>
+                );
+            })}
+        </ul>
+    );
 }
 
 /**
@@ -312,19 +350,7 @@ export function RightsDialog({
 
                 <p className="text-muted-foreground text-[13px]">{description}</p>
 
-                <ul className="grid gap-2">
-                    {rights.map((right) => (
-                        <li key={right.key}>
-                            <label className="flex items-start gap-2 text-sm">
-                                <Checkbox checked={held.includes(right.key)} onCheckedChange={() => toggle(right.key)} className="mt-0.5" />
-                                <span className="min-w-0">
-                                    {right.title}
-                                    <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
-                                </span>
-                            </label>
-                        </li>
-                    ))}
-                </ul>
+                <PlainRights rights={rights} held={held} onToggle={toggle} />
 
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>

@@ -16,6 +16,7 @@ use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
 use App\Notifications\AccountCreated;
 use App\Support\Access;
+use App\Support\Directories;
 use App\Support\EmployeeFields;
 use App\Support\EquipmentHistory;
 use Illuminate\Database\Eloquent\Builder;
@@ -380,7 +381,7 @@ class EmployeeController extends Controller
             ] : null,
             // What this colleague may do, and why. Only a system administrator
             // is shown it, because only they can change any of it.
-            'access' => $request->user()->hasRole('sysadmin') ? $this->access($employee) : null,
+            'access' => Directories::canEdit($request->user(), 'access') ? $this->access($employee) : null,
         ]);
     }
 

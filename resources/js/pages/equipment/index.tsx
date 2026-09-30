@@ -27,7 +27,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
-import { useCan } from '@/lib/access';
+import { type EquipmentRights } from '@/lib/access';
 import { formatDate } from '@/lib/employee';
 import { statusLabel, statusTone, type EquipmentStatus as Status } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
@@ -73,6 +73,9 @@ interface Unit {
 /** The tab above the table: a status, the units being serviced, or everything. */
 type Tab = Status | 'service' | 'all';
 
+/** How much of the fleet is open: one's own, one's department's, all of it. */
+type Scope = 'own' | 'department' | 'all';
+
 interface Filters {
     q: string;
     name: string;
@@ -102,7 +105,12 @@ interface Props {
     perPageOptions: number[];
     counts: Record<'all' | 'service' | Status, number>;
     options: Options;
-    canEdit: boolean;
+    /** Which blocks and moves are open to the viewer; the server decided each one. */
+    can: EquipmentRights;
+    /** Which parts of the fleet the list was narrowed to; the server did the narrowing. */
+    scopes: Scope[];
+    /** The parts of those whose journal may be read; empty means no journal at all. */
+    journalScopes: Scope[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Оборудование', href: '/equipment' }];
@@ -116,47 +124,41 @@ const dangerItem = 'text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] [&_s
 /**
  * The "⋯" at the end of a row. A written-off unit has nowhere left to go: the
  * only thing left to do with it is strike it off the books for good.
+ *
+ * Every item is a right of its own, so a storekeeper who hands units out and an
+ * accountant who writes them off are offered different menus — and a viewer left
+ * with no item at all is offered no menu, rather than one that opens on nothing.
  */
 function RowActions({
     unit,
+    can,
     onAsk,
     onDelete,
 }: {
     unit: Unit;
+    can: EquipmentRights;
     onAsk: (move: { unit: Unit; kind: AskedMove }) => void;
-    /** Missing for a viewer who may not strike a record out. */
-    onDelete?: (unit: Unit) => void;
+    onDelete: (unit: Unit) => void;
 }) {
-    const can = useCan();
+    const moves: { kind: AskedMove; icon: LucideIcon }[] = [];
 
     // A unit that has been written off has nowhere left to move: the only thing
     // to do with the record is to strike it out.
-    if (unit.status === 'written_off') {
-        return onDelete ? (
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground size-8" aria-label={`Действия: ${unit.name}`}>
-                        <Ellipsis className="size-5!" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem onSelect={() => onDelete(unit)} className={dangerItem}>
-                        <Eraser />
-                        Удалить запись…
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-        ) : null;
+    if (unit.status !== 'written_off') {
+        if (unit.status === 'issued') {
+            if (can.take) moves.push({ kind: 'take', icon: ArrowDownToLine });
+        } else if (can.issue) {
+            moves.push({ kind: 'issue', icon: UserPlus });
+        }
+
+        if (can.write_off) moves.push({ kind: 'write-off', icon: Trash2 });
     }
 
-    if (!can('equipment.manage')) {
+    const removable = unit.status === 'written_off' && can.delete;
+
+    if (moves.length === 0 && !removable) {
         return null;
     }
-
-    const moves: { kind: AskedMove; icon: LucideIcon }[] = [
-        ...(unit.status === 'issued' ? [{ kind: 'take' as const, icon: ArrowDownToLine }] : [{ kind: 'issue' as const, icon: UserPlus }]),
-        { kind: 'write-off' as const, icon: Trash2 },
-    ];
 
     return (
         <DropdownMenu>
@@ -172,6 +174,13 @@ function RowActions({
                         {moveLabel[kind]}
                     </DropdownMenuItem>
                 ))}
+
+                {removable && (
+                    <DropdownMenuItem onSelect={() => onDelete(unit)} className={dangerItem}>
+                        <Eraser />
+                        Удалить запись…
+                    </DropdownMenuItem>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );
@@ -288,10 +297,45 @@ function buildColumns(options: Options): ColumnDef[] {
 
 const defaultView = (): ViewState => ({ hidden: [], pinned: { left: ['holder'], right: [] } });
 
-export default function EquipmentIndex({ equipment, filters, tab, sort, sortable, perPage, perPageOptions, counts, options, canEdit }: Props) {
-    const can = useCan();
-    const canJournal = can('equipment.journal');
-    const canDelete = can('equipment.delete');
+/**
+ * A short line above the table for a viewer who is not shown the whole fleet,
+ * so that a list of three units — or of none — reads as the part of it they
+ * were given rather than as something gone wrong.
+ */
+function narrowedTo(scopes: Scope[]): string | null {
+    if (scopes.includes('all')) return null;
+
+    const own = scopes.includes('own');
+    const department = scopes.includes('department');
+
+    if (own && department) return 'Здесь только ваша техника и техника вашего отдела — не весь фонд компании.';
+    if (department) return 'Здесь только техника вашего отдела — не весь фонд компании.';
+    if (own) return 'Здесь только техника, которая числится за вами, — не весь фонд компании.';
+
+    return null;
+}
+
+export default function EquipmentIndex({
+    equipment,
+    filters,
+    tab,
+    sort,
+    sortable,
+    perPage,
+    perPageOptions,
+    counts,
+    options,
+    can,
+    scopes,
+    journalScopes,
+}: Props) {
+    // The journal is open where at least one part of the fleet carries it.
+    const canJournal = journalScopes.length > 0;
+    // Whether there is anything at all to do with a row. Which item a row offers
+    // depends on where its unit is, so the column stays wherever one of them
+    // could come up, and goes for a viewer who only reads the list.
+    const actsOnRows = can.issue || can.take || can.write_off || can.delete;
+    const notice = narrowedTo(scopes);
     const columns = useMemo(() => buildColumns(options), [options]);
     const defaults = useMemo(defaultView, []);
     const { view, setView, pin, toggleHidden } = useTableView(
@@ -478,7 +522,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    {(canJournal || canEdit) && (
+                    {(canJournal || can.create) && (
                         <>
                             {canJournal && (
                                 <Button variant="outline" className="h-8" asChild>
@@ -489,7 +533,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                                 </Button>
                             )}
 
-                            {canEdit && (
+                            {can.create && (
                                 <Button className="h-8" asChild>
                                     <Link href={route('equipment.create')}>
                                         <Plus />
@@ -500,6 +544,9 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                         </>
                     )}
                 </div>
+
+                {/* Said once, above the table, rather than repeated on every empty tab. */}
+                {notice && <p className="text-muted-foreground text-[13px]">{notice}</p>}
 
                 <DataTable
                     columns={columns}
@@ -517,11 +564,7 @@ export default function EquipmentIndex({ equipment, filters, tab, sort, sortable
                     onPin={pin}
                     onHide={(key) => toggleHidden(key, true)}
                     lockedKey="holder"
-                    actions={
-                        canEdit || canDelete
-                            ? (unit) => <RowActions unit={unit} onAsk={setAsking} onDelete={canDelete ? setDeleting : undefined} />
-                            : undefined
-                    }
+                    actions={actsOnRows ? (unit) => <RowActions unit={unit} can={can} onAsk={setAsking} onDelete={setDeleting} /> : undefined}
                     empty="Ничего не найдено."
                     footer={
                         <>

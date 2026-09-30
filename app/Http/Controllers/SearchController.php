@@ -8,6 +8,7 @@ use App\Models\EquipmentType;
 use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
+use App\Support\EquipmentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,11 +49,11 @@ class SearchController extends Controller
         // it, a category opens the equipment list.
         $user = $request->user();
         $people = $user->can('employees.view');
-        $units = $user->can('equipment.view');
+        $units = EquipmentAccess::sees($user);
 
         return response()->json([
             'employees' => $people ? $this->employees($words) : [],
-            'equipment' => $units ? $this->equipment($words) : [],
+            'equipment' => $units ? $this->equipment($words, $user) : [],
             'departments' => Department::query()
                 ->where(fn (Builder $q) => $this->everyWord($q, $words, ['name']))
                 ->orderBy('name')
@@ -124,9 +125,12 @@ class SearchController extends Controller
      * @param  list<string>  $words
      * @return list<array<string, mixed>>
      */
-    private function equipment(array $words): array
+    private function equipment(array $words, User $user): array
     {
         $query = Equipment::query()->with(['type:id,name,icon', 'holder:id,name,surname']);
+        // Search is a way into the list, so it reaches no further than the list
+        // does: a unit one may not open must not surface as a result either.
+        EquipmentAccess::narrow($query, $user);
 
         foreach ($words as $word) {
             $like = "%{$word}%";

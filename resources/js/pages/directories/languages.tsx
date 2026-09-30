@@ -8,11 +8,12 @@ interface LanguageItem {
 }
 
 /** Languages employees speak, each with a level. */
-export default function Languages({ items }: { items: LanguageItem[] }) {
+export default function Languages({ items, canEdit }: { items: LanguageItem[]; canEdit: boolean }) {
     return (
         <DirectoriesLayout title="Языки">
             <DirectoryManager
                 items={items.map((item) => ({ id: item.id, label: item.name, users_count: item.users_count }))}
+                canEdit={canEdit}
                 field="name"
                 route="directories.languages"
                 labels={{ add: 'Добавить язык', create: 'Новый язык', edit: 'Изменить язык', accusative: 'язык' }}

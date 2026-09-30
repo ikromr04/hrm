@@ -1,7 +1,8 @@
-import { type CardFieldGroup } from '@/components/card-fields';
+import { type CardFieldGroup, type PlainRight } from '@/components/card-fields';
 import { DirectoryManager } from '@/components/directory-manager';
+import { type EquipmentScope } from '@/components/equipment-scopes';
 import DirectoriesLayout from '@/layouts/directories-layout';
-import { type AccessSection } from '@/lib/access';
+import { type AccessRight, type AccessSection } from '@/lib/access';
 
 interface RoleItem {
     id: number;
@@ -19,8 +20,14 @@ export default function Roles({
     sections,
     fields,
     profileFields,
+    equipmentScopes,
+    equipmentBlocks,
+    equipmentActions,
+    directoryLists,
+    directoryEdits,
     defaults,
     canManageAccess,
+    canEdit,
 }: {
     items: RoleItem[];
     sections: AccessSection[];
@@ -28,9 +35,21 @@ export default function Roles({
     fields: CardFieldGroup[];
     /** The same lines as the rights to one's own card, asked separately. */
     profileFields: CardFieldGroup[];
+    /** How much of the fleet the position sees, part by part, journals included. */
+    equipmentScopes: EquipmentScope[];
+    /** The blocks of a unit's card the position may change. */
+    equipmentBlocks: AccessRight[];
+    /** What the position does with a unit: balance, handover, write-off. */
+    equipmentActions: AccessRight[];
+    /** Which of the five reference lists the position opens, one right each. */
+    directoryLists: PlainRight[];
+    /** Which of the open ones it may also change; each depends on its viewing right. */
+    directoryEdits: PlainRight[];
     /** What a new position starts with, as the server defines it. */
     defaults: string[];
     canManageAccess: boolean;
+    /** Whether this list of positions is this person's to change. */
+    canEdit: boolean;
 }) {
     const byId = new Map(items.map((item) => [item.id, item]));
 
@@ -44,6 +63,7 @@ export default function Roles({
                     protected: item.protected,
                     permissions: item.permissions,
                 }))}
+                canEdit={canEdit}
                 field="title"
                 route="directories.roles"
                 labels={{ add: 'Добавить позицию', create: 'Новая позиция', edit: 'Изменить позицию', accusative: 'позицию' }}
@@ -53,6 +73,11 @@ export default function Roles({
                 rights={canManageAccess ? sections : undefined}
                 cardFields={canManageAccess ? fields : undefined}
                 profileFields={canManageAccess ? profileFields : undefined}
+                equipmentScopes={canManageAccess ? equipmentScopes : undefined}
+                equipmentBlocks={canManageAccess ? equipmentBlocks : undefined}
+                equipmentActions={canManageAccess ? equipmentActions : undefined}
+                directoryLists={canManageAccess ? directoryLists : undefined}
+                directoryEdits={canManageAccess ? directoryEdits : undefined}
                 defaultRights={defaults}
             />
         </DirectoriesLayout>

@@ -1,6 +1,7 @@
-import { CardFields, countCardFields, type CardFieldGroup, type CardFieldsMode } from '@/components/card-fields';
+import { CardFields, countCardFields, PlainRights, type CardFieldGroup, type CardFieldsMode, type PlainRight } from '@/components/card-fields';
 import { CategoryFieldsEditor } from '@/components/category-fields-editor';
 import { IconChip } from '@/components/equipment-icon';
+import { countEquipmentScopes, EquipmentScopes, type EquipmentScope } from '@/components/equipment-scopes';
 import InputError from '@/components/input-error';
 import { PeoplePicker, type PickablePerson } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
@@ -10,14 +11,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useCan, type AccessSection } from '@/lib/access';
+import { type AccessRight, type AccessSection } from '@/lib/access';
 import { type CategoryField, type FieldTypeOption } from '@/lib/equipment-fields';
 import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { Link, router, useForm } from '@inertiajs/react';
 import { LoaderCircle, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { useMemo, useState, type FormEventHandler } from 'react';
+import { useMemo, useState, type FormEventHandler, type ReactNode } from 'react';
 
 export interface DirectoryItem {
     id: number;
@@ -57,6 +58,13 @@ interface Labels {
 
 interface DirectoryManagerProps {
     items: DirectoryItem[];
+    /**
+     * Whether this list is this person's to change. Reading a directory and
+     * changing it are two different rights, and each of the five lists has its
+     * own pair of them, so the page that opened says which it is: without the
+     * second right the same table simply has no controls.
+     */
+    canEdit: boolean;
     /** Server field that holds the label. */
     field: 'title' | 'name';
     /** Route name prefix, e.g. "directories.roles". */
@@ -94,6 +102,34 @@ interface DirectoryManagerProps {
      * holding the record sees and may change on themselves (positions).
      */
     profileFields?: CardFieldGroup[];
+    /**
+     * When given, the dialog also chooses how much of the fleet the record sees
+     * — one's own, the department's, everything — and whose journal it reads
+     * (positions).
+     */
+    equipmentScopes?: EquipmentScope[];
+    /**
+     * When given, the dialog also chooses which blocks of a unit's card the
+     * record may change (positions).
+     */
+    equipmentBlocks?: AccessRight[];
+    /**
+     * When given, the dialog also chooses which moves the record makes with a
+     * unit — putting it on the balance, handing it over, writing it off
+     * (positions).
+     */
+    equipmentActions?: AccessRight[];
+    /**
+     * When given, the dialog also chooses which of the five reference lists the
+     * record opens (positions). "Справочники" is not one right but five, so the
+     * section is ticked list by list rather than as a whole.
+     */
+    directoryLists?: PlainRight[];
+    /**
+     * The same five lists again, but as the right to change them: each names the
+     * viewing right it depends on, so one cannot be ticked without the other.
+     */
+    directoryEdits?: PlainRight[];
     /** What a new record's fields start off as (equipment categories). */
     defaultFields?: CategoryField[];
     /** What a new record starts with, right by right (positions); from the server. */
@@ -133,6 +169,7 @@ function descendantIds(items: DirectoryItem[], id: number): Set<number> {
 
 export function DirectoryManager({
     items,
+    canEdit,
     field,
     route: routeName,
     labels,
@@ -146,11 +183,13 @@ export function DirectoryManager({
     defaultFields,
     cardFields,
     profileFields,
+    equipmentScopes,
+    equipmentBlocks,
+    equipmentActions,
+    directoryLists,
+    directoryEdits,
     defaultRights,
 }: DirectoryManagerProps) {
-    // Looking at a directory and changing it are two different rights, so the
-    // same list serves both: without the second one it simply has no controls.
-    const canEdit = useCan()('directories.manage');
     const [query, setQuery] = useState('');
     const [editing, setEditing] = useState<DirectoryItem | 'new' | null>(null);
     const [deleting, setDeleting] = useState<DirectoryItem | null>(null);
@@ -312,6 +351,11 @@ export function DirectoryManager({
                     defaultFields={defaultFields}
                     cardFields={cardFields}
                     profileFields={profileFields}
+                    equipmentScopes={equipmentScopes}
+                    equipmentBlocks={equipmentBlocks}
+                    equipmentActions={equipmentActions}
+                    directoryLists={directoryLists}
+                    directoryEdits={directoryEdits}
                     defaultRights={defaultRights}
                     onClose={() => setEditing(null)}
                 />
@@ -346,12 +390,35 @@ const cardScopeNotes: Record<string, string> = {
     profile: 'Речь о собственной карточке сотрудника этой позиции, а не о карточках коллег.',
 };
 
-/** What is left of the employee section once its lines are chosen above. */
+/** What is left of a section once the lists above have taken their part of it. */
 const sectionTitles: Record<string, string> = { employees: 'Действия с сотрудником' };
 
 const cardModes: CardFieldsMode[] = ['view', 'edit'];
 
-/** One list of card lines under a heading that counts what is chosen in it. */
+/** How much of a plain list of rights the position already holds. */
+const countRights = (rights: PlainRight[], held: string[]) => ({
+    chosen: rights.filter((right) => held.includes(right.key)).length,
+    total: rights.length,
+});
+
+/** One list of rights under a heading that counts what is chosen in it. */
+function RightsBlock({ title, note, chosen, total, children }: { title: string; note?: string; chosen: number; total: number; children: ReactNode }) {
+    return (
+        <div className="grid gap-1.5">
+            <p className={groupHeading}>
+                {title}
+                <span className="font-normal normal-case tabular-nums">
+                    {' · '}
+                    {chosen} из {total}
+                </span>
+            </p>
+            {note && <p className="text-muted-foreground text-[13px]">{note}</p>}
+            {children}
+        </div>
+    );
+}
+
+/** One list of card lines under such a heading. */
 function CardFieldsBlock({
     title,
     note,
@@ -367,20 +434,10 @@ function CardFieldsBlock({
     held: string[];
     onChange: (permissions: string[]) => void;
 }) {
-    const { chosen, total } = countCardFields(groups, held, mode);
-
     return (
-        <div className="grid gap-1.5">
-            <p className={groupHeading}>
-                {title}
-                <span className="font-normal normal-case tabular-nums">
-                    {' · '}
-                    {chosen} из {total}
-                </span>
-            </p>
-            {note && <p className="text-muted-foreground text-[13px]">{note}</p>}
+        <RightsBlock title={title} note={note} {...countCardFields(groups, held, mode)}>
             <CardFields mode={mode} groups={groups} held={held} onChange={onChange} />
-        </div>
+        </RightsBlock>
     );
 }
 
@@ -398,6 +455,11 @@ function EditorDialog({
     defaultFields,
     cardFields,
     profileFields,
+    equipmentScopes,
+    equipmentBlocks,
+    equipmentActions,
+    directoryLists,
+    directoryEdits,
     defaultRights,
     onClose,
 }: {
@@ -414,6 +476,11 @@ function EditorDialog({
     defaultFields?: CategoryField[];
     cardFields?: CardFieldGroup[];
     profileFields?: CardFieldGroup[];
+    equipmentScopes?: EquipmentScope[];
+    equipmentBlocks?: AccessRight[];
+    equipmentActions?: AccessRight[];
+    directoryLists?: PlainRight[];
+    directoryEdits?: PlainRight[];
     defaultRights?: string[];
     onClose: () => void;
 }) {
@@ -445,6 +512,26 @@ function EditorDialog({
             'permissions',
             form.data.permissions.includes(key) ? form.data.permissions.filter((held) => held !== key) : [...form.data.permissions, key],
         );
+
+    /**
+     * The same, for rights others lean on: closing a list takes the right to
+     * change it away as well. Left behind it would be a right that never answers
+     * yes — the dialog greys it out, and the save would drop it anyway.
+     */
+    const toggleDirectoryRight = (key: string) => {
+        if (!form.data.permissions.includes(key)) {
+            togglePermission(key);
+
+            return;
+        }
+
+        const dependent = (directoryEdits ?? []).filter((right) => right.requires?.key === key).map((right) => right.key);
+
+        form.setData(
+            'permissions',
+            form.data.permissions.filter((held) => held !== key && !dependent.includes(held)),
+        );
+    };
 
     // A head is a member too, listed once: new heads leave the member list,
     // former heads stay in the department as ordinary members.
@@ -552,8 +639,20 @@ function EditorDialog({
                                         {rights.map((section) => {
                                             const shown = section.rights.filter((right) => right.key !== viewRight);
                                             const groups = cardGroups[section.key];
+                                            // The fleet is opened part by part, and only here: nowhere
+                                            // else does a section keep its own list of scopes.
+                                            const scopes = section.key === 'equipment' ? equipmentScopes : undefined;
+                                            // The fleet keeps its rights in lists of its own too: the
+                                            // blocks of a unit's card, and the moves one makes with it.
+                                            const blocks = section.key === 'equipment' ? equipmentBlocks : undefined;
+                                            const actions = section.key === 'equipment' ? equipmentActions : undefined;
+                                            // The reference lists keep no rights of the section's own:
+                                            // all ten of them live in these two lists, read and change
+                                            // side by side.
+                                            const lists = section.key === 'directories' ? directoryLists : undefined;
+                                            const edits = section.key === 'directories' ? directoryEdits : undefined;
 
-                                            if (!groups && shown.length === 0) return null;
+                                            if (!groups && !scopes && !blocks && !actions && !lists && !edits && shown.length === 0) return null;
 
                                             return (
                                                 <div key={section.key} className="grid gap-4">
@@ -572,22 +671,73 @@ function EditorDialog({
                                                             />
                                                         ))}
 
+                                                    {/* Which units are visible decides what the actions
+                                                        below are about, so it is settled first. */}
+                                                    {scopes && (
+                                                        <RightsBlock
+                                                            title="Оборудование: что видно"
+                                                            {...countEquipmentScopes(scopes, form.data.permissions)}
+                                                        >
+                                                            <EquipmentScopes
+                                                                scopes={scopes}
+                                                                held={form.data.permissions}
+                                                                onChange={(permissions) => form.setData('permissions', permissions)}
+                                                            />
+                                                        </RightsBlock>
+                                                    )}
+
+                                                    {/* A unit's card is edited in blocks, the way a person's
+                                                        is edited line by line, so the blocks come next. */}
+                                                    {blocks && blocks.length > 0 && (
+                                                        <RightsBlock
+                                                            title="Оборудование: что можно менять"
+                                                            note="Карточка единицы правится блоками, и каждый блок — отдельное право: кто ведёт характеристики, не обязан трогать инвентаризацию."
+                                                            {...countRights(blocks, form.data.permissions)}
+                                                        >
+                                                            <PlainRights rights={blocks} held={form.data.permissions} onToggle={togglePermission} />
+                                                        </RightsBlock>
+                                                    )}
+
+                                                    {actions && actions.length > 0 && (
+                                                        <RightsBlock
+                                                            title="Оборудование: действия"
+                                                            note="Это операции над единицей, а не строки её карточки: где она стоит на балансе, у кого на руках и жива ли ещё."
+                                                            {...countRights(actions, form.data.permissions)}
+                                                        >
+                                                            <PlainRights rights={actions} held={form.data.permissions} onToggle={togglePermission} />
+                                                        </RightsBlock>
+                                                    )}
+
+                                                    {/* Which of the five lists open, and only then which of
+                                                        the open ones may be written in. */}
+                                                    {lists && lists.length > 0 && (
+                                                        <RightsBlock
+                                                            title="Справочники: что видно"
+                                                            note="Раздел собран из пяти списков, и каждый открывается сам по себе: должности ведёт кадровик, категории техники — тот, кто отвечает за парк."
+                                                            {...countRights(lists, form.data.permissions)}
+                                                        >
+                                                            <PlainRights
+                                                                rights={lists}
+                                                                held={form.data.permissions}
+                                                                onToggle={toggleDirectoryRight}
+                                                            />
+                                                        </RightsBlock>
+                                                    )}
+
+                                                    {edits && edits.length > 0 && (
+                                                        <RightsBlock
+                                                            title="Справочники: что можно менять"
+                                                            note="Менять можно только то, что видно: закрытый выше список здесь недоступен, а если закрыть его потом, право на изменение снимется вместе с ним."
+                                                            {...countRights(edits, form.data.permissions)}
+                                                        >
+                                                            <PlainRights rights={edits} held={form.data.permissions} onToggle={togglePermission} />
+                                                        </RightsBlock>
+                                                    )}
+
                                                     {shown.length > 0 && (
                                                         <div className="grid gap-1.5">
                                                             <p className={groupHeading}>{sectionTitles[section.key] ?? section.title}</p>
-                                                            {shown.map((right) => (
-                                                                <label key={right.key} className="flex items-start gap-2 text-sm">
-                                                                    <Checkbox
-                                                                        checked={form.data.permissions.includes(right.key)}
-                                                                        onCheckedChange={() => togglePermission(right.key)}
-                                                                        className="mt-0.5"
-                                                                    />
-                                                                    <span className="min-w-0">
-                                                                        <span>{right.title}</span>
-                                                                        <span className="text-muted-foreground block text-[13px]">{right.hint}</span>
-                                                                    </span>
-                                                                </label>
-                                                            ))}
+                                                            <PlainRights rights={shown} held={form.data.permissions} onToggle={togglePermission} />
                                                         </div>
                                                     )}
                                                 </div>

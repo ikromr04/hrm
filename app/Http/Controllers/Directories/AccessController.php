@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Support\Access;
+use App\Support\Directories;
 use App\Support\EmployeeFields;
+use App\Support\EquipmentAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -41,6 +43,17 @@ class AccessController extends Controller
             // The same lines asked about one's own card, which is a different set
             // of rights and a column of its own.
             'profileFields' => EmployeeFields::tree(EmployeeFields::OWN),
+            // How much of the fleet a position sees, which is three answers and
+            // a journal apiece rather than a column.
+            'equipmentScopes' => EquipmentAccess::tree(),
+            // And what it may change there: the blocks of a card, and the moves
+            // one makes on a unit rather than on a line of it.
+            'equipmentBlocks' => EquipmentAccess::blockTree(),
+            'equipmentActions' => EquipmentAccess::actionTree(),
+            // The reference lists, one right each: five lists kept by different
+            // people, and changing one takes being able to read it.
+            'directoryLists' => Directories::viewTree(),
+            'directoryEdits' => Directories::editTree(),
             'roles' => $roles->map(fn (Role $role) => [
                 'id' => $role->id,
                 'name' => $role->name,

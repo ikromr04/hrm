@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Support\Directories;
 use App\Support\EmployeeFields;
+use App\Support\EquipmentAccess;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -56,6 +58,22 @@ class AppServiceProvider extends ServiceProvider
                     EmployeeFields::editableBy($user, $employee),
                 ) !== [],
             );
+        }
+
+        // The equipment section is open to whoever sees any part of the fleet,
+        // and its journal to whoever reads any part of that.
+        Gate::define('equipment.view.any', fn (User $user) => EquipmentAccess::sees($user));
+        Gate::define('equipment.journal.any', fn (User $user) => EquipmentAccess::readsJournal($user));
+
+        // The directories are five lists behind one door: the door opens for
+        // whoever may read any of them, and each list then answers for itself.
+        Gate::define('directories.view.any', fn (User $user) => Directories::sees($user));
+
+        // Changing a list takes reading it as well. The pair is a gate of its own
+        // because the bare right would pass on its own — a permission answers
+        // before any gate of the same name would.
+        foreach (array_keys(Directories::LISTS) as $list) {
+            Gate::define("directories.manage.{$list}", fn (User $user) => Directories::canEdit($user, $list));
         }
 
         // A photograph belongs to no block of the card, and adding a colleague is

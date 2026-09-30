@@ -20,17 +20,21 @@ export default function Equipment({
     icons,
     fieldTypes,
     defaultFields,
+    canEdit,
 }: {
     items: EquipmentTypeItem[];
     icons: string[];
     fieldTypes: FieldTypeOption[];
     /** What a new category starts off with, so nobody types these out again. */
     defaultFields: CategoryField[];
+    /** Whether this list of categories is this person's to change. */
+    canEdit: boolean;
 }) {
     return (
         <DirectoriesLayout title="Категории техники">
             <DirectoryManager
                 items={items.map((item) => ({ ...item, label: item.name }))}
+                canEdit={canEdit}
                 icons={icons}
                 // A monitor has a diagonal and no processor: what the units of a
                 // category are described by is decided here, category by category.

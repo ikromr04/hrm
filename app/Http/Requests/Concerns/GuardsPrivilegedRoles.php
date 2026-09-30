@@ -83,7 +83,14 @@ trait GuardsPrivilegedRoles
         }
     }
 
-    /** Whoever is making the change, and whether they may decide on access. */
+    /**
+     * Whether the change is being made by a system administrator.
+     *
+     * Appointing an administrator is not the same duty as filling in the access
+     * table, and it stays with the role rather than with a right: an
+     * administrator holds every right there is, and could otherwise promote a
+     * colleague or strip whoever appointed them.
+     */
     private function bySysadmin(): bool
     {
         return (bool) $this->user()?->hasRole('sysadmin');

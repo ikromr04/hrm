@@ -40,8 +40,8 @@ class DirectoriesTest extends TestCase
         $this->assertSame(0, Position::count());
 
         // The rights travel with every page, keyed the way they are named.
-        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.manage'] === false));
-        $this->actingAs($this->admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.manage'] === true));
+        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.edit.positions'] === false));
+        $this->actingAs($this->admin)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.can', fn ($can) => $can['directories.edit.positions'] === true));
     }
 
     public function test_admin_sees_each_directory_with_employee_counts()

@@ -1,7 +1,7 @@
 import { CategoryChip } from '@/components/equipment-icon';
 import { PersonAvatar } from '@/components/person-avatar';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { useCan } from '@/lib/access';
+import { readsEquipmentJournal, seesDirectories, seesEquipment, useCan } from '@/lib/access';
 import { type EquipmentStatus, statusLabel } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
@@ -121,10 +121,14 @@ export function GlobalSearch() {
                 { label: 'Главная', href: '/dashboard', icon: LayoutGrid },
                 ...(can('employees.view') ? [{ label: 'Сотрудники', href: '/employees', icon: Users }] : []),
                 { label: 'Структура компании', href: '/departments', icon: Network },
-                ...(can('equipment.view') ? [{ label: 'Оборудование', href: '/equipment', icon: Laptop }] : []),
-                // The journal keeps to whoever manages the fleet, as the page does.
-                ...(can('equipment.journal') ? [{ label: 'Журнал операций', href: '/equipment/journal', icon: History }] : []),
-                ...(can('directories.view') ? [{ label: 'Справочники', href: '/directories', icon: BookMarked }] : []),
+                // Any part of the fleet — own, the department's or all of it — opens the section.
+                ...(seesEquipment(can) ? [{ label: 'Оборудование', href: '/equipment', icon: Laptop }] : []),
+                // The journal opens for whoever may read it on any part of the fleet;
+                // the page itself shows only the entries of that part.
+                ...(readsEquipmentJournal(can) ? [{ label: 'Журнал операций', href: '/equipment/journal', icon: History }] : []),
+                // One of the five lists is enough: the section opens on the first
+                // one its viewer may read.
+                ...(seesDirectories(can) ? [{ label: 'Справочники', href: '/directories', icon: BookMarked }] : []),
                 { label: 'Настройки', href: '/settings', icon: Settings },
             ] as const,
         [can],

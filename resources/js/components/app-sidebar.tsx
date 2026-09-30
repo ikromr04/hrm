@@ -1,7 +1,7 @@
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { useCan, type Permission } from '@/lib/access';
+import { seesDirectories, seesEquipment, useCan, type Permission } from '@/lib/access';
 import { type SidebarNavGroup } from '@/types';
 import { Link } from '@inertiajs/react';
 import { BarChart3, BookMarked, Briefcase, CalendarDays, Laptop, LayoutGrid, Network, Users } from 'lucide-react';
@@ -14,7 +14,8 @@ const navGroups = (can: (permission: Permission) => boolean): SidebarNavGroup[] 
             { title: 'Главная', url: '/dashboard', icon: LayoutGrid },
             ...(can('employees.view') ? [{ title: 'Сотрудники', url: '/employees', icon: Users }] : []),
             { title: 'Структура компании', url: '/departments', icon: Network },
-            ...(can('equipment.view') ? [{ title: 'Оборудование', url: '/equipment', icon: Laptop }] : []),
+            // Any part of the fleet — own, the department's or all of it — opens the section.
+            ...(seesEquipment(can) ? [{ title: 'Оборудование', url: '/equipment', icon: Laptop }] : []),
             { title: 'Отпуска', icon: CalendarDays },
         ],
     },
@@ -36,8 +37,9 @@ export function AppSidebar() {
         // doors to one room, and among company-wide entries settings would
         // read as something they are not.
         items: [
-            // Only shown to people who may look at positions, roles and departments.
-            ...(can('directories.view') ? [{ title: 'Справочники', url: '/directories', icon: BookMarked }] : []),
+            // One list open is enough for the door: /directories lands on the
+            // first one this person may read.
+            ...(seesDirectories(can) ? [{ title: 'Справочники', url: '/directories', icon: BookMarked }] : []),
         ],
     };
 

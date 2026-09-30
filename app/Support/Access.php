@@ -46,13 +46,12 @@ final class Access
         'employees.fire' => ['Увольнение', 'Уволить сотрудника и восстановить уволенного.'],
         'employees.delete' => ['Удаление', 'Удалить сотрудника вместе со всем, что на него записано.'],
 
-        'equipment.view' => ['Просмотр', 'Список техники и карточки единиц.'],
-        'equipment.manage' => ['Изменение', 'Постановка на баланс, выдача, возврат, списание, обслуживание.'],
-        'equipment.journal' => ['Журнал операций', 'Что происходило с техникой за период.'],
-        'equipment.delete' => ['Удаление', 'Снятие единицы с учёта вместе с её журналом.'],
+        // У оборудования обычных прав нет вовсе: просмотр — это три области со
+        // своими журналами, изменение — блоки карточки, действия — операции над
+        // единицей. Всё это живёт в App\Support\EquipmentAccess.
 
-        'directories.view' => ['Просмотр', 'Позиции, должности, отделы, языки и категории техники.'],
-        'directories.manage' => ['Изменение', 'Добавление, переименование и удаление записей справочников.'],
+        // У справочников обычных прав тоже нет: это пять отдельных списков, и
+        // каждый открывается и меняется сам по себе (App\Support\Directories).
     ];
 
     /**
@@ -62,7 +61,7 @@ final class Access
      *
      * @var list<string>
      */
-    public const DEFAULTS = ['employees.view', 'equipment.view'];
+    public const DEFAULTS = ['employees.view', 'equipment.view.own'];
 
     /**
      * The same, with the fields a card used to show any colleague: a position is
@@ -84,7 +83,12 @@ final class Access
      */
     public static function keys(): array
     {
-        return [...array_keys(self::PERMISSIONS), ...EmployeeFields::permissions()];
+        return [
+            ...array_keys(self::PERMISSIONS),
+            ...EmployeeFields::permissions(),
+            ...EquipmentAccess::permissions(),
+            ...Directories::permissions(),
+        ];
     }
 
     /**

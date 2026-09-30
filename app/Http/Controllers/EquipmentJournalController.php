@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\EquipmentEvent;
 use App\Models\EquipmentType;
 use App\Models\User;
+use App\Support\EquipmentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -52,6 +53,9 @@ class EquipmentJournalController extends Controller
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
         $query = EquipmentEvent::query()
+            // Only what happened to units this person may see: a journal is a list
+            // of units by another name.
+            ->tap(fn (Builder $q) => EquipmentAccess::narrowJournal($q, $request->user()))
             ->with(['user:id,name,surname,avatar', 'equipment:id,name,inventory_number,equipment_type_id', 'equipment.type:id,name,icon', 'photos'])
             ->when($from, fn (Builder $q, Carbon $at) => $q->where('created_at', '>=', $at))
             ->when($to, fn (Builder $q, Carbon $at) => $q->where('created_at', '<=', $at))
@@ -105,8 +109,11 @@ class EquipmentJournalController extends Controller
             'perPageOptions' => self::PER_PAGE_OPTIONS,
             'options' => [
                 'types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
+                // Whom the filter offers: only people who turn up in entries this
+                // viewer may read. A name in the list is itself an answer about
+                // units they cannot see.
                 'actors' => User::query()
-                    ->whereHas('equipmentEvents')
+                    ->whereHas('equipmentEvents', fn (Builder $q) => EquipmentAccess::narrowJournal($q, $request->user()))
                     ->orderBy('surname')
                     ->orderBy('name')
                     ->get(['id', 'name', 'surname'])

@@ -10,6 +10,7 @@ use App\Models\EquipmentField;
 use App\Models\EquipmentPhoto;
 use App\Models\EquipmentType;
 use App\Models\User;
+use App\Support\EquipmentAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -83,6 +84,9 @@ class EquipmentController extends Controller
         $perPage = (int) ($input['per_page'] ?? self::PER_PAGE_OPTIONS[0]);
 
         $query = Equipment::query()->with(['type:id,name,icon', 'type.fields', 'fieldValues', 'holder:id,name,surname,avatar']);
+        // Whatever the tabs and filters then do, the list starts from the part of
+        // the fleet this person may see at all.
+        EquipmentAccess::narrow($query, $request->user());
         $query->withExists(['repairs as repairs_exists' => fn (Builder $q) => $q->whereNull('ended_at')]);
         $query->when($tab === 'service', fn (Builder $q) => $q->underService())
             ->when(! in_array($tab, ['all', 'service'], true), fn (Builder $q) => $q->where('status', $tab));
@@ -122,7 +126,7 @@ class EquipmentController extends Controller
             'sortable' => self::SORTS,
             'perPage' => $perPage,
             'perPageOptions' => self::PER_PAGE_OPTIONS,
-            'counts' => $this->counts(),
+            'counts' => $this->counts($request->user()),
             'options' => [
                 'types' => EquipmentType::query()->orderBy('name')->get(['id', 'name']),
                 'statuses' => collect(Equipment::STATUSES)->map(fn (string $s) => ['value' => $s, 'label' => self::STATUS_LABELS[$s]])->all(),
@@ -134,7 +138,13 @@ class EquipmentController extends Controller
                     ->get(['id', 'name', 'surname'])
                     ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
             ],
-            'canEdit' => $request->user()->can('equipment.manage'),
+            // Which blocks and moves this person may make. Every row on the page
+            // is a unit they already see, so the rights alone decide it here.
+            'can' => EquipmentAccess::allowed($request->user()),
+            // Which parts of the fleet are open, so the page can say what it is
+            // showing and offer the journal only where it is readable.
+            'scopes' => EquipmentAccess::viewScopes($request->user()),
+            'journalScopes' => EquipmentAccess::journalScopes($request->user()),
         ]);
     }
 
@@ -318,7 +328,9 @@ class EquipmentController extends Controller
             // The ids the journal kept, read back as the names behind them.
             'names' => EquipmentEvent::namesFor($equipment->events),
             // Everything that has happened to this one unit, newest first.
-            'events' => $equipment->events->map(fn ($event) => [
+            // The journal of this unit is a question of its own: one may hold a
+            // laptop and not be shown who had it before.
+            'events' => $request->user()->can('viewJournal', $equipment) ? $equipment->events->map(fn ($event) => [
                 'id' => $event->id,
                 'kind' => $event->kind,
                 'changes' => $event->diff ?? [],
@@ -334,7 +346,7 @@ class EquipmentController extends Controller
                     'url' => $photo->url,
                     'preview' => $photo->preview_url,
                 ]),
-            ]),
+            ]) : [],
             'holders' => User::query()
                 ->active()
                 ->orderBy('surname')
@@ -342,12 +354,16 @@ class EquipmentController extends Controller
                 ->get(['id', 'name', 'surname'])
                 ->map(fn (User $u) => ['id' => $u->id, 'name' => "{$u->surname} {$u->name}"]),
             // What the card's forms offer; only an editor needs any of it.
-            'types' => $request->user()->can('equipment.manage')
+            'types' => EquipmentAccess::edits($request->user())
                 ? EquipmentType::query()->with('fields')->orderBy('name')->get(['id', 'name', 'has_accessories'])
                     ->map(fn (EquipmentType $type) => self::categoryOption($type))
                 : [],
             'neighbours' => $this->neighbours($equipment),
-            'canEdit' => $request->user()->can('equipment.manage'),
+            // Block by block and move by move, asked of this very unit.
+            'can' => EquipmentAccess::allowed($request->user()),
+            // What happened to this unit is a question of its own, asked of this
+            // very unit: one may keep a laptop and not be shown its history.
+            'canReadJournal' => $request->user()->can('viewJournal', $equipment),
         ]);
     }
 
@@ -526,14 +542,17 @@ class EquipmentController extends Controller
      *
      * @return array<string, int>
      */
-    private function counts(): array
+    private function counts(User $viewer): array
     {
-        $byStatus = Equipment::query()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        // Counted over the same slice the list shows: a tab promising eleven
+        // units and opening on three would be worse than no number at all.
+        $seen = fn () => Equipment::query()->tap(fn (Builder $q) => EquipmentAccess::narrow($q, $viewer));
+        $byStatus = $seen()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
         return [
             'all' => (int) $byStatus->sum(),
             ...collect(Equipment::STATUSES)->mapWithKeys(fn (string $s) => [$s => (int) ($byStatus[$s] ?? 0)])->all(),
-            'service' => Equipment::query()->underService()->count(),
+            'service' => $seen()->underService()->count(),
         ];
     }
 }

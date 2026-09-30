@@ -58,7 +58,10 @@ class PermissionsTest extends TestCase
         $colleague = User::factory()->create()->assignRole('analyst');
 
         $this->assertTrue($colleague->can('employees.view'));
-        $this->assertTrue($colleague->can('equipment.view'));
+        // The fleet comes in parts, and a position starts with its own desk.
+        $this->assertTrue($colleague->can('equipment.view.own'));
+        $this->assertFalse($colleague->can('equipment.view.department'));
+        $this->assertFalse($colleague->can('equipment.view.all'));
         // The structure of the company needs no right at all.
         $this->assertTrue($colleague->can('employees.view'));
 
@@ -68,13 +71,13 @@ class PermissionsTest extends TestCase
         $this->assertTrue($colleague->can('employees.field.positions'));
         $this->assertFalse($colleague->can('employees.field.home_address'));
         $this->assertFalse($colleague->can('employees.field.passport_number'));
-        $this->assertFalse($colleague->can('equipment.journal'));
-        $this->assertFalse($colleague->can('directories.view'));
+        $this->assertFalse($colleague->can('equipment.journal.own'));
+        $this->assertFalse($colleague->can('directories.view.positions'));
     }
 
     public function test_a_right_opens_the_page_it_names_and_only_that_page()
     {
-        $this->actingAs($this->withRights('equipment.view', 'equipment.journal'));
+        $this->actingAs($this->withRights('equipment.view.all', 'equipment.journal.all'));
 
         $this->get('/equipment')->assertOk();
         $this->get('/equipment/journal')->assertOk();
@@ -87,12 +90,12 @@ class PermissionsTest extends TestCase
 
     public function test_reading_a_directory_and_changing_it_are_separate_rights()
     {
-        $reader = $this->withRights('directories.view');
+        $reader = $this->withRights('directories.view.positions');
 
-        $this->actingAs($reader)->get('/directories/roles')->assertOk();
+        $this->actingAs($reader)->get('/directories/positions')->assertOk();
         $this->actingAs($reader)->post('/directories/positions', ['name' => 'Хакер'])->assertForbidden();
 
-        $editor = $this->withRights('directories.view', 'directories.manage');
+        $editor = $this->withRights('directories.view.positions', 'directories.edit.positions');
         $this->actingAs($editor)->post('/directories/positions', ['name' => 'Аналитик данных'])->assertRedirect();
     }
 
@@ -113,11 +116,11 @@ class PermissionsTest extends TestCase
 
     public function test_a_right_given_to_one_person_beats_their_position()
     {
-        $colleague = $this->withRights('employees.view');
+        $colleague = $this->withRights('employees.view', 'equipment.view.all');
 
         $this->actingAs($colleague)->get('/equipment/journal')->assertForbidden();
 
-        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'equipment.journal', 'allowed' => true]);
+        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'equipment.journal.all', 'allowed' => true]);
 
         $this->actingAs($colleague->fresh())->get('/equipment/journal')->assertOk();
     }
@@ -146,7 +149,7 @@ class PermissionsTest extends TestCase
         }
     }
 
-    public function test_only_a_system_administrator_opens_the_access_page()
+    public function test_the_access_page_is_a_directory_like_any_other()
     {
         $role = Role::findByName('analyst');
 
@@ -159,13 +162,22 @@ class PermissionsTest extends TestCase
                 ->where('roles', fn ($roles) => collect($roles)->firstWhere('name', 'admin')['everything'] === true)
             );
 
-        // Not even an administrator, who holds every right there is.
+        // An administrator holds every right there is, this one included.
         $this->actingAs(User::factory()->create()->assignRole('admin'))
             ->get('/directories/access')
+            ->assertOk();
+
+        // A position gets it the way it gets any other list, and reading the table
+        // is not deciding what is in it.
+        $reader = $this->withRights('directories.view.access');
+        $this->actingAs($reader)->get('/directories/access')->assertOk();
+        $this->actingAs($reader)
+            ->put("/directories/access/{$role->id}", ['permissions' => ['employees.view']])
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
-            ->put("/directories/access/{$role->id}", ['permissions' => ['employees.manage']])
+        // And without the right the page is somebody else's business.
+        $this->actingAs($this->withRights('directories.view.positions'))
+            ->get('/directories/access')
             ->assertForbidden();
     }
 
@@ -178,6 +190,11 @@ class PermissionsTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame(['employees.field.home_address', 'employees.view'], $role->fresh()->permissions->pluck('name')->sort()->values()->all());
+
+        // Changing the table takes the right for it, not merely reading it.
+        $this->actingAs($this->withRights('directories.view.access'))
+            ->put("/directories/access/{$role->id}", ['permissions' => []])
+            ->assertForbidden();
 
         // An unknown right is refused, and the access roles are not editable at
         // all: they answer yes to everything whatever the table holds.
@@ -196,25 +213,30 @@ class PermissionsTest extends TestCase
         $sysadmin = $this->sysadmin();
 
         $this->actingAs($sysadmin)
-            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal', 'allowed' => true])
+            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal.all', 'allowed' => true])
             ->assertRedirect();
-        $this->assertTrue($colleague->fresh()->can('equipment.journal'));
+        $this->assertTrue($colleague->fresh()->can('equipment.journal.all'));
 
         $this->actingAs($sysadmin)
-            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal', 'allowed' => false])
+            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal.all', 'allowed' => false])
             ->assertRedirect();
-        $this->assertFalse($colleague->fresh()->can('equipment.journal'));
+        $this->assertFalse($colleague->fresh()->can('equipment.journal.all'));
 
         // Nothing at all means "back to whatever the position says".
         $this->actingAs($sysadmin)
-            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal', 'allowed' => null])
+            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal.all', 'allowed' => null])
             ->assertRedirect();
         $this->assertSame(0, PermissionOverride::count());
-        $this->assertFalse($colleague->fresh()->can('equipment.journal'));
+        $this->assertFalse($colleague->fresh()->can('equipment.journal.all'));
 
-        // And it is the system administrator's to make.
+        // It takes the same right as the table itself: an administrator holds it,
+        // somebody who merely reads the table does not.
         $this->actingAs(User::factory()->create()->assignRole('admin'))
-            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal', 'allowed' => true])
+            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal.all', 'allowed' => true])
+            ->assertRedirect();
+
+        $this->actingAs($this->withRights('employees.view', 'directories.view.access'))
+            ->put("/employees/{$colleague->id}/access", ['permission' => 'equipment.journal.all', 'allowed' => true])
             ->assertForbidden();
     }
 
@@ -222,7 +244,7 @@ class PermissionsTest extends TestCase
     {
         $colleague = $this->withRights('employees.view', 'employees.field.home_address');
         PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'employees.field.home_address', 'allowed' => false]);
-        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'equipment.journal', 'allowed' => true]);
+        PermissionOverride::create(['user_id' => $colleague->id, 'permission' => 'equipment.journal.all', 'allowed' => true]);
 
         $right = fn (array $rights, string $key) => collect($rights)->firstWhere('key', $key);
 
@@ -231,11 +253,16 @@ class PermissionsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('access.everything', false)
                 ->where('access.rights', fn ($rights) => $right($rights->all(), 'employees.field.home_address') === ['key' => 'employees.field.home_address', 'position' => true, 'override' => false]
-                    && $right($rights->all(), 'equipment.journal') === ['key' => 'equipment.journal', 'position' => false, 'override' => true])
+                    && $right($rights->all(), 'equipment.journal.all') === ['key' => 'equipment.journal.all', 'position' => false, 'override' => true])
             );
 
-        // Nobody else is shown any of it, not even an administrator.
+        // Only whoever hands rights out is shown it: an administrator is, and a
+        // position that merely reads the staff is not.
         $this->actingAs(User::factory()->create()->assignRole('admin'))
+            ->get("/employees/{$colleague->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('access.everything', false));
+
+        $this->actingAs($this->withRights('employees.view'))
             ->get("/employees/{$colleague->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('access', null));
     }
@@ -253,11 +280,14 @@ class PermissionsTest extends TestCase
     public function test_a_position_is_created_with_its_rights_in_one_go()
     {
         $this->actingAs($this->sysadmin())
-            ->post('/directories/roles', ['title' => 'Кладовщик', 'permissions' => ['equipment.view', 'equipment.manage']])
+            ->post('/directories/roles', ['title' => 'Кладовщик', 'permissions' => ['equipment.view.all', 'equipment.issue', 'equipment.take']])
             ->assertRedirect();
 
         $role = Role::findByName('kladovschik');
-        $this->assertSame(['equipment.manage', 'equipment.view'], $role->permissions->pluck('name')->sort()->values()->all());
+        $this->assertSame(
+            ['equipment.issue', 'equipment.take', 'equipment.view.all'],
+            $role->permissions->pluck('name')->sort()->values()->all(),
+        );
     }
 
     public function test_a_position_created_without_a_word_about_rights_may_look_around()
@@ -287,10 +317,13 @@ class PermissionsTest extends TestCase
         $role = Role::findByName('analyst');
         $held = $role->permissions->pluck('name')->sort()->values()->all();
 
-        // An administrator renames positions all day; deciding what they open is
-        // not theirs, so a list sent by one changes nothing.
-        $this->actingAs(User::factory()->create()->assignRole('admin'))
-            ->put("/directories/roles/{$role->id}", ['title' => 'Аналитик данных', 'permissions' => ['directories.manage']])
+        // Whoever keeps the positions directory renames them all day; deciding
+        // what they open is a right of its own, so a list sent without it changes
+        // nothing.
+        $keeper = $this->withRights('directories.view.roles', 'directories.edit.roles');
+
+        $this->actingAs($keeper)
+            ->put("/directories/roles/{$role->id}", ['title' => 'Аналитик данных', 'permissions' => ['directories.edit.positions']])
             ->assertRedirect();
 
         $this->assertSame('Аналитик данных', $role->fresh()->title);
@@ -308,7 +341,13 @@ class PermissionsTest extends TestCase
                 ->where('items', fn ($items) => collect(collect($items)->firstWhere('name', 'analyst')['permissions'])->sort()->values()->all() === collect(Access::defaults())->sort()->values()->all())
             );
 
+        // An administrator holds every right, so the list is offered to them too;
+        // a position that only keeps the positions directory is not offered it.
         $this->actingAs(User::factory()->create()->assignRole('admin'))
+            ->get('/directories/roles')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('canManageAccess', true));
+
+        $this->actingAs($this->withRights('directories.view.roles'))
             ->get('/directories/roles')
             ->assertInertia(fn (AssertableInertia $page) => $page->where('canManageAccess', false));
     }
@@ -331,7 +370,7 @@ class PermissionsTest extends TestCase
 
     public function test_the_search_only_offers_what_the_viewer_may_open()
     {
-        $colleague = $this->withRights('equipment.view');
+        $colleague = $this->withRights('equipment.view.all');
         User::factory()->create(['surname' => 'Рахимов', 'name' => 'Фарход']);
 
         $this->actingAs($colleague)

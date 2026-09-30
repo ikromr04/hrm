@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Support\Access;
+use App\Support\Directories;
 use App\Support\EmployeeFields;
+use App\Support\EquipmentAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -32,11 +34,19 @@ class RoleController extends Controller
             // Which fields of a card the position reads, chosen in the same dialog.
             'fields' => EmployeeFields::tree(),
             'profileFields' => EmployeeFields::tree(EmployeeFields::OWN),
+            'equipmentScopes' => EquipmentAccess::tree(),
+            'equipmentBlocks' => EquipmentAccess::blockTree(),
+            'equipmentActions' => EquipmentAccess::actionTree(),
+            'directoryLists' => Directories::viewTree(),
+            'directoryEdits' => Directories::editTree(),
             // What a new position starts with, so the dialog offers the same set a
             // seeded position gets rather than a copy of it kept in the client.
             'defaults' => Access::defaults(),
-            'canManageAccess' => $request->user()->hasRole('sysadmin'),
+            'canManageAccess' => Directories::canEdit($request->user(), 'access'),
             // Counts match the employee list the number links to: working staff only.
+            // Reading a list and keeping it are two rights, so the page says
+            // which one it is looking at.
+            'canEdit' => Directories::canEdit($request->user(), 'roles'),
             'items' => Role::query()
                 ->with('permissions:id,name')
                 ->withCount(['users' => fn ($q) => $q->where('status', 'active')])
@@ -98,9 +108,9 @@ class RoleController extends Controller
             'permissions.*' => ['string', Rule::in(Access::keys())],
         ], attributes: ['title' => 'название', 'permissions' => 'доступы']);
 
-        // Deciding on access is the system administrator's; for anybody else the
-        // list is not so much refused as absent, and the rights stay as they are.
-        if (! $request->user()->hasRole('sysadmin')) {
+        // Deciding on access is its own right; for anybody without it the list
+        // is not so much refused as absent, and the rights stay as they are.
+        if (! Directories::canEdit($request->user(), 'access')) {
             unset($data['permissions']);
         }
 

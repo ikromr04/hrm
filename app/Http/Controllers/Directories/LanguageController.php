@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Directories;
 
 use App\Http\Controllers\Controller;
 use App\Models\Language;
+use App\Support\Directories;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,10 +16,13 @@ use Inertia\Response;
  */
 class LanguageController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('directories/languages', [
             // Counts match the employee list the number links to: working staff only.
+            // Reading a list and keeping it are two rights, so the page says
+            // which one it is looking at.
+            'canEdit' => Directories::canEdit($request->user(), 'languages'),
             'items' => Language::query()->withCount(['users' => fn ($q) => $q->where('status', 'active')])->orderBy('name')->get(['id', 'name']),
         ]);
     }

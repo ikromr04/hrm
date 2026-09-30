@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { useCan } from '@/lib/access';
+import { type EquipmentRights } from '@/lib/access';
 import { formatDate } from '@/lib/employee';
 import {
     eventLabel,
@@ -108,7 +108,10 @@ interface Props {
     /** Every category with its own fields, for the specs form. */
     types: CategoryOption[];
     neighbours: { prev: Neighbour; next: Neighbour };
-    canEdit: boolean;
+    /** Which blocks of this card and which moves are open; the server decided each one. */
+    can: EquipmentRights;
+    /** Whether the journal of this very unit may be read; without it `events` is empty. */
+    canReadJournal: boolean;
 }
 
 /** The unit before or after this one in the list; null at either end. */
@@ -122,12 +125,17 @@ const tabs = [
 
 type TabKey = (typeof tabs)[number]['key'];
 
-/** The open section rides in the URL hash, so a tab can be linked and survives a reload. */
-function useTab(): [TabKey, (key: TabKey) => void] {
+/**
+ * The open section rides in the URL hash, so a tab can be linked and survives a
+ * reload. Only the tabs this viewer has are answered to: a link to «#journal»
+ * handed to somebody who may not read it opens the card on «Обзор» instead of
+ * on a section that is not there.
+ */
+function useTab(shown: TabKey[]): [TabKey, (key: TabKey) => void] {
     const fromHash = () => {
         const key = window.location.hash.replace('#', '') as TabKey;
 
-        return tabs.some((tab) => tab.key === key) ? key : 'overview';
+        return shown.includes(key) ? key : 'overview';
     };
     const [tab, setTab] = useState<TabKey>(fromHash);
 
@@ -857,9 +865,11 @@ function narrowJournal(events: JournalEvent[], filters: JournalFilters): Journal
 
 /* ------------------------------------------------------------------------ page */
 
-export default function EquipmentShow({ unit, repairs, events, names, holders, types, neighbours, canEdit }: Props) {
-    const can = useCan();
-    const [tab, setTab] = useTab();
+export default function EquipmentShow({ unit, repairs, events, names, holders, types, neighbours, can, canReadJournal }: Props) {
+    // The journal of this unit is a section of its own, and only for those who
+    // may read it; the rest of the card stays as it was.
+    const shownTabs = useMemo(() => tabs.filter((item) => item.key !== 'journal' || canReadJournal), [canReadJournal]);
+    const [tab, setTab] = useTab(shownTabs.map((item) => item.key));
     const [asking, setAsking] = useState<AskedMove | null>(null);
     const [repairing, setRepairing] = useState(false);
     const [removing, setRemoving] = useState<Repair | null>(null);
@@ -924,14 +934,23 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
         { title: unit.name, href: route('equipment.show', unit.id) },
     ];
 
-    /** What a unit can be moved to next, given where it is now. */
-    const moves: { kind: AskedMove; icon: LucideIcon; danger?: boolean }[] =
-        unit.status === 'written_off'
-            ? []
-            : [
-                  ...(unit.status === 'issued' ? [{ kind: 'take' as const, icon: ArrowDownToLine }] : [{ kind: 'issue' as const, icon: UserPlus }]),
-                  { kind: 'write-off' as const, icon: Trash2, danger: true },
-              ];
+    /**
+     * What a unit can be moved to next, given where it is now and which of the
+     * moves this viewer holds: handing a unit over, taking it back and writing it
+     * off are three separate rights, so the group is built out of whichever of
+     * them are open and is left out entirely when none is.
+     */
+    const moves: { kind: AskedMove; icon: LucideIcon; danger?: boolean }[] = [];
+
+    if (unit.status !== 'written_off') {
+        if (unit.status === 'issued') {
+            if (can.take) moves.push({ kind: 'take', icon: ArrowDownToLine });
+        } else if (can.issue) {
+            moves.push({ kind: 'issue', icon: UserPlus });
+        }
+
+        if (can.write_off) moves.push({ kind: 'write-off', icon: Trash2, danger: true });
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -973,7 +992,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                 </div>
 
                 <nav aria-label="Разделы" className="scroll-soft flex gap-6 overflow-x-auto">
-                    {tabs.map((item) => (
+                    {shownTabs.map((item) => (
                         <button
                             key={item.key}
                             type="button"
@@ -996,7 +1015,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                         <div className="flex flex-col gap-4">
                             <Section
                                 title="Характеристики"
-                                action={canEdit && <EditButton what="характеристики" onClick={() => setEditing('specs')} />}
+                                action={can.specs && <EditButton what="характеристики" onClick={() => setEditing('specs')} />}
                             >
                                 <Fields>
                                     <Field label="Категория">
@@ -1022,7 +1041,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             {unit.accessories !== null && (
                                 <Section
                                     title="Комплектация"
-                                    action={canEdit && <EditButton what="комплектацию" onClick={() => setEditing('accessories')} />}
+                                    action={can.accessories && <EditButton what="комплектацию" onClick={() => setEditing('accessories')} />}
                                 >
                                     {unit.accessories.length === 0 ? (
                                         <p className="text-muted-foreground text-sm">Ничего не записано</p>
@@ -1080,7 +1099,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
 
                             <Section
                                 title="Инвентаризация"
-                                action={canEdit && <EditButton what="инвентаризацию" onClick={() => setEditing('state')} />}
+                                action={can.state && <EditButton what="инвентаризацию" onClick={() => setEditing('state')} />}
                             >
                                 <Fields columns={1}>
                                     <Field label="Текущее состояние">{unit.condition}</Field>
@@ -1091,10 +1110,10 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                 <Photos photos={lastPhotos} />
                             </Section>
 
-                            {canEdit && moves.length > 0 && <MoveGroup moves={moves} onPick={setAsking} />}
+                            {moves.length > 0 && <MoveGroup moves={moves} onPick={setAsking} />}
 
                             {/* Written off and nowhere left to go: only striking it off remains. */}
-                            {can('equipment.delete') && unit.status === 'written_off' && (
+                            {can.delete && unit.status === 'written_off' && (
                                 <Button
                                     variant="outline"
                                     className="border-[#F5C9C4] text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
@@ -1112,7 +1131,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                     <Section
                         title="Обслуживание"
                         action={
-                            canEdit &&
+                            can.service &&
                             unit.status !== 'written_off' && (
                                 <Button variant="outline" size="sm" onClick={() => setRepairing(true)}>
                                     <Plus />
@@ -1136,7 +1155,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                         <td className="px-6 py-2.5">{repair.note ?? dash}</td>
                                         <td className="px-6 py-2.5">{repair.photos.length > 0 ? <Photos photos={repair.photos} /> : dash}</td>
                                         <td className="py-2.5 pr-6 text-right">
-                                            {canEdit && (
+                                            {can.service && (
                                                 <div className="flex items-center justify-end gap-1">
                                                     {/* Until the work has an end date the unit counts as being looked after. */}
                                                     {repair.ended_at === null && (
