@@ -112,7 +112,7 @@ export function EquipmentScopesDialog({
 }) {
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="scroll-soft max-h-[85svh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Что видно в оборудовании: {subject}</DialogTitle>
                     <DialogDescription>Изменения сохраняются сразу.</DialogDescription>

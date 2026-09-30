@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { Check, ChevronLeft, ChevronRight, LoaderCircle, Plus, Trash2, UserPlus } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Options {
     roles: { name: string; title: string }[];
@@ -89,7 +89,7 @@ function Records<T>({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="text-muted-foreground -mr-2 size-7"
+                            className="text-muted-foreground -mr-2.5 size-9 lg:-mr-2 lg:size-7"
                             aria-label={`Убрать запись ${index + 1}`}
                             onClick={() => onRemove(index)}
                         >
@@ -165,6 +165,18 @@ export default function CreateEmployee({ options }: { options: Options }) {
     const today = new Date().toISOString().slice(0, 10);
     const [step, setStep] = useState(0);
     const [employee, setEmployee] = useState<NewEmployee | null>(null);
+
+    // Below lg the steps are a strip that scrolls sideways; the open one is
+    // brought into it, or on a phone the fourth step would open out of sight.
+    const strip = useRef<HTMLOListElement>(null);
+    useEffect(() => {
+        const list = strip.current;
+        const item = list?.children[step] as HTMLElement | undefined;
+
+        if (!list || !item || list.scrollWidth <= list.clientWidth) return;
+
+        list.scrollTo({ left: item.offsetLeft - list.offsetLeft - 8, behavior: 'smooth' });
+    }, [step]);
 
     const main = useForm({
         surname: '',
@@ -400,10 +412,13 @@ export default function CreateEmployee({ options }: { options: Options }) {
                     </Button>
                 </div>
 
-                <div className="grid gap-5 lg:grid-cols-[18rem_1fr] lg:items-start">
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[18rem_1fr] lg:items-start">
                     {/* The road ahead: what is done, where you are, what is left. */}
                     <Card className="flex flex-col gap-1 rounded-xl p-3">
-                        <ol className="flex flex-col gap-0.5">
+                        <ol
+                            ref={strip}
+                            className="flex gap-0.5 overflow-x-auto [scrollbar-width:none] lg:flex-col lg:overflow-visible [&::-webkit-scrollbar]:hidden"
+                        >
                             {steps.map((item, index) => {
                                 const done = index < step;
                                 const current = index === step;
@@ -414,7 +429,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                 const reachable = employee !== null;
 
                                 return (
-                                    <li key={item.title}>
+                                    <li key={item.title} className="shrink-0">
                                         <button
                                             type="button"
                                             disabled={!reachable && !current}
@@ -440,10 +455,12 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                 {done ? <Check className="size-3.5" /> : index + 1}
                                             </span>
                                             <span className="flex min-w-0 flex-col">
-                                                <span className={cn('truncate text-sm', current ? 'font-semibold' : 'font-medium')}>
+                                                <span
+                                                    className={cn('text-sm whitespace-nowrap lg:truncate', current ? 'font-semibold' : 'font-medium')}
+                                                >
                                                     {item.title}
                                                 </span>
-                                                <span className="text-muted-foreground truncate text-[13px]">{item.note}</span>
+                                                <span className="text-muted-foreground hidden truncate text-[13px] lg:block">{item.note}</span>
                                             </span>
                                         </button>
                                     </li>
@@ -452,7 +469,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                         </ol>
                     </Card>
 
-                    <Card className="rounded-xl p-6">
+                    <Card className="rounded-xl p-4 sm:p-6">
                         {/* noValidate: the server's rules are the real ones. */}
                         <form
                             noValidate
@@ -460,7 +477,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                 event.preventDefault();
                                 next(step === steps.length - 1 ? 'profile' : 'next');
                             }}
-                            className="flex flex-col gap-6"
+                            className="@container flex flex-col gap-6"
                         >
                             <div className="flex flex-col gap-1">
                                 <h2 className="text-base font-semibold">{steps[step].title}</h2>
@@ -469,7 +486,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 0 && (
                                 <div className="flex flex-col gap-4">
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="Фамилия" error={main.errors.surname}>
                                             <Input
                                                 value={main.data.surname}
@@ -493,7 +510,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="E-mail" error={main.errors.email}>
                                             <Input
                                                 type="email"
@@ -526,7 +543,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="Место рождения" error={main.errors.birth_place}>
                                             <Input
                                                 value={main.data.birth_place}
@@ -563,7 +580,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="Начало работы" error={main.errors.hired_at}>
                                             <Input
                                                 type="date"
@@ -574,7 +591,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                             />
                                         </Field>
                                         {/* An address is longer than a date, so it takes the other two. */}
-                                        <Field label="Домашний адрес" error={main.errors.home_address} className="sm:col-span-2">
+                                        <Field label="Домашний адрес" error={main.errors.home_address} className="@min-[22rem]:col-span-2">
                                             <Input
                                                 value={main.data.home_address}
                                                 onChange={(event) => main.setData('home_address', event.target.value)}
@@ -583,7 +600,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="Позиция" error={at(main.errors, 'roles')}>
                                             <MultiSelect
                                                 options={options.roles.map((role) => ({
@@ -618,7 +635,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 1 && (
                                 <div className="flex flex-col gap-6">
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="Телефон" error={contacts.errors.phone}>
                                             <Input
                                                 value={contacts.data.phone}
@@ -654,9 +671,9 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         )}
 
                                         {languages.data.languages.map((spoken, index) => (
-                                            <div key={index} className="flex items-center gap-2">
+                                            <div key={index} className="flex flex-wrap items-center gap-2 @min-[30rem]:flex-nowrap">
                                                 <SearchableSelect
-                                                    className="flex-1"
+                                                    className="min-w-0 grow basis-full @min-[30rem]:basis-0"
                                                     invalid={!!at(languages.errors, `languages.${index}.id`)}
                                                     value={spoken.id}
                                                     onChange={(value) =>
@@ -676,7 +693,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                     empty="Язык не найден"
                                                 />
                                                 <SearchableSelect
-                                                    className="w-48"
+                                                    className="min-w-0 flex-1 @min-[30rem]:w-48 @min-[30rem]:flex-none"
                                                     invalid={!!at(languages.errors, `languages.${index}.level`)}
                                                     value={spoken.level}
                                                     onChange={(value) =>
@@ -725,7 +742,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 2 && (
                                 <div className="flex flex-col gap-6">
-                                    <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <div className="grid grid-cols-2 gap-3">
                                             <Field label="Серия паспорта" error={passport.errors.passport_series}>
                                                 <Input
@@ -762,7 +779,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 border-t pt-6 sm:grid-cols-3">
+                                    <div className="grid gap-4 border-t pt-6 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                         <Field label="Семейное положение" error={family.errors.marital_status}>
                                             <SearchableSelect
                                                 value={family.data.marital_status}
@@ -790,7 +807,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     </div>
 
                                     {family.data.marital_status === 'married' && (
-                                        <div className="flex items-end gap-2">
+                                        <div className="flex flex-col gap-4 @min-[22rem]:flex-row @min-[22rem]:items-end @min-[22rem]:gap-2">
                                             <Field label="ФИО супруга" className="flex-1" error={family.errors.spouse_name}>
                                                 <Input
                                                     value={family.data.spouse_name}
@@ -813,10 +830,10 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     {family.data.has_children === 'yes' && (
                                         <div className="flex flex-col gap-3">
                                             {family.data.children.map((child, index) => (
-                                                <div key={index} className="flex items-end gap-2">
+                                                <div key={index} className="flex flex-wrap items-end gap-2 @min-[22rem]:flex-nowrap">
                                                     <Field
                                                         label="ФИО ребёнка"
-                                                        className="flex-1"
+                                                        className="min-w-0 grow basis-full @min-[22rem]:basis-0"
                                                         error={at(family.errors, `children.${index}.full_name`)}
                                                     >
                                                         <Input
@@ -832,7 +849,11 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                                             aria-invalid={!!at(family.errors, `children.${index}.full_name`)}
                                                         />
                                                     </Field>
-                                                    <Field label="Дата рождения" error={at(family.errors, `children.${index}.birth_date`)}>
+                                                    <Field
+                                                        label="Дата рождения"
+                                                        className="min-w-0 flex-1 @min-[22rem]:flex-none"
+                                                        error={at(family.errors, `children.${index}.birth_date`)}
+                                                    >
                                                         <Input
                                                             type="date"
                                                             max={today}
@@ -892,10 +913,10 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     onRemove={(index) => dropRecord(educations, index)}
                                 >
                                     {(record, index) => (
-                                        <div className="grid gap-4 sm:grid-cols-3">
+                                        <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                             <Field
                                                 label="Учебное заведение"
-                                                className="sm:col-span-2"
+                                                className="@min-[22rem]:col-span-2"
                                                 error={at(educations.errors, `records.${index}.institution`)}
                                             >
                                                 <Input
@@ -913,7 +934,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                             </Field>
                                             <Field
                                                 label="Факультет"
-                                                className="sm:col-span-2"
+                                                className="@min-[22rem]:col-span-2"
                                                 error={at(educations.errors, `records.${index}.faculty`)}
                                             >
                                                 <Input
@@ -965,7 +986,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     onRemove={(index) => dropRecord(jobs, index)}
                                 >
                                     {(record, index) => (
-                                        <div className="grid gap-4 sm:grid-cols-3">
+                                        <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
                                             <Field label="Организация" error={at(jobs.errors, `records.${index}.organization`)}>
                                                 <Input
                                                     value={record.organization}
@@ -1025,8 +1046,8 @@ export default function CreateEmployee({ options }: { options: Options }) {
                             )}
 
                             {step === 5 && (
-                                <div className="grid gap-4 sm:grid-cols-3">
-                                    <Field label="Что выдаём" className="sm:col-span-2" error={at(equipment.errors, 'equipment')}>
+                                <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <Field label="Что выдаём" className="@min-[22rem]:col-span-2" error={at(equipment.errors, 'equipment')}>
                                         <MultiSelect
                                             options={options.stock.map((unit) => ({
                                                 value: unit.id,
@@ -1052,13 +1073,13 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                 </div>
                             )}
 
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-5">
+                            <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                                 <Button type="button" variant="outline" disabled={step === 0 || busy} onClick={() => setStep(step - 1)}>
                                     <ChevronLeft />
                                     Назад
                                 </Button>
 
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap">
                                     {/*
                                      * Filing a whole intake: save this step and start the next
                                      * colleague straight away. From the first step it is the quick

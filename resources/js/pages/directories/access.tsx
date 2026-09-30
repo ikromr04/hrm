@@ -323,7 +323,7 @@ export default function AccessPage({
     return (
         <DirectoriesLayout title="Доступы">
             <div className="-mb-2 flex flex-wrap items-center gap-2">
-                <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-8 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
+                <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
                     <Search className="size-4 shrink-0" />
                     <span className="sr-only">Поиск</span>
                     <input
@@ -340,14 +340,22 @@ export default function AccessPage({
             </div>
 
             <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
-                <div className="overflow-auto md:min-h-0 md:flex-1">
+                {/*
+                 * Below md the page scrolls as a whole, so the table is given a
+                 * height of its own: without it the header row would have no box
+                 * to stick to, and a phone scrolling down twenty positions would
+                 * lose the names of the columns.
+                 */}
+                <div className="max-h-[75svh] overflow-auto md:max-h-none md:min-h-0 md:flex-1">
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-sidebar sticky top-0 z-20 shadow-[0_1px_0_var(--border)]">
                             <tr className="text-muted-foreground text-left text-[13px]">
                                 <th
                                     scope="col"
                                     rowSpan={2}
-                                    className="bg-sidebar sticky left-0 z-30 min-w-56 px-6 py-3 font-semibold shadow-[1px_0_0_var(--border)]"
+                                    // Narrower on a phone: at 320px a column of 224px would leave the
+                                    // counters a strip too thin to scroll through.
+                                    className="bg-sidebar sticky left-0 z-30 min-w-36 px-3 py-3 font-semibold shadow-[1px_0_0_var(--border)] md:min-w-56 md:px-6"
                                 >
                                     Позиция
                                 </th>
@@ -366,7 +374,8 @@ export default function AccessPage({
                                 {sections.flatMap((section) =>
                                     columnsOf(section).map((column, index) => (
                                         <th
-                                            key={column.key}
+                                            // «Просмотр» and «Изменение» appear under several sections.
+                                            key={`${section.key}.${column.key}`}
                                             scope="col"
                                             className={cn('px-2 pb-2.5 align-bottom font-medium', column.width, index === 0 && 'border-l')}
                                         >
@@ -391,7 +400,7 @@ export default function AccessPage({
                                         // The tint of a hovered row has to be opaque here: this cell
                                         // stands still while the table scrolls under it, and a
                                         // see-through background shows the counters passing behind.
-                                        className="bg-background sticky left-0 z-10 px-6 py-2.5 text-left font-normal shadow-[1px_0_0_var(--border)] group-hover:bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))]"
+                                        className="bg-background sticky left-0 z-10 px-3 py-2.5 text-left font-normal shadow-[1px_0_0_var(--border)] group-hover:bg-[color-mix(in_oklab,var(--muted)_40%,var(--background))] md:px-6"
                                     >
                                         <span className="flex items-center gap-2">
                                             <span>{role.title}</span>
@@ -590,7 +599,12 @@ export default function AccessPage({
 
                             {visible.length === 0 && (
                                 <tr className="border-t">
-                                    <td colSpan={columnCount + 1} className="text-muted-foreground px-6 py-12 text-center">
+                                    <td
+                                        colSpan={columnCount + 1}
+                                        // The row spans the whole width of the table, so on a phone a
+                                        // centred line would sit somewhere off to the right.
+                                        className="text-muted-foreground px-3 py-12 text-left md:px-6 md:text-center"
+                                    >
                                         Ничего не найдено.
                                     </td>
                                 </tr>

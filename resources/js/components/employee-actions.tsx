@@ -78,7 +78,7 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
             {variant === 'menu' ? (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground size-8" aria-label={`Действия: ${name}`}>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground size-9 lg:size-8" aria-label={`Действия: ${name}`}>
                             <Ellipsis className="size-5!" />
                         </Button>
                     </DropdownMenuTrigger>
@@ -96,7 +96,8 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
                 </DropdownMenu>
             ) : (
                 // One segmented control: shared borders, rounded only at the ends.
-                // The labels drop their "…" here, where every pixel of width counts.
+                // The labels drop their "…" here, where every pixel of width counts;
+                // on a phone the icon goes above the label so the words stay whole.
                 <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border">
                     {actions.map(({ key, label, Icon, disabled, run }, index) => (
                         <button
@@ -105,7 +106,7 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
                             disabled={disabled}
                             onClick={run}
                             className={cn(
-                                'hover:bg-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50',
+                                'hover:bg-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:text-xs lg:py-2',
                                 index > 0 && 'border-l',
                                 key === 'delete' && 'text-[#B42318] dark:text-[#F7A19A]',
                             )}

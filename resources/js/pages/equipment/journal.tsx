@@ -231,29 +231,32 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                 <h1 className="text-xl font-semibold tracking-tight">Журнал операций</h1>
 
                 <div className="-mb-2 flex flex-wrap items-center gap-2">
-                    <Input
-                        type="date"
-                        aria-label="Период с"
-                        value={from}
-                        max={to || undefined}
-                        onChange={(event) => setFrom(event.target.value)}
-                        onBlur={() => from !== (filters.from ?? '') && visit({ filters: { from: from || null } })}
-                        className="h-8 w-40"
-                    />
+                    {/* The period keeps to one line: on a phone its two boxes share the width. */}
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
+                        <Input
+                            type="date"
+                            aria-label="Период с"
+                            value={from}
+                            max={to || undefined}
+                            onChange={(event) => setFrom(event.target.value)}
+                            onBlur={() => from !== (filters.from ?? '') && visit({ filters: { from: from || null } })}
+                            className="h-10 min-w-0 flex-1 sm:w-40 sm:flex-none lg:h-8"
+                        />
 
-                    <span className="text-muted-foreground text-sm">–</span>
+                        <span className="text-muted-foreground text-sm">–</span>
 
-                    <Input
-                        type="date"
-                        aria-label="Период по"
-                        value={to}
-                        min={from || undefined}
-                        onChange={(event) => setTo(event.target.value)}
-                        onBlur={() => to !== (filters.to ?? '') && visit({ filters: { to: to || null } })}
-                        className="h-8 w-40"
-                    />
+                        <Input
+                            type="date"
+                            aria-label="Период по"
+                            value={to}
+                            min={from || undefined}
+                            onChange={(event) => setTo(event.target.value)}
+                            onBlur={() => to !== (filters.to ?? '') && visit({ filters: { to: to || null } })}
+                            className="h-10 min-w-0 flex-1 sm:w-40 sm:flex-none lg:h-8"
+                        />
+                    </div>
 
-                    <div className="flex gap-1">
+                    <div className="grid w-full grid-cols-4 gap-1 sm:flex sm:w-auto">
                         {[
                             { days: 7, label: 'Неделя' },
                             { days: 30, label: 'Месяц' },
@@ -264,7 +267,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                                 key={preset.days}
                                 variant={inForce(preset.days) ? 'default' : 'outline'}
                                 aria-pressed={inForce(preset.days)}
-                                className="h-8"
+                                className="h-10 min-w-0 px-2 sm:px-4 lg:h-8"
                                 onClick={() => period(preset.days)}
                             >
                                 {preset.label}
@@ -275,7 +278,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                     {activeFilters > 0 && (
                         <Button
                             variant="ghost"
-                            className="h-8"
+                            className="h-10 lg:h-8"
                             onClick={() => {
                                 // The boxes empty with it, or they would keep
                                 // showing a period that is no longer in force.
@@ -293,7 +296,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="ml-auto h-8 font-normal">
+                            <Button variant="outline" className="h-10 font-normal sm:ml-auto lg:h-8">
                                 <Columns3 />
                                 Колонки
                                 <ChevronDown className="text-muted-foreground" />
@@ -325,7 +328,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button variant="outline" className="h-8" asChild>
+                    <Button variant="outline" className="h-10 lg:h-8" asChild>
                         <Link href={route('equipment.index')}>К списку оборудования</Link>
                     </Button>
                 </div>

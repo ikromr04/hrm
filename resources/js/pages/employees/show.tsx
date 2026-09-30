@@ -152,7 +152,9 @@ function useTab(available: readonly TabKey[]): [TabKey, (key: TabKey) => void] {
 
 function Tabs({ tabs, active, onChange }: { tabs: readonly { key: TabKey; title: string }[]; active: TabKey; onChange: (key: TabKey) => void }) {
     return (
-        <nav aria-label="Разделы профиля" className="mt-3 flex flex-wrap gap-x-6 gap-y-1">
+        // One strip that scrolls sideways on a phone: wrapped, the underline of the
+        // open tab would sit between two rows and read as belonging to neither.
+        <nav aria-label="Разделы профиля" className="mt-1 flex gap-x-6 overflow-x-auto [scrollbar-width:none] lg:mt-3 [&::-webkit-scrollbar]:hidden">
             {tabs.map((tab) => (
                 <button
                     key={tab.key}
@@ -160,7 +162,7 @@ function Tabs({ tabs, active, onChange }: { tabs: readonly { key: TabKey; title:
                     onClick={() => onChange(tab.key)}
                     aria-current={tab.key === active ? 'page' : undefined}
                     className={cn(
-                        'shrink-0 border-b-2 px-1 pb-2.5 text-sm transition-colors',
+                        'shrink-0 border-b-2 px-1 pt-2 pb-2.5 text-sm whitespace-nowrap transition-colors lg:pt-0',
                         tab.key === active
                             ? 'border-brand text-foreground font-semibold'
                             : 'text-muted-foreground hover:text-foreground border-transparent font-medium',
@@ -223,7 +225,7 @@ function AccessSection({ employee, access }: { employee: Employee; access: Acces
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="text-muted-foreground -mr-2 size-7"
+                            className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                             aria-label="Настроить доступы"
                             onClick={() => setOpen(true)}
                         >
@@ -279,41 +281,51 @@ function AccessSection({ employee, access }: { employee: Employee; access: Acces
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="scroll-soft -mx-6 max-h-[60vh] overflow-y-auto px-6">
-                        {access.sections.map((section) => (
-                            <div key={section.key} className="border-t py-3 first:border-t-0 first:pt-0">
-                                <p className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">{section.title}</p>
-                                <ul className="grid gap-2">
-                                    {section.rights.map((right) => {
-                                        const state = access.rights.find((row) => row.key === right.key);
-                                        const value = state?.override === true ? 'yes' : state?.override === false ? 'no' : 'position';
+                    <div className="scroll-soft -mx-4 max-h-[60vh] overflow-y-auto px-4 sm:-mx-6 sm:px-6">
+                        {/* Sections kept list by list (fields, equipment, directories) have no single right to override here. */}
+                        {access.sections
+                            .filter((section) => section.rights.length > 0)
+                            .map((section) => (
+                                <div key={section.key} className="border-t py-3 first:border-t-0 first:pt-0">
+                                    <p className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">{section.title}</p>
+                                    <ul className="grid gap-2">
+                                        {section.rights.map((right) => {
+                                            const state = access.rights.find((row) => row.key === right.key);
+                                            const value = state?.override === true ? 'yes' : state?.override === false ? 'no' : 'position';
 
-                                        return (
-                                            <li key={right.key} className="flex flex-wrap items-center justify-between gap-2">
-                                                <span className="min-w-0">
-                                                    <span className="text-sm">{right.title}</span>
-                                                    <span className="text-muted-foreground block text-xs">
-                                                        {state?.position ? 'Позиция даёт этот доступ' : 'Позиция этот доступ не даёт'}
+                                            return (
+                                                <li key={right.key} className="flex flex-wrap items-center justify-between gap-2">
+                                                    <span className="min-w-0">
+                                                        <span className="text-sm">{right.title}</span>
+                                                        <span className="text-muted-foreground block text-xs">
+                                                            {state?.position ? 'Позиция даёт этот доступ' : 'Позиция этот доступ не даёт'}
+                                                        </span>
                                                     </span>
-                                                </span>
-                                                <ToggleGroup
-                                                    type="single"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    value={value}
-                                                    onValueChange={(next) => next && set(right.key, next === 'position' ? null : next === 'yes')}
-                                                    aria-label={right.title}
-                                                >
-                                                    <ToggleGroupItem value="position">По позиции</ToggleGroupItem>
-                                                    <ToggleGroupItem value="yes">Разрешить</ToggleGroupItem>
-                                                    <ToggleGroupItem value="no">Запретить</ToggleGroupItem>
-                                                </ToggleGroup>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            </div>
-                        ))}
+                                                    <ToggleGroup
+                                                        className="w-full sm:w-auto"
+                                                        type="single"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        value={value}
+                                                        onValueChange={(next) => next && set(right.key, next === 'position' ? null : next === 'yes')}
+                                                        aria-label={right.title}
+                                                    >
+                                                        <ToggleGroupItem value="position" className={toggleItem}>
+                                                            По позиции
+                                                        </ToggleGroupItem>
+                                                        <ToggleGroupItem value="yes" className={toggleItem}>
+                                                            Разрешить
+                                                        </ToggleGroupItem>
+                                                        <ToggleGroupItem value="no" className={toggleItem}>
+                                                            Запретить
+                                                        </ToggleGroupItem>
+                                                    </ToggleGroup>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            ))}
                     </div>
 
                     <DialogFooter>
@@ -326,6 +338,9 @@ function AccessSection({ employee, access }: { employee: Employee; access: Acces
         </>
     );
 }
+
+/** On a phone the three choices split the row between them; from `sm` they sit at their own width. */
+const toggleItem = 'h-auto min-h-8 flex-1 px-1 text-xs whitespace-nowrap sm:flex-none sm:px-2.5 sm:text-sm';
 
 /** The "Основные данные" card in a form; sex sits on the user, the rest on the details. */
 function PersonalDialog({
@@ -382,7 +397,7 @@ function PersonalDialog({
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: the browser's own bubbles would pre-empt the server, whose
                     rules are the real ones; its messages show under each field instead. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
@@ -601,13 +616,16 @@ function PersonalDialog({
 const paneGrid = 'grid gap-4 md:min-h-0 md:flex-1 lg:grid-cols-[1fr_24rem]';
 
 /** One scrolling column of that area; scroll-soft keeps its bar out of sight until needed. */
-const pane = 'scroll-soft flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto';
+const pane = 'scroll-soft flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overflow-y-auto';
 
 /**
  * Contacts are dialled and written to, so they carry the brand colour and an
  * icon rather than looking like the plain text of the fields around them.
  */
 const contactLink = 'text-brand-strong flex items-center gap-1.5 hover:underline dark:text-[#C5E27A]';
+
+/** A badge that may break onto a second line rather than run off a phone screen. */
+const wrappingBadge = 'h-auto min-h-[22px] max-w-full py-0.5 whitespace-normal';
 
 /** The spouse of a man is "Супруга", of a woman "Супруг". */
 const spouseLabel = (sex: Sex) => (sex === 'male' ? 'Супруга' : 'Супруг');
@@ -628,7 +646,7 @@ function PassportDialog({ employee, details, onClose }: { employee: Employee; de
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -719,7 +737,7 @@ function ContactsDialog({ employee, details, onClose }: { employee: Employee; de
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -879,7 +897,7 @@ function LanguagesDialog({ employee, options, onClose }: { employee: Employee; o
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -892,7 +910,7 @@ function LanguagesDialog({ employee, options, onClose }: { employee: Employee; o
 
                         {form.data.languages.map((language, index) => (
                             <div key={index} className="flex items-start gap-2">
-                                <div className="grid flex-1 grid-cols-[1fr_9.5rem] gap-2">
+                                <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[1fr_9.5rem]">
                                     <div className="flex flex-col gap-1">
                                         <Select value={String(language.id)} onValueChange={(value) => setLanguage(index, { id: Number(value) })}>
                                             <SelectTrigger aria-label="Язык">
@@ -1009,7 +1027,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -1089,7 +1107,7 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                         {!noChildren &&
                             form.data.children.map((child, index) => (
                                 <div key={index} className="flex items-start gap-2">
-                                    <div className="grid flex-1 gap-x-4 gap-y-2 sm:grid-cols-[1fr_10rem]">
+                                    <div className="grid min-w-0 flex-1 gap-x-4 gap-y-2 sm:grid-cols-[1fr_10rem]">
                                         <div className="grid content-start gap-2">
                                             <Label htmlFor={`family-child-${index}`} className="sr-only">
                                                 ФИО ребёнка
@@ -1190,7 +1208,7 @@ function EducationDialog({ employee, education, onClose }: { employee: Employee;
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -1329,7 +1347,7 @@ function WorkExperienceDialog({
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="overflow-y-auto sm:max-h-[90vh] sm:max-w-lg">
                 {/* noValidate: see PersonalDialog — the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -1381,7 +1399,7 @@ function WorkExperienceDialog({
 
                         <div className="grid content-start gap-2">
                             <Label htmlFor="job-started-month">Вступление</Label>
-                            <div className="grid grid-cols-[1fr_6rem] gap-2">
+                            <div className="grid grid-cols-[1fr_4.5rem] gap-2 sm:grid-cols-[1fr_6rem]">
                                 <Select value={form.data.started_month} onValueChange={(value) => form.setData('started_month', value)}>
                                     <SelectTrigger id="job-started-month" aria-label="Месяц вступления">
                                         <SelectValue placeholder="Месяц" />
@@ -1411,7 +1429,7 @@ function WorkExperienceDialog({
 
                         <div className="grid content-start gap-2">
                             <Label htmlFor="job-ended-month">Уход</Label>
-                            <div className="grid grid-cols-[1fr_6rem] gap-2">
+                            <div className="grid grid-cols-[1fr_4.5rem] gap-2 sm:grid-cols-[1fr_6rem]">
                                 {/* Clearing the month clears the year too: half a date means nothing. */}
                                 <Select
                                     value={form.data.ended_month || 'none'}
@@ -1537,11 +1555,11 @@ function Section({
     }
 
     return (
-        <Card className={cn('flex flex-col gap-4 rounded-xl px-6 py-5', className)}>
+        <Card className={cn('flex flex-col gap-4 rounded-xl px-4 py-5 sm:px-6', className)}>
             {title && (
                 // Flush to the card's edges, so the strip reads as its header.
-                <div className="bg-muted/60 -mx-6 -mt-5 flex min-h-11 items-center justify-between gap-3 rounded-t-xl border-b px-6 py-2">
-                    <h2 className="text-base font-semibold">{title}</h2>
+                <div className="bg-muted/60 -mx-4 -mt-5 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-t-xl border-b px-4 py-2 sm:-mx-6 sm:px-6">
+                    <h2 className="min-w-0 text-base font-semibold">{title}</h2>
                     {action}
                 </div>
             )}
@@ -1646,9 +1664,18 @@ function ProfileFields({ visible, editable, children }: { visible: string[]; edi
  * order on the page would not be the order the card is written in.
  */
 function Fields({ children, columns }: { children: ReactNode; columns?: 1 | 2 }) {
-    const fixed = { 1: 'grid-cols-1', 2: 'grid-cols-1 sm:grid-cols-2' } as const;
+    const fixed = { 1: 'grid-cols-1', 2: 'grid-cols-2' } as const;
 
-    return <dl className={cn('grid gap-x-6 gap-y-4', columns ? fixed[columns] : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3')}>{children}</dl>;
+    // Counted from the card's own width rather than the window's: from `lg` the
+    // main column shares the row with the sidebar, and with the menu open a
+    // 1024px screen leaves it too narrow for three.
+    return (
+        <div className="@container">
+            <dl className={cn('grid gap-x-6 gap-y-4', columns ? fixed[columns] : 'grid-cols-1 @min-[22rem]:grid-cols-2 @min-[28rem]:grid-cols-3')}>
+                {children}
+            </dl>
+        </div>
+    );
 }
 
 /** One line of a card. Named after a field, it disappears when that is hidden. */
@@ -1713,7 +1740,7 @@ function Educations({
         <ul className="flex flex-col">
             {items.map((education) => (
                 <li key={education.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words">
                         <span className="text-sm font-medium">{education.institution}</span>
                         <span className="text-sm">
                             {education.faculty} · {education.specialty}
@@ -1734,13 +1761,13 @@ function Educations({
 function RowActions({ onEdit, onDelete, what }: { onEdit: () => void; onDelete: () => void; what: string }) {
     return (
         <div className="flex shrink-0 gap-1">
-            <Button variant="ghost" size="icon" className="text-muted-foreground size-7" aria-label={`Изменить ${what}`} onClick={onEdit}>
+            <Button variant="ghost" size="icon" className="text-muted-foreground size-9 lg:size-7" aria-label={`Изменить ${what}`} onClick={onEdit}>
                 <Pencil className="size-4" />
             </Button>
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-7 text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
+                className="size-9 text-[#B42318] hover:text-[#B42318] lg:size-7 dark:text-[#F7A19A]"
                 aria-label={`Удалить ${what}`}
                 onClick={onDelete}
             >
@@ -1774,7 +1801,7 @@ function WorkExperiences({
         <ul className="flex flex-col">
             {items.map((job) => (
                 <li key={job.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words">
                         <span className="text-sm font-medium">{job.position}</span>
                         <span className="text-sm">
                             {job.organization} · {job.country}
@@ -1838,7 +1865,7 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
         <ul className="flex flex-col">
             {items.map((unit) => (
                 <li key={unit.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words">
                         {/* The unit's own card is a matter of the fleet, not of this card. */}
                         {unit.open ? (
                             <Link href={route('equipment.show', unit.id)} className="text-sm font-medium hover:underline">
@@ -1949,7 +1976,7 @@ function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: 
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    className="absolute right-0 bottom-0 size-8 rounded-full shadow-sm"
+                                    className="absolute right-0 bottom-0 size-9 rounded-full shadow-sm lg:size-8"
                                     aria-label="Изменить фотографию"
                                 >
                                     <Camera className="size-4" />
@@ -2012,7 +2039,14 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
         const back = Icon === ChevronLeft;
 
         return (
-            <Button variant="outline" disabled={!to} aria-label={to ? `${label}: ${to.name}` : label} title={to?.name} asChild={!!to}>
+            <Button
+                variant="outline"
+                className="flex-1 px-3 sm:flex-none sm:px-4"
+                disabled={!to}
+                aria-label={to ? `${label}: ${to.name}` : label}
+                title={to?.name}
+                asChild={!!to}
+            >
                 {to ? (
                     <Link href={href(to)} prefetch>
                         {back && <Icon />}
@@ -2031,7 +2065,7 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
     };
 
     return (
-        <div className="flex gap-1">
+        <div className="flex w-full gap-1 sm:w-auto">
             {arrow(prev, 'Предыдущий', ChevronLeft)}
             {arrow(next, 'Следующий', ChevronRight)}
         </div>
@@ -2106,7 +2140,7 @@ export default function EmployeeProfile({
 
                 {/* The header and tabs stay put; each column below scrolls on its own. */}
                 <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                    <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:items-end">
+                    <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:flex-wrap sm:items-end">
                         {/* The photograph is a line of the card: closed, it says so, and
                         changing it takes that line rather than the right to change
                         anything at all. */}
@@ -2116,11 +2150,15 @@ export default function EmployeeProfile({
                             <LockedFace />
                         )}
 
-                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:min-w-64">
                             <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="text-xl font-semibold tracking-tight">{fullName}</h1>
+                                <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{fullName}</h1>
                                 {employee.status !== 'active' && (
-                                    <StatusBadge tone={employee.status === 'fired' ? 'danger' : 'warning'} title={employee.status_note ?? undefined}>
+                                    <StatusBadge
+                                        tone={employee.status === 'fired' ? 'danger' : 'warning'}
+                                        title={employee.status_note ?? undefined}
+                                        className={wrappingBadge}
+                                    >
                                         {[
                                             employee.status === 'fired'
                                                 ? employee.sex === 'female'
@@ -2146,12 +2184,12 @@ export default function EmployeeProfile({
                             {((employee.roles ?? []).length > 0 || (employee.positions ?? []).length > 0) && (
                                 <div className="flex flex-wrap gap-2">
                                     {(employee.roles ?? []).map((title) => (
-                                        <StatusBadge key={title} tone="info">
+                                        <StatusBadge key={title} tone="info" className={wrappingBadge}>
                                             {title}
                                         </StatusBadge>
                                     ))}
                                     {(employee.positions ?? []).map((title) => (
-                                        <StatusBadge key={title} tone="success">
+                                        <StatusBadge key={title} tone="success" className={wrappingBadge}>
                                             {title}
                                         </StatusBadge>
                                     ))}
@@ -2160,9 +2198,9 @@ export default function EmployeeProfile({
 
                             <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm">
                                 {employee.email && (
-                                    <a href={`mailto:${employee.email}`} className={contactLink}>
-                                        <Mail className="size-4" />
-                                        {employee.email}
+                                    <a href={`mailto:${employee.email}`} className={cn(contactLink, 'max-w-full min-w-0')}>
+                                        <Mail className="size-4 shrink-0" />
+                                        <span className="truncate">{employee.email}</span>
                                     </a>
                                 )}
                                 {details?.phone && (
@@ -2175,7 +2213,7 @@ export default function EmployeeProfile({
                         </div>
 
                         {neighbours !== null && (
-                            <div className="flex items-center gap-2 self-start sm:self-end">
+                            <div className="flex items-center gap-2 self-stretch sm:self-end">
                                 <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
                             </div>
                         )}
@@ -2287,7 +2325,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать основные данные"
                                                     onClick={() => setEditing('personal')}
                                                 >
@@ -2349,7 +2387,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать паспорт"
                                                     onClick={() => setEditing('passport')}
                                                 >
@@ -2383,7 +2421,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать семью"
                                                     onClick={() => setEditing('family')}
                                                 >
@@ -2454,7 +2492,7 @@ export default function EmployeeProfile({
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="text-muted-foreground -my-1 size-6 shrink-0"
+                                                            className="text-muted-foreground -my-2.5 size-9 shrink-0 lg:-my-1 lg:size-6"
                                                             aria-label="Редактировать начало работы"
                                                             onClick={() => setEditing('employment')}
                                                         >
@@ -2477,7 +2515,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать знание языков"
                                                     onClick={() => setEditing('languages')}
                                                 >
@@ -2501,7 +2539,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать контакты"
                                                     onClick={() => setEditing('contacts')}
                                                 >
@@ -2533,7 +2571,9 @@ export default function EmployeeProfile({
 
                                     {access && <AccessSection employee={employee} access={access} />}
 
-                                    {canEdit && (
+                                    {/* Nobody transfers, fires or deletes themselves, so on one's own
+                                    card the row would be three disabled buttons and nothing else. */}
+                                    {canEdit && !isSelf && (
                                         <EmployeeActions
                                             variant="group"
                                             isSelf={isSelf}
@@ -2563,7 +2603,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать основные данные"
                                                     onClick={() => setEditing('personal')}
                                                 >
@@ -2599,7 +2639,7 @@ export default function EmployeeProfile({
                                         </Fields>
                                     </Section>
 
-                                    <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-6 py-5 text-sm">
+                                    <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-4 py-5 text-sm sm:px-6">
                                         <Lock className="mt-0.5 size-5 shrink-0" />
                                         {/* Who exactly sees them is no longer a sentence to write down:
                                         it is whatever the access page says, line by line. */}
@@ -2618,7 +2658,7 @@ export default function EmployeeProfile({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="text-muted-foreground -mr-2 size-7"
+                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
                                                     aria-label="Редактировать знание языков"
                                                     onClick={() => setEditing('languages')}
                                                 >

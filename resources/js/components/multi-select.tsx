@@ -50,18 +50,18 @@ export function MultiSelect<T extends string | number>({
                         <li
                             key={option.value}
                             className={cn(
-                                'bg-muted flex items-center gap-1 rounded-md py-0.5 pl-2 text-sm',
+                                'bg-muted flex max-w-full min-w-0 items-center gap-1 rounded-md py-0.5 pl-2 text-sm',
                                 disabled ? 'pr-2' : 'pr-0.5',
                                 chipClassName,
                             )}
                         >
-                            {option.label}
+                            <span className="min-w-0 break-words">{option.label}</span>
                             {!disabled && (
                                 <button
                                     type="button"
                                     onClick={() => toggle(option.value)}
                                     aria-label={`Убрать: ${option.label}`}
-                                    className="rounded-sm p-0.5 opacity-60 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+                                    className="shrink-0 rounded-sm p-1.5 opacity-60 hover:bg-black/10 hover:opacity-100 lg:p-0.5 dark:hover:bg-white/10"
                                 >
                                     <X className="size-3.5" />
                                 </button>
@@ -101,7 +101,7 @@ export function MultiSelect<T extends string | number>({
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder={searchPlaceholder}
-                            className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-hidden"
+                            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-hidden lg:h-9"
                         />
                     </label>
                     <ul role="listbox" aria-multiselectable="true" className="max-h-64 overflow-y-auto p-1">
@@ -112,7 +112,7 @@ export function MultiSelect<T extends string | number>({
                                     role="option"
                                     aria-selected={value.includes(option.value)}
                                     onClick={() => toggle(option.value)}
-                                    className="hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+                                    className="hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-left text-sm lg:py-1.5"
                                 >
                                     <Check className={cn('size-4 shrink-0', value.includes(option.value) ? 'opacity-100' : 'opacity-0')} />
                                     <span className="truncate" style={term ? undefined : { paddingLeft: (option.depth ?? 0) * 16 }}>

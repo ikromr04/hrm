@@ -162,7 +162,7 @@ export function ColumnFilter({
                     {active && <span className="bg-brand absolute top-0.5 right-0.5 size-1.5 rounded-full" />}
                 </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className={cn('p-3', wide ? 'w-96' : 'w-64')}>
+            <PopoverContent align="start" className={cn('max-w-[calc(100vw-2rem)] p-3', wide ? 'w-96' : 'w-64')}>
                 <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-semibold">{column.label}</span>
                     {active && (

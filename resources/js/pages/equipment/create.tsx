@@ -37,8 +37,11 @@ const breadcrumbs: BreadcrumbItem[] = [
  */
 const row = 'grid gap-4 sm:grid-cols-2 lg:grid-cols-4';
 
-/** Half a box, which is all a date needs: two of them share one field's place. */
-const half = 'grid grid-cols-2 gap-3';
+/**
+ * Half a box, which is all a date needs: two of them share one field's place.
+ * The narrowest phones stack them, as two dates side by side would not fit.
+ */
+const half = 'grid gap-3 min-[360px]:grid-cols-2';
 
 /** A field worth two boxes: a long line of text or a list. */
 const wide = 'sm:col-span-2';
@@ -176,7 +179,7 @@ export default function CreateEquipment({ options }: Props) {
                     </Button>
                 </div>
 
-                <Card className="w-full rounded-xl p-6">
+                <Card className="w-full rounded-xl p-4 sm:p-6">
                     {/* noValidate: the server's rules are the real ones. */}
                     <form onSubmit={submit} noValidate className="flex flex-col gap-6">
                         <div className={row}>
@@ -319,7 +322,8 @@ export default function CreateEquipment({ options }: Props) {
                             )}
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-6">
+                        {/* A phone stacks the buttons at full width, the one that saves last. */}
+                        <div className="flex flex-col gap-2 border-t pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                             {filed.length > 0 && (
                                 <p className="text-muted-foreground mr-auto text-sm">
                                     Добавлено {filed.length}, последнее —{' '}

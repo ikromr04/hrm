@@ -161,8 +161,8 @@ function useTab(shown: TabKey[]): [TabKey, (key: TabKey) => void] {
 
 function Section({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
     return (
-        <Card className="flex flex-col gap-4 rounded-xl px-6 py-5">
-            <div className="bg-muted/60 -mx-6 -mt-5 flex min-h-11 items-center justify-between gap-3 rounded-t-xl border-b px-6 py-2">
+        <Card className="flex flex-col gap-4 rounded-xl px-4 py-4 sm:px-6 sm:py-5">
+            <div className="bg-muted/60 -mx-4 -mt-4 flex min-h-11 items-center justify-between gap-3 rounded-t-xl border-b px-4 py-2 sm:-mx-6 sm:-mt-5 sm:px-6">
                 <h2 className="text-base font-semibold">{title}</h2>
                 {action}
             </div>
@@ -199,7 +199,13 @@ const at = (errors: Record<string, string | undefined>, key: string) =>
 /** The pencil in a block's header strip, as on the employee's profile. */
 function EditButton({ what, onClick }: { what: string; onClick: () => void }) {
     return (
-        <Button variant="ghost" size="icon" className="text-muted-foreground -mr-2 size-7" aria-label={`Редактировать ${what}`} onClick={onClick}>
+        <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground -mr-2 size-9 lg:size-7"
+            aria-label={`Редактировать ${what}`}
+            onClick={onClick}
+        >
             <Pencil className="size-4" />
         </Button>
     );
@@ -231,7 +237,14 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
         const back = Icon === ChevronLeft;
 
         return (
-            <Button variant="outline" disabled={!to} aria-label={to ? `${label}: ${to.name}` : label} title={to?.name} asChild={!!to}>
+            <Button
+                variant="outline"
+                className="flex-1 sm:flex-none"
+                disabled={!to}
+                aria-label={to ? `${label}: ${to.name}` : label}
+                title={to?.name}
+                asChild={!!to}
+            >
                 {to ? (
                     <Link href={href(to)} prefetch>
                         {back && <Icon />}
@@ -250,7 +263,8 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
     };
 
     return (
-        <div className="flex gap-1">
+        // A row of its own on a phone, the two halves sharing it.
+        <div className="flex w-full gap-1 sm:w-auto">
             {arrow(prev, 'Предыдущее', ChevronLeft)}
             {arrow(next, 'Следующее', ChevronRight)}
         </div>
@@ -272,13 +286,14 @@ function MoveGroup({ moves, onPick }: { moves: { kind: AskedMove; icon: LucideIc
                     onClick={() => onPick(kind)}
                     title={moveLabel[kind]}
                     className={cn(
-                        'hover:bg-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden',
+                        'hover:bg-accent focus-visible:ring-ring flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden lg:min-h-0',
                         index > 0 && 'border-l',
                         danger && 'text-[#B42318] dark:text-[#F7A19A]',
                     )}
                 >
                     <Icon className="size-4 shrink-0" />
-                    <span className="truncate">{moveLabel[kind]}</span>
+                    {/* A phone wraps a long label rather than cutting it short. */}
+                    <span className="min-w-0 text-center lg:truncate">{moveLabel[kind]}</span>
                 </button>
             ))}
         </div>
@@ -288,12 +303,12 @@ function MoveGroup({ moves, onPick }: { moves: { kind: AskedMove; icon: LucideIc
 /** A plain table, for the service tab. */
 function Table({ head, children }: { head: string[]; children: ReactNode }) {
     return (
-        <div className="scroll-soft -mx-6 overflow-x-auto">
+        <div className="scroll-soft -mx-4 overflow-x-auto sm:-mx-6">
             <table className="w-full min-w-[640px] border-collapse text-sm">
                 <thead>
                     <tr className="text-muted-foreground text-left text-[13px]">
                         {head.map((title) => (
-                            <th key={title} scope="col" className="px-6 py-2 font-medium first:pl-6">
+                            <th key={title} scope="col" className="px-4 py-2 font-medium sm:px-6">
                                 {title}
                             </th>
                         ))}
@@ -438,7 +453,7 @@ function StateDialog({ unit, onClose }: { unit: Unit; onClose: () => void }) {
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-md">
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -525,7 +540,7 @@ function AccessoriesDialog({ unit, onClose }: { unit: Unit; onClose: () => void 
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-md">
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -611,7 +626,7 @@ function RepairDialog({ unit, repair, finishing, onClose }: { unit: Unit; repair
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className={finishing ? 'sm:max-w-md' : 'sm:max-w-lg'}>
+            <DialogContent className={cn('scroll-soft max-h-[85vh] overflow-y-auto', finishing ? 'sm:max-w-md' : 'sm:max-w-lg')}>
                 {/* noValidate: the server's rules are the real ones. */}
                 <form onSubmit={submit} noValidate className="flex flex-col gap-5">
                     <DialogHeader>
@@ -960,12 +975,19 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
 
             <div className="flex flex-1 flex-col gap-5 p-3 md:px-5 md:py-4">
                 {/* Aligned along the bottom, so the title, the actions and the arrows sit on one line. */}
-                <div className="flex flex-wrap items-end gap-5">
-                    <CategoryChip icon={unit.type_icon} size={72} iconSize={32} />
+                {/* On a phone the name wraps to several lines, so the chip sits by its top instead. */}
+                <div className="flex flex-wrap items-start gap-3 sm:items-end sm:gap-5">
+                    {/* Smaller on a phone, where the full-size chip would leave the name a narrow strip. */}
+                    <span className="shrink-0 sm:hidden">
+                        <CategoryChip icon={unit.type_icon} size={48} iconSize={24} />
+                    </span>
+                    <span className="hidden shrink-0 sm:block">
+                        <CategoryChip icon={unit.type_icon} size={72} iconSize={32} />
+                    </span>
 
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="text-xl font-semibold tracking-tight">{unit.name}</h1>
+                            <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{unit.name}</h1>
                             <StatusBadge tone={statusTone[unit.status]}>{statusLabel[unit.status]}</StatusBadge>
                         </div>
 
@@ -1014,7 +1036,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
 
                 {tab === 'overview' && (
                     <div className="grid gap-4 lg:grid-cols-[1fr_26.4rem]">
-                        <div className="flex flex-col gap-4">
+                        <div className="flex min-w-0 flex-col gap-4">
                             <Section
                                 title="Характеристики"
                                 action={can.specs && <EditButton what="характеристики" onClick={() => setEditing('specs')} />}
@@ -1050,7 +1072,11 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                     ) : (
                                         <div className="flex flex-wrap gap-2">
                                             {unit.accessories.map((item) => (
-                                                <StatusBadge key={item} tone="neutral">
+                                                <StatusBadge
+                                                    key={item}
+                                                    tone="neutral"
+                                                    className="h-auto min-h-[22px] py-0.5 break-words whitespace-normal"
+                                                >
                                                     {item}
                                                 </StatusBadge>
                                             ))}
@@ -1060,7 +1086,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             )}
                         </div>
 
-                        <div className="flex flex-col gap-4">
+                        <div className="flex min-w-0 flex-col gap-4">
                             <Section
                                 // Not editable: where a unit is follows from the moves
                                 // below, so it is changed by making one of them.
@@ -1146,20 +1172,20 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             <Table head={['Тип', 'Период', 'Комментарий', 'Фото', '']}>
                                 {repairs.map((repair) => (
                                     <tr key={repair.id} className="border-t">
-                                        <td className="px-6 py-2.5 font-medium">{repair.kind}</td>
-                                        <td className="px-6 py-2.5 tabular-nums">
+                                        <td className="px-4 py-2.5 font-medium sm:px-6">{repair.kind}</td>
+                                        <td className="px-4 py-2.5 tabular-nums sm:px-6">
                                             {repair.ended_at
                                                 ? `${formatDate(repair.started_at)} – ${formatDate(repair.ended_at)}`
                                                 : `с ${formatDate(repair.started_at)}`}
                                         </td>
-                                        <td className="px-6 py-2.5">{repair.note ?? dash}</td>
-                                        <td className="px-6 py-2.5">{repair.photos.length > 0 ? <Photos photos={repair.photos} /> : dash}</td>
-                                        <td className="py-2.5 pr-6 text-right">
+                                        <td className="px-4 py-2.5 sm:px-6">{repair.note ?? dash}</td>
+                                        <td className="px-4 py-2.5 sm:px-6">{repair.photos.length > 0 ? <Photos photos={repair.photos} /> : dash}</td>
+                                        <td className="py-2.5 pr-4 text-right sm:pr-6">
                                             {can.service && (
                                                 <div className="flex items-center justify-end gap-1">
                                                     {/* Until the work has an end date the unit counts as being looked after. */}
                                                     {repair.ended_at === null && (
-                                                        <Button variant="outline" size="sm" className="h-8" onClick={() => setClosing(repair)}>
+                                                        <Button variant="outline" size="sm" className="h-9 lg:h-8" onClick={() => setClosing(repair)}>
                                                             <Check />
                                                             Завершить
                                                         </Button>
@@ -1168,7 +1194,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="text-muted-foreground size-8"
+                                                        className="text-muted-foreground size-9 lg:size-8"
                                                         aria-label={`Изменить запись: ${repair.kind}`}
                                                         onClick={() => setCorrecting(repair)}
                                                     >
@@ -1178,7 +1204,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="text-muted-foreground size-8"
+                                                        className="text-muted-foreground size-9 lg:size-8"
                                                         aria-label={`Удалить запись: ${repair.kind}`}
                                                         onClick={() => setRemoving(repair)}
                                                     >
@@ -1198,7 +1224,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                     <div className="flex flex-col gap-3 md:min-h-0 md:flex-1">
                         {activeFilters > 0 && (
                             <div className="flex items-center">
-                                <Button variant="ghost" className="h-8" onClick={() => setJournalFilters(noJournalFilters)}>
+                                <Button variant="ghost" className="h-10 lg:h-8" onClick={() => setJournalFilters(noJournalFilters)}>
                                     <X />
                                     Сбросить фильтры ({activeFilters})
                                 </Button>

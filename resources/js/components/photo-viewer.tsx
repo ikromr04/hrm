@@ -67,7 +67,7 @@ function Viewer({ photos, at, onMove, onClose }: { photos: Photo[]; at: number; 
             aria-modal="true"
             aria-label="Просмотр фотографии"
             onClick={onClose}
-            className="fixed inset-0 z-50 flex flex-col bg-black/85 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col bg-black/85 p-2 backdrop-blur-sm sm:p-4"
         >
             <div className="flex shrink-0 items-center justify-end gap-2" onClick={(event) => event.stopPropagation()}>
                 <Button variant="ghost" className="text-white hover:bg-white/15 hover:text-white" asChild>
@@ -81,7 +81,7 @@ function Viewer({ photos, at, onMove, onClose }: { photos: Photo[]; at: number; 
                 </Button>
             </div>
 
-            <div className="flex min-h-0 flex-1 items-center gap-2" onClick={(event) => event.stopPropagation()}>
+            <div className="flex min-h-0 flex-1 items-center gap-1 sm:gap-2" onClick={(event) => event.stopPropagation()}>
                 {photos.length > 1 && (
                     <Button
                         variant="ghost"
@@ -94,7 +94,7 @@ function Viewer({ photos, at, onMove, onClose }: { photos: Photo[]; at: number; 
                     </Button>
                 )}
 
-                <img src={photo.preview} alt="" className="mx-auto max-h-full min-h-0 flex-1 object-contain" />
+                <img src={photo.preview} alt="" className="mx-auto max-h-full min-h-0 min-w-0 flex-1 object-contain" />
 
                 {photos.length > 1 && (
                     <Button

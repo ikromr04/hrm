@@ -560,7 +560,7 @@ export default function Employees({
                 <h1 className="text-xl font-semibold tracking-tight">Сотрудники</h1>
 
                 <div className="-mb-2 flex flex-wrap items-center gap-2">
-                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-8 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
+                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
                         <Search className="size-4 shrink-0" />
                         <span className="sr-only">Поиск по всем полям</span>
                         <input
@@ -573,7 +573,7 @@ export default function Employees({
                     </label>
 
                     {statusCounts && (
-                        <nav aria-label="Списки сотрудников" className="flex items-center gap-1 text-sm">
+                        <nav aria-label="Списки сотрудников" className="flex flex-wrap items-center gap-1 text-sm">
                             {statusTabs.map((tab) => (
                                 <button
                                     key={tab.status}
@@ -581,7 +581,7 @@ export default function Employees({
                                     onClick={() => visit({ status: tab.status })}
                                     aria-current={status === tab.status ? 'page' : undefined}
                                     className={cn(
-                                        'flex h-8 items-center gap-1.5 rounded-md px-2.5 transition-colors',
+                                        'flex h-10 items-center gap-1.5 rounded-md px-2.5 whitespace-nowrap transition-colors lg:h-8',
                                         status === tab.status
                                             ? 'bg-brand-soft text-foreground font-semibold dark:bg-white/10'
                                             : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -597,7 +597,7 @@ export default function Employees({
                     {activeFilters > 0 && (
                         <Button
                             variant="ghost"
-                            className="h-8"
+                            className="h-10 lg:h-8"
                             onClick={() =>
                                 applyFilters(
                                     columns.filter(canFilter).reduce<Partial<Filters>>((acc, c) => ({ ...acc, ...clearedFilter(c.filter!) }), {}),
@@ -611,7 +611,7 @@ export default function Employees({
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="h-8 font-normal">
+                            <Button variant="outline" className="h-10 font-normal lg:h-8">
                                 <Columns3 />
                                 Колонки
                                 <ChevronDown className="text-muted-foreground" />
@@ -645,7 +645,7 @@ export default function Employees({
 
                     {canEdit && (
                         // A page of its own: the form runs over several steps.
-                        <Button className="h-8" asChild>
+                        <Button className="h-10 lg:h-8" asChild>
                             <Link href={route('employees.create')}>
                                 <Plus />
                                 Добавить сотрудника

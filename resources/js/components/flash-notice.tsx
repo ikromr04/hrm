@@ -22,8 +22,13 @@ export function FlashNotice() {
     return (
         <div role="status" className="bg-muted text-foreground mx-3 mt-3 flex items-start gap-3 rounded-lg border px-4 py-3 text-sm md:mx-5">
             <Info className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-            <p className="flex-1">{shown}</p>
-            <button type="button" onClick={() => setShown(null)} aria-label="Закрыть" className="text-muted-foreground hover:text-foreground">
+            <p className="min-w-0 flex-1 break-words">{shown}</p>
+            <button
+                type="button"
+                onClick={() => setShown(null)}
+                aria-label="Закрыть"
+                className="text-muted-foreground hover:text-foreground -m-2 shrink-0 rounded-md p-2"
+            >
                 <X className="size-4" />
             </button>
         </div>

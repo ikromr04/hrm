@@ -189,7 +189,7 @@ function ZoomControls({
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-8"
+                className="size-9 lg:size-8"
                 onClick={onToggleAll}
                 aria-label={allOpen ? 'Скрыть сотрудников во всех отделах' : 'Показать сотрудников во всех отделах'}
                 title={allOpen ? 'Скрыть всех сотрудников' : 'Показать всех сотрудников'}
@@ -200,28 +200,42 @@ function ZoomControls({
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-8"
+                className="size-9 lg:size-8"
                 onClick={() => onZoom(1 / 1.2)}
                 disabled={scale <= MIN_SCALE}
                 aria-label="Отдалить"
             >
                 <Minus />
             </Button>
-            <Button variant="ghost" className="h-8 w-14 px-0 text-xs tabular-nums" onClick={onReset} title="Сбросить до 100%">
+            <Button variant="ghost" className="h-9 w-14 px-0 text-xs tabular-nums lg:h-8" onClick={onReset} title="Сбросить до 100%">
                 {Math.round(scale * 100)}%
             </Button>
-            <Button variant="ghost" size="icon" className="size-8" onClick={() => onZoom(1.2)} disabled={scale >= MAX_SCALE} aria-label="Приблизить">
+            <Button
+                variant="ghost"
+                size="icon"
+                className="size-9 lg:size-8"
+                onClick={() => onZoom(1.2)}
+                disabled={scale >= MAX_SCALE}
+                aria-label="Приблизить"
+            >
                 <Plus />
             </Button>
             <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
-            <Button variant="ghost" size="icon" className="size-8" onClick={onFit} aria-label="Уместить схему целиком" title="Уместить целиком">
+            <Button
+                variant="ghost"
+                size="icon"
+                className="size-9 lg:size-8"
+                onClick={onFit}
+                aria-label="Уместить схему целиком"
+                title="Уместить целиком"
+            >
                 <Scan />
             </Button>
             {onFullscreen && (
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="size-8"
+                    className="size-9 lg:size-8"
                     onClick={onFullscreen}
                     aria-label={fullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
                     title={fullscreen ? 'Выйти из полноэкранного режима (F или Esc)' : 'На весь экран (F)'}
@@ -402,8 +416,12 @@ export function OrgChart({
     };
     const onPointerUp = () => (drag.current = null);
 
+    // Below md the page is not held to the viewport, so the frame gets a height of
+    // its own: left to grow with the chart, it would lay a tall tree out on the
+    // page, push the zoom controls below the fold and give «Уместить» no height to
+    // fit into. A phone pans the chart inside the frame with a finger instead.
     return (
-        <div ref={frame} className="bg-sidebar relative flex min-h-[28rem] flex-col md:min-h-0 md:flex-1">
+        <div ref={frame} className="bg-sidebar relative flex h-[70svh] min-h-[24rem] flex-col md:h-auto md:min-h-0 md:flex-1">
             <div
                 ref={scroller}
                 onPointerDown={onPointerDown}

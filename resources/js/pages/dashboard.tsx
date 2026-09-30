@@ -47,7 +47,7 @@ function capitalize(text: string) {
 
 function Section({ title, aside, children, className }: { title: string; aside?: ReactNode; children: ReactNode; className?: string }) {
     return (
-        <Card className={cn('flex flex-col gap-4 rounded-xl px-6 py-5', className)}>
+        <Card className={cn('flex flex-col gap-4 rounded-xl px-4 py-4 md:px-6 md:py-5', className)}>
             <div className="flex items-center gap-3">
                 <h2 className="flex-1 text-base font-semibold">{title}</h2>
                 {aside}
@@ -75,7 +75,7 @@ function StatCard({ stat }: { stat: Stat }) {
 
     return (
         <Link href={stat.href} className="group rounded-xl">
-            <Card className="group-hover:border-brand/60 flex h-full flex-col gap-3.5 rounded-xl p-5 transition-colors">
+            <Card className="group-hover:border-brand/60 flex h-full flex-col gap-3.5 rounded-xl p-4 transition-colors md:p-5">
                 <div className="text-muted-foreground flex items-center gap-2.5 text-sm font-medium">
                     <span className="bg-brand-soft text-brand-strong flex size-8 items-center justify-center rounded-lg dark:bg-white/10 dark:text-[#C5E27A]">
                         <Icon className="size-[18px]" />
@@ -134,7 +134,7 @@ export default function Dashboard({ since, today, staff, equipment, departments,
                         <h1 className="text-xl font-semibold tracking-tight">Обзор</h1>
                         <p className="text-muted-foreground text-sm">{heading}</p>
                     </div>
-                    <Button className="h-8" asChild>
+                    <Button className="h-10 lg:h-8" asChild>
                         <Link href="/employees/create">
                             <Plus />
                             Добавить сотрудника
@@ -142,13 +142,13 @@ export default function Dashboard({ since, today, staff, equipment, departments,
                     </Button>
                 </div>
 
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 sm:gap-5 xl:grid-cols-4">
                     {stats.map((stat) => (
                         <StatCard key={stat.key} stat={stat} />
                     ))}
                 </div>
 
-                <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+                <div className="grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
                     <Section title="Численность по отделам" aside={<SectionLink href="/departments">Структура</SectionLink>}>
                         {departments.length === 0 ? (
                             <Empty>Отделов пока нет.</Empty>
@@ -185,10 +185,16 @@ export default function Dashboard({ since, today, staff, equipment, departments,
                                     const date = event.at ? parseISO(event.at) : null;
 
                                     return (
-                                        <li key={event.id} className="flex items-center gap-3.5">
+                                        // On a phone the badge drops under the name: beside it,
+                                        // «Обслуживание завершено» alone would leave the name of
+                                        // the unit no room at all. From sm up it is one line again.
+                                        <li
+                                            key={event.id}
+                                            className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3.5 gap-y-1 sm:flex sm:items-center sm:gap-3.5"
+                                        >
                                             <time
                                                 dateTime={event.at ?? undefined}
-                                                className="bg-muted flex h-[52px] w-12 shrink-0 flex-col items-center justify-center rounded-lg"
+                                                className="bg-muted row-span-2 flex h-[52px] w-12 shrink-0 flex-col items-center justify-center rounded-lg"
                                             >
                                                 <span className="text-lg leading-none font-bold tabular-nums">{date ? format(date, 'dd') : '—'}</span>
                                                 <span className="text-muted-foreground text-xs">{date ? shortMonths[date.getMonth()] : ''}</span>
@@ -206,7 +212,9 @@ export default function Dashboard({ since, today, staff, equipment, departments,
                                                 )}
                                                 <span className="text-muted-foreground truncate text-[13px]">{eventDetails(event)}</span>
                                             </div>
-                                            <StatusBadge tone={eventTone[event.kind]}>{eventLabel[event.kind]}</StatusBadge>
+                                            <StatusBadge tone={eventTone[event.kind]} className="justify-self-start">
+                                                {eventLabel[event.kind]}
+                                            </StatusBadge>
                                         </li>
                                     );
                                 })}

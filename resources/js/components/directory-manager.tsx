@@ -212,7 +212,7 @@ export function DirectoryManager({
     return (
         <>
             <div className="-mb-2 flex flex-wrap items-center gap-2">
-                <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-8 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2">
+                <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
                     <Search className="size-4 shrink-0" />
                     <span className="sr-only">Поиск</span>
                     <input
@@ -224,7 +224,7 @@ export function DirectoryManager({
                     />
                 </label>
                 {canEdit && (
-                    <Button className="h-8" onClick={() => setEditing('new')}>
+                    <Button className="h-10 lg:h-8" onClick={() => setEditing('new')}>
                         <Plus />
                         {labels.add}
                     </Button>
@@ -236,19 +236,22 @@ export function DirectoryManager({
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-sidebar sticky top-0 z-10 shadow-[0_1px_0_var(--border)]">
                             <tr className="text-muted-foreground text-left text-[13px]">
-                                <th scope="col" className="px-6 py-3 font-semibold">
+                                {/* On a phone the fixed widths and the wide gutters give way:
+                                    the columns share what there is, and whatever still does
+                                    not fit scrolls inside the card rather than the page. */}
+                                <th scope="col" className="px-3 py-3 font-semibold md:px-6">
                                     Название
                                 </th>
                                 {people && (
-                                    <th scope="col" className="w-72 px-4 py-3 font-semibold">
+                                    <th scope="col" className="px-3 py-3 font-semibold md:w-72 md:px-4">
                                         Руководители
                                     </th>
                                 )}
-                                <th scope="col" className="w-40 px-4 py-3 font-semibold">
+                                <th scope="col" className="px-3 py-3 font-semibold md:w-40 md:px-4">
                                     {countLabel}
                                 </th>
                                 {canEdit && (
-                                    <th scope="col" className="w-28 py-3 pr-6 pl-4">
+                                    <th scope="col" className="py-3 pr-3 pl-1 md:w-28 md:pr-6 md:pl-4">
                                         <span className="sr-only">Действия</span>
                                     </th>
                                 )}
@@ -257,7 +260,7 @@ export function DirectoryManager({
                         <tbody>
                             {visible.map((row) => (
                                 <tr key={row.id} className="hover:bg-muted/40 border-t">
-                                    <td className="px-6 py-2.5">
+                                    <td className="px-3 py-2.5 md:px-6">
                                         <span className="flex items-center gap-2" style={{ paddingLeft: query ? 0 : row.depth * 24 }}>
                                             {tree && row.depth > 0 && !query && <span className="text-muted-foreground">└</span>}
                                             {icons && (
@@ -270,7 +273,7 @@ export function DirectoryManager({
                                         </span>
                                     </td>
                                     {people && (
-                                        <td className="px-4 py-2.5">
+                                        <td className="px-3 py-2.5 md:px-4">
                                             {row.heads?.length ? (
                                                 <span className="flex flex-col gap-0.5">
                                                     {row.heads.map((head) => (
@@ -288,7 +291,7 @@ export function DirectoryManager({
                                             )}
                                         </td>
                                     )}
-                                    <td className="px-4 py-2.5 tabular-nums">
+                                    <td className="px-3 py-2.5 tabular-nums md:px-4">
                                         {(row.total_count ?? row.users_count) > 0 ? (
                                             // The number is a count; following it means reading the
                                             // staff, which is a right of its own.
@@ -310,12 +313,12 @@ export function DirectoryManager({
                                         )}
                                     </td>
                                     {canEdit && (
-                                        <td className="py-1.5 pr-6 pl-4">
+                                        <td className="py-1.5 pr-3 pl-1 md:pr-6 md:pl-4">
                                             <div className="flex justify-end gap-1">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="size-8"
+                                                    className="size-9 lg:size-8"
                                                     aria-label={`Изменить: ${row.label}`}
                                                     onClick={() => setEditing(row)}
                                                 >
@@ -324,7 +327,7 @@ export function DirectoryManager({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="size-8 text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
+                                                    className="size-9 text-[#B42318] hover:text-[#B42318] lg:size-8 dark:text-[#F7A19A]"
                                                     aria-label={`Удалить: ${row.label}`}
                                                     disabled={row.protected}
                                                     onClick={() => setDeleting(row)}
@@ -339,7 +342,10 @@ export function DirectoryManager({
 
                             {visible.length === 0 && (
                                 <tr className="border-t">
-                                    <td colSpan={(people ? 3 : 2) + (canEdit ? 1 : 0)} className="text-muted-foreground px-6 py-12 text-center">
+                                    <td
+                                        colSpan={(people ? 3 : 2) + (canEdit ? 1 : 0)}
+                                        className="text-muted-foreground px-3 py-12 text-center md:px-6"
+                                    >
                                         {items.length === 0 ? 'Пока пусто.' : 'Ничего не найдено.'}
                                     </td>
                                 </tr>
@@ -618,7 +624,9 @@ function EditorDialog({
                 them asks for more room than a name and a couple of checkboxes. */}
             <DialogContent
                 className={cn(
-                    'max-h-[90vh] overflow-y-auto sm:max-w-md',
+                    // svh rather than vh: on a phone the browser's own bars would
+                    // otherwise hide the bottom of a long list of rights.
+                    'max-h-[90svh] overflow-y-auto sm:max-w-md',
                     (cardFields || profileFields) && 'sm:max-w-lg',
                     fieldTypes && 'sm:max-w-2xl',
                 )}
@@ -928,7 +936,7 @@ function DeleteDialog({
         <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>
+                    <DialogTitle className="break-words">
                         Удалить {labels.accusative} «{item?.label}»?
                     </DialogTitle>
                     <DialogDescription asChild>

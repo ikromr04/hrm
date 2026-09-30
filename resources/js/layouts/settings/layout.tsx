@@ -39,7 +39,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                 size="sm"
                                 variant="ghost"
                                 asChild
-                                className={cn('w-full justify-start', {
+                                className={cn('w-full justify-start max-lg:h-10', {
                                     'bg-muted': currentPath === item.url,
                                 })}
                             >

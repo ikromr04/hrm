@@ -234,7 +234,7 @@ export function GlobalSearch() {
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="border-input bg-background text-muted-foreground hover:text-foreground focus-visible:ring-ring hidden h-9 w-72 items-center gap-2 rounded-md border px-3 text-sm shadow-xs outline-hidden focus-visible:ring-2 md:flex"
+                className="border-input bg-background text-muted-foreground hover:text-foreground focus-visible:ring-ring hidden h-9 w-72 items-center gap-2 rounded-md border px-3 text-sm shadow-xs outline-hidden focus-visible:ring-2 lg:flex"
             >
                 <Search className="size-4 shrink-0" />
                 <span className="flex-1 text-left">Поиск…</span>
@@ -244,13 +244,13 @@ export function GlobalSearch() {
                 type="button"
                 onClick={() => setOpen(true)}
                 aria-label="Поиск"
-                className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-md md:hidden"
+                className="text-muted-foreground hover:text-foreground flex size-9 shrink-0 items-center justify-center rounded-md lg:hidden"
             >
                 <Search className="size-4" />
             </button>
 
             <Dialog open={open} onOpenChange={changeOpen}>
-                <DialogContent className="top-[12vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:last-child]:top-3.5">
+                <DialogContent className="top-[12vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:last-child]:top-1.5 sm:[&>button:last-child]:top-3.5">
                     <DialogTitle className="sr-only">Поиск</DialogTitle>
                     <DialogDescription className="sr-only">
                         Сотрудники, оборудование, отделы, должности, позиции, категории техники, языки и разделы.

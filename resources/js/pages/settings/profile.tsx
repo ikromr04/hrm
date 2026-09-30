@@ -66,7 +66,7 @@ export default function Profile({ pendingEmail, status }: { pendingEmail: string
                             <InputError message={errors.email} />
 
                             <p className="text-muted-foreground text-[13px]">
-                                Сейчас вход по адресу <span className="font-medium">{user.email}</span>.
+                                Сейчас вход по адресу <span className="font-medium break-all">{user.email}</span>.
                             </p>
                         </div>
 
@@ -77,7 +77,7 @@ export default function Profile({ pendingEmail, status }: { pendingEmail: string
                         {pendingEmail !== null && (
                             <div className="max-w-md space-y-2 rounded-lg border p-4">
                                 <p className="text-sm">
-                                    Ждём подтверждения адреса <span className="font-medium">{pendingEmail}</span>.
+                                    Ждём подтверждения адреса <span className="font-medium break-all">{pendingEmail}</span>.
                                 </p>
                                 <p className="text-muted-foreground text-[13px]">
                                     {status === 'email-confirmation-sent'
@@ -85,7 +85,7 @@ export default function Profile({ pendingEmail, status }: { pendingEmail: string
                                         : 'Перейдите по ссылке из письма — до этого вход по прежнему адресу. Ссылка действует час.'}
                                 </p>
 
-                                <div className="flex items-center gap-3 pt-1">
+                                <div className="flex flex-wrap items-center gap-3 pt-1">
                                     <Button type="submit" variant="outline" size="sm" disabled={processing}>
                                         Отправить письмо ещё раз
                                     </Button>

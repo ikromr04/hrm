@@ -136,7 +136,7 @@ export function SearchableSelect({
                             onMouseEnter={() => setHighlighted(index)}
                             onClick={() => pick(option)}
                             className={cn(
-                                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
+                                'flex w-full items-center gap-2 rounded-md px-2 py-2.5 text-left text-sm lg:py-1.5',
                                 index === highlighted && 'bg-accent text-accent-foreground',
                             )}
                         >

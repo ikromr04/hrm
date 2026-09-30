@@ -140,14 +140,14 @@ export function CardFields({
                                         aria-expanded={expanded}
                                         className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm"
                                     >
-                                        <span>{group.title}</span>
+                                        <span className="min-w-0 break-words">{group.title}</span>
                                         <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-[13px] tabular-nums">
                                             {chosen} из {group.fields.length}
                                             <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />
                                         </span>
                                     </button>
                                 ) : (
-                                    <span className="flex-1 text-sm">{group.title}</span>
+                                    <span className="min-w-0 flex-1 text-sm break-words">{group.title}</span>
                                 )}
 
                                 {available === 0 && (
@@ -169,7 +169,12 @@ export function CardFields({
                                             {group.fields.map((field) => (
                                                 <li key={field.key}>
                                                     <label
-                                                        className={cn('flex items-center gap-2 text-sm', locked(field) && 'text-muted-foreground')}
+                                                        // A little taller on a touch screen, so a finger finds
+                                                        // the line it meant rather than its neighbour.
+                                                        className={cn(
+                                                            'flex items-center gap-2 py-1 text-sm lg:py-0',
+                                                            locked(field) && 'text-muted-foreground',
+                                                        )}
                                                     >
                                                         <Checkbox
                                                             checked={ticked(field)}
@@ -222,7 +227,7 @@ export function CardFieldsDialog({
 }) {
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="scroll-soft max-h-[85vh] overflow-y-auto sm:max-w-lg">
+            <DialogContent className="scroll-soft max-h-[85svh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
                         {HINTS[mode].title}: {subject}
@@ -357,7 +362,9 @@ export function RightsDialog({
 
     return (
         <Dialog open onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
+            {/* The hints under each right make the list long enough to outgrow a
+                phone held sideways, so the window scrolls inside itself. */}
+            <DialogContent className="scroll-soft max-h-[85svh] overflow-y-auto sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>Изменения сохраняются сразу.</DialogDescription>

@@ -50,8 +50,8 @@ export function CategoryFieldsEditor({
             <ul className="grid gap-3">
                 {fields.map((field, index) => (
                     <li key={field.id ?? `new-${index}`} className="border-border grid gap-2 rounded-lg border p-3">
-                        <div className="flex items-start gap-2">
-                            <div className="grid flex-1 content-start gap-2">
+                        <div className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
+                            <div className="grid min-w-0 flex-1 basis-full content-start gap-2 sm:basis-auto">
                                 <Input
                                     value={field.name}
                                     placeholder="Название поля"
@@ -62,7 +62,7 @@ export function CategoryFieldsEditor({
                                 <InputError message={error?.(`fields.${index}.name`)} />
                             </div>
 
-                            <div className="grid w-40 content-start gap-2">
+                            <div className="grid min-w-0 flex-1 content-start gap-2 sm:w-40 sm:flex-none">
                                 <Select value={field.type} onValueChange={(type) => replace(index, { type: type as FieldType })}>
                                     <SelectTrigger aria-label={`Тип поля ${index + 1}`}>
                                         <SelectValue />

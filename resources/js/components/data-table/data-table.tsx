@@ -107,17 +107,24 @@ export function DataTable<Row>({
         const side = pinSide(column.key);
         if (!side) return '';
 
+        // Pins hold from the desktop up. On a phone or a tablet a pinned name
+        // column alone is about as wide as the screen and would leave nothing
+        // to scroll, so there the columns all move together; the row actions
+        // stay at the edge, being narrow.
         return cn(
-            'sticky',
+            'lg:sticky',
             header ? 'bg-sidebar z-20' : 'bg-card z-[1]',
-            side === 'left' && column === left[left.length - 1] && 'shadow-[1px_0_0_var(--border)]',
-            side === 'right' && column === right[0] && 'shadow-[-1px_0_0_var(--border)]',
+            side === 'left' && column === left[left.length - 1] && 'lg:shadow-[1px_0_0_var(--border)]',
+            side === 'right' && column === right[0] && 'lg:shadow-[-1px_0_0_var(--border)]',
         );
     };
 
     return (
         <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
-            <div className="scroll-soft overflow-auto md:min-h-0 md:flex-1">
+            {/* relative: absolutely placed things inside the table — screen-reader
+            labels, for one — take this box as their frame and are clipped by it,
+            instead of escaping it and stretching the whole page sideways. */}
+            <div className="scroll-soft relative overflow-auto md:min-h-0 md:flex-1">
                 <table className="min-w-full table-fixed border-collapse text-sm" style={{ width: tableWidth }}>
                     <thead className="bg-sidebar sticky top-0 z-30">
                         <tr className="text-muted-foreground text-left text-[13px] whitespace-nowrap">
@@ -266,7 +273,12 @@ export function DataTable<Row>({
                 </table>
             </div>
 
-            {footer && <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t px-6 py-3">{footer}</div>}
+            {footer && (
+                // A phone stacks rows-per-page over the paging; from sm up they share a line.
+                <div className="flex shrink-0 flex-col items-stretch gap-2 border-t px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2 md:px-6">
+                    {footer}
+                </div>
+            )}
         </Card>
     );
 }

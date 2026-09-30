@@ -48,7 +48,7 @@ export function PhotoInput({
                                 type="button"
                                 aria-label={`Убрать снимок ${index + 1}`}
                                 onClick={() => onChange(photos.filter((_, other) => other !== index))}
-                                className="bg-background absolute -top-1.5 -right-1.5 rounded-full border p-0.5 shadow-sm"
+                                className="bg-background absolute -top-2 -right-2 rounded-full border p-1.5 shadow-sm lg:-top-1.5 lg:-right-1.5 lg:p-0.5"
                             >
                                 <X className="size-3.5" />
                             </button>

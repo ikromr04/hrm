@@ -197,10 +197,10 @@ export function CameraDialog({ onShot, onClose }: { onShot: (photo: File) => voi
                             Другая камера
                         </Button>
                     ) : (
-                        <span />
+                        <span className="hidden sm:block" />
                     )}
 
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:flex">
                         <Button type="button" variant="outline" onClick={onClose}>
                             {taken > 0 ? 'Готово' : 'Отмена'}
                         </Button>

@@ -58,7 +58,7 @@ function savedView(): View {
 
 function Section({ title, count, children, className }: { title: string; count?: number; children: ReactNode; className?: string }) {
     return (
-        <Card className={cn('flex flex-col gap-3 rounded-xl px-6 py-5', className)}>
+        <Card className={cn('flex flex-col gap-3 rounded-xl px-4 py-4 md:px-6 md:py-5', className)}>
             <h2 className="flex items-baseline gap-2 text-base font-semibold">
                 {title}
                 {count !== undefined && <span className="text-muted-foreground text-sm font-normal tabular-nums">{count}</span>}
@@ -97,7 +97,7 @@ function ColleagueRow({ person, compact }: { person: Colleague; compact?: boolea
                 {person.positions.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                         {person.positions.map((position) => (
-                            <StatusBadge key={position} tone="success">
+                            <StatusBadge key={position} tone="success" className="h-auto min-h-[22px] whitespace-normal">
                                 {position}
                             </StatusBadge>
                         ))}
@@ -134,7 +134,7 @@ export default function DepartmentPage({ department, chart }: { department: Depa
             <Head title={department.name} />
 
             <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <Card className="flex flex-col gap-4 rounded-xl p-6 sm:flex-row sm:items-center">
+                <Card className="flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center md:p-6">
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         {department.parents.length > 0 && (
                             <nav aria-label="Входит в" className="text-muted-foreground flex flex-wrap items-center gap-1 text-sm">
@@ -148,7 +148,7 @@ export default function DepartmentPage({ department, chart }: { department: Depa
                                 ))}
                             </nav>
                         )}
-                        <h1 className="text-xl font-semibold tracking-tight">{department.name}</h1>
+                        <h1 className="text-xl font-semibold tracking-tight break-words">{department.name}</h1>
                         <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
                             <Users className="size-4" />
                             {peopleLabel(department.total_count)}
@@ -156,24 +156,34 @@ export default function DepartmentPage({ department, chart }: { department: Depa
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                    {/* On a phone the two controls take the whole width of the card, one
+                        under the other: side by side they are wider than 320px, and the
+                        long label of the link would run out of its button. */}
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:self-center">
                         {/* The structure of the company is open to everybody; the list of
                         the staff is not, and narrowing it by department takes reading
                         that line of a card. A link into a refusal is worse than none. */}
                         {department.total_count > 0 && can('employees.view') && can('employees.field.departments') && (
-                            <Button variant="outline" asChild>
+                            <Button variant="outline" className="h-auto min-h-10 whitespace-normal sm:h-10 sm:whitespace-nowrap" asChild>
                                 <Link href={route('employees.index', { department: [department.id] })}>
                                     <List />
                                     Открыть в списке сотрудников
                                 </Link>
                             </Button>
                         )}
-                        <ToggleGroup type="single" variant="outline" value={view} onValueChange={changeView} aria-label="Вид">
-                            <ToggleGroupItem value="chart" className="gap-1.5 px-3">
+                        <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            value={view}
+                            onValueChange={changeView}
+                            aria-label="Вид"
+                            className="justify-start"
+                        >
+                            <ToggleGroupItem value="chart" className="flex-1 gap-1.5 px-3 sm:flex-none">
                                 <Network />
                                 Схема
                             </ToggleGroupItem>
-                            <ToggleGroupItem value="list" className="gap-1.5 px-3">
+                            <ToggleGroupItem value="list" className="flex-1 gap-1.5 px-3 sm:flex-none">
                                 <LayoutGrid />
                                 Список
                             </ToggleGroupItem>
@@ -186,7 +196,7 @@ export default function DepartmentPage({ department, chart }: { department: Depa
                         <OrgChart departments={chart} rootId={department.id} />
                     </Card>
                 ) : (
-                    <div className="grid items-start gap-4 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
                         <div className="flex flex-col gap-4">
                             <Section title={department.heads.length > 1 ? 'Руководители' : 'Руководитель'}>
                                 {department.heads.length === 0 ? (

@@ -2,8 +2,9 @@ import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, Sideba
 import { type SidebarNavGroup } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 
+// max-md:h-10: in the phone's slide-out menu the rows are finger targets.
 const activeClasses =
-    'data-[active=true]:bg-brand-soft data-[active=true]:text-foreground data-[active=true]:[&>svg]:text-brand-strong dark:data-[active=true]:bg-sidebar-accent';
+    'max-md:h-10 data-[active=true]:bg-brand-soft data-[active=true]:text-foreground data-[active=true]:[&>svg]:text-brand-strong dark:data-[active=true]:bg-sidebar-accent';
 
 export function NavMain({ group, className }: { group: SidebarNavGroup; className?: string }) {
     const page = usePage();

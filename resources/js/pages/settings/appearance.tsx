@@ -22,7 +22,8 @@ export default function Appearance() {
             <SettingsLayout>
                 <div className="space-y-6">
                     <HeadingSmall title="Оформление" description="Светлая или тёмная тема — выбор сохраняется в этом браузере" />
-                    <AppearanceTabs />
+                    {/* Three options side by side are wider than a phone, so there they stack. */}
+                    <AppearanceTabs className="max-sm:flex max-sm:w-full max-sm:flex-col max-sm:*:py-2.5" />
                 </div>
             </SettingsLayout>
         </AppLayout>
