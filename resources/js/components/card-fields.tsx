@@ -41,12 +41,25 @@ const rightOf = (field: CardField, mode: CardFieldsMode): string | null =>
 export const cardFieldRights = (groups: CardFieldGroup[], mode: CardFieldsMode): string[] =>
     groups.flatMap((group) => group.fields.map((field) => rightOf(field, mode)).filter((right) => right !== null));
 
-/** How much of a card a position reads or may change: for the button in the table. */
+/**
+ * How much of a card a position reads or may change: for the button in the table.
+ * The surname and the name are read by everybody, so in «Просмотр» they count as
+ * ticked — the same boxes the dialog shows checked and locked.
+ */
 export function countCardFields(groups: CardFieldGroup[], held: string[], mode: CardFieldsMode): { chosen: number; total: number } {
     const rights = cardFieldRights(groups, mode);
+    const always = mode === 'view' ? groups.flatMap((group) => group.fields).filter((field) => field.always).length : 0;
 
-    return { chosen: rights.filter((right) => held.includes(right)).length, total: rights.length };
+    return { chosen: rights.filter((right) => held.includes(right)).length + always, total: rights.length + always };
 }
+
+/**
+ * Whether a position reads any line of a card it was actually given. The lines
+ * everybody reads do not count here: they alone are no reason to open the staff
+ * list, or every position would get it.
+ */
+export const readsAnyCardLine = (groups: CardFieldGroup[], held: string[]): boolean =>
+    cardFieldRights(groups, 'view').some((right) => held.includes(right));
 
 const HINTS: Record<CardFieldsMode, { title: string; description: string }> = {
     view: {

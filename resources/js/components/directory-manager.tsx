@@ -1,4 +1,12 @@
-import { CardFields, countCardFields, PlainRights, type CardFieldGroup, type CardFieldsMode, type PlainRight } from '@/components/card-fields';
+import {
+    CardFields,
+    countCardFields,
+    PlainRights,
+    readsAnyCardLine,
+    type CardFieldGroup,
+    type CardFieldsMode,
+    type PlainRight,
+} from '@/components/card-fields';
 import { CategoryFieldsEditor } from '@/components/category-fields-editor';
 import { MobileRow } from '@/components/data-table';
 import { IconChip } from '@/components/equipment-icon';
@@ -684,7 +692,7 @@ function EditorDialog({
 
         const rest = permissions.filter((right) => right !== viewRight);
 
-        return countCardFields(cardFields, permissions, 'view').chosen > 0 ? [...rest, viewRight] : rest;
+        return readsAnyCardLine(cardFields, permissions) ? [...rest, viewRight] : rest;
     };
 
     /**

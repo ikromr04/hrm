@@ -1,7 +1,7 @@
 import {
     CardFieldsButton,
     CardFieldsDialog,
-    countCardFields,
+    readsAnyCardLine,
     RightsButton,
     RightsDialog,
     type CardFieldGroup,
@@ -303,7 +303,7 @@ export default function AccessPage({
 
         const rest = permissions.filter((name) => name !== EMPLOYEES_VIEW);
 
-        save(role, countCardFields(fields, rest, 'view').chosen > 0 ? [...rest, EMPLOYEES_VIEW] : rest);
+        save(role, readsAnyCardLine(fields, rest) ? [...rest, EMPLOYEES_VIEW] : rest);
     };
 
     /**
