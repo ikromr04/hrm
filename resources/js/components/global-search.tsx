@@ -244,13 +244,13 @@ export function GlobalSearch() {
                 type="button"
                 onClick={() => setOpen(true)}
                 aria-label="Поиск"
-                className="text-muted-foreground hover:text-foreground flex size-9 shrink-0 items-center justify-center rounded-md lg:hidden"
+                className="text-muted-foreground hover:text-foreground flex size-10 shrink-0 items-center justify-center rounded-md md:size-9 lg:hidden"
             >
-                <Search className="size-4" />
+                <Search className="size-5 md:size-4" />
             </button>
 
             <Dialog open={open} onOpenChange={changeOpen}>
-                <DialogContent className="top-[12vh] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl [&>button:last-child]:top-1.5 sm:[&>button:last-child]:top-3.5">
+                <DialogContent className="gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:flex max-sm:h-dvh max-sm:max-h-none max-sm:flex-col max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)] sm:top-[12vh] sm:max-w-xl sm:translate-y-0 [&>button:last-child]:top-1.5 sm:[&>button:last-child]:top-3.5 [&>div[aria-hidden]:first-child]:hidden">
                     <DialogTitle className="sr-only">Поиск</DialogTitle>
                     <DialogDescription className="sr-only">
                         Сотрудники, оборудование, отделы, должности, позиции, категории техники, языки и разделы.
@@ -277,7 +277,12 @@ export function GlobalSearch() {
                         />
                     </label>
 
-                    <ul ref={list} id="global-search-results" role="listbox" className="max-h-[60vh] overflow-y-auto p-2">
+                    <ul
+                        ref={list}
+                        id="global-search-results"
+                        role="listbox"
+                        className="max-h-[60vh] overflow-y-auto p-2 max-sm:max-h-none max-sm:flex-1"
+                    >
                         {items.map((item, index) => (
                             <li key={item.key} role="presentation">
                                 {item.group !== items[index - 1]?.group && (

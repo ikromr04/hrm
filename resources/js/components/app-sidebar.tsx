@@ -22,6 +22,14 @@ const navGroups = (can: (permission: Permission) => boolean, sysadmin: boolean):
     },
 ];
 
+/** The same entries for the phone's tab bar, which draws them its own way. */
+export function useMainNav() {
+    const can = useCan();
+    const { sysadmin } = usePage<SharedData>().props.auth;
+
+    return navGroups(can, sysadmin)[0].items;
+}
+
 export function AppSidebar() {
     const can = useCan();
     const { sysadmin } = usePage<SharedData>().props.auth;

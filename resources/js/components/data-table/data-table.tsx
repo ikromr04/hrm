@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { ArrowDown, ArrowUp, ArrowUpDown, EllipsisVertical, EyeOff, Pin, PinOff } from 'lucide-react';
-import { type CSSProperties, type ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { ColumnFilter, isFilterActive } from './filters';
 import { type CellRenderer, type ColumnDef, type FilterValues, type Sort, type ViewState } from './types';
 
@@ -48,6 +48,11 @@ interface DataTableProps<Row> {
     empty: ReactNode;
     /** A bar under the table, inside the card: rows per page and paging. */
     footer?: ReactNode;
+    /**
+     * How a row reads on a phone — usually a MobileRow. Given one, the table
+     * turns into a plain list below `md`, where columns would only scroll sideways.
+     */
+    mobileRow?: (row: Row) => ReactNode;
 }
 
 /**
@@ -74,6 +79,7 @@ export function DataTable<Row>({
     actions,
     empty,
     footer,
+    mobileRow,
 }: DataTableProps<Row>) {
     /* Left-pinned first, then the rest in their own order, then right-pinned. */
     const isHidden = (key: string) => view.hidden.includes(key);
@@ -120,11 +126,19 @@ export function DataTable<Row>({
     };
 
     return (
-        <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
+        <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 max-md:rounded-2xl max-md:border-0 max-md:shadow-none md:min-h-0 md:flex-1">
             {/* relative: absolutely placed things inside the table — screen-reader
             labels, for one — take this box as their frame and are clipped by it,
             instead of escaping it and stretching the whole page sideways. */}
-            <div className="scroll-soft relative overflow-auto md:min-h-0 md:flex-1">
+            {mobileRow && (
+                <ul className="divide-border/70 divide-y md:hidden">
+                    {rows.map((row) => (
+                        <Fragment key={rowKey(row)}>{mobileRow(row)}</Fragment>
+                    ))}
+                    {rows.length === 0 && <li className="text-muted-foreground px-6 py-16 text-center text-sm">{empty}</li>}
+                </ul>
+            )}
+            <div className={cn('scroll-soft relative overflow-auto md:min-h-0 md:flex-1', mobileRow && 'max-md:hidden')}>
                 <table className="min-w-full table-fixed border-collapse text-sm" style={{ width: tableWidth }}>
                     <thead className="bg-sidebar sticky top-0 z-30">
                         <tr className="text-muted-foreground text-left text-[13px] whitespace-nowrap">
@@ -274,8 +288,8 @@ export function DataTable<Row>({
             </div>
 
             {footer && (
-                // A phone stacks rows-per-page over the paging; from sm up they share a line.
-                <div className="flex shrink-0 flex-col items-stretch gap-2 border-t px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2 md:px-6">
+                // From sm up rows-per-page and the paging share a line; a phone shows only the paging.
+                <div className="flex shrink-0 flex-col items-stretch gap-2 border-t px-4 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2 md:px-6 md:py-3">
                     {footer}
                 </div>
             )}

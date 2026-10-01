@@ -36,7 +36,7 @@ export function clearedFilter(filter: FilterDef): FilterValues {
     }
 }
 
-function FilterBody({ filter, filters, onApply }: { filter: FilterDef; filters: FilterValues; onApply: (changes: FilterValues) => void }) {
+export function FilterBody({ filter, filters, onApply }: { filter: FilterDef; filters: FilterValues; onApply: (changes: FilterValues) => void }) {
     const [text, setText] = useState(filter.type === 'text' ? ((filters[filter.param] as string) ?? '') : '');
     const [from, setFrom] = useState(filter.type === 'dates' ? ((filters[filter.from] as string) ?? '') : '');
     const [to, setTo] = useState(filter.type === 'dates' ? ((filters[filter.to] as string) ?? '') : '');

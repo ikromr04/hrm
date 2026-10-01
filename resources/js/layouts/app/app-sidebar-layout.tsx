@@ -3,6 +3,7 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import { FlashNotice } from '@/components/flash-notice';
+import { MobileTabBar } from '@/components/mobile-tab-bar';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 
@@ -17,11 +18,19 @@ export default function AppSidebarLayout({ children, breadcrumbs = [], fitViewpo
     return (
         <AppShell variant="sidebar">
             <AppSidebar />
-            <AppContent variant="sidebar" className={cn(fitViewport && 'md:h-[calc(100svh-(--spacing(4)))] md:overflow-hidden')}>
+            {/* On a phone the tab bar sits over the bottom of the page; the padding keeps the last row clear of it. */}
+            <AppContent
+                variant="sidebar"
+                className={cn(
+                    'max-md:bg-muted/40 max-md:pb-[calc(3.5rem+env(safe-area-inset-bottom))]',
+                    fitViewport && 'md:h-[calc(100svh-(--spacing(4)))] md:overflow-hidden',
+                )}
+            >
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 <FlashNotice />
                 {children}
             </AppContent>
+            <MobileTabBar />
         </AppShell>
     );
 }
