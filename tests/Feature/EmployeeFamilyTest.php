@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\UserChild;
 use App\Models\UserDetail;
+use App\Support\EmployeeFields;
 use Database\Seeders\PositionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -183,6 +185,194 @@ class EmployeeFamilyTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($this->colleague())
+            ->put("/employees/{$employee->id}/family", $this->payload())
+            ->assertForbidden();
+    }
+
+    /**
+     * Somebody whose position holds exactly these lines of the "Семья" card, to
+     * read and to change, plus the staff list. Nobody retypes what they cannot
+     * see, so each line comes with its right to read it.
+     */
+    private function withFamilyRights(string $scope, string ...$fields): User
+    {
+        $rights = collect($fields)->flatMap(fn (string $field) => [
+            EmployeeFields::permission($field, $scope),
+            EmployeeFields::editPermission($field, $scope),
+        ])->all();
+
+        $role = Role::create(['name' => 'f-'.Role::count(), 'title' => 'Роль '.Role::count(), 'guard_name' => 'web']);
+        $role->syncPermissions(['employees.view', ...$rights]);
+
+        return User::factory()->has(UserDetail::factory(), 'details')->create()->assignRole($role);
+    }
+
+    /** A card with a whole family already on file. */
+    private function withFamily(User $employee): User
+    {
+        $employee->details()->update([
+            'marital_status' => 'married',
+            'spouse_name' => 'Азимова Нигина',
+            'spouse_birth_date' => '1992-03-08',
+            'has_children' => true,
+        ]);
+        UserChild::factory()->for($employee)->create(['full_name' => 'Азимов Далер', 'birth_date' => '2015-09-01']);
+
+        return $employee->refresh();
+    }
+
+    private function assertSpouseKept(User $employee): void
+    {
+        $this->assertSame('Азимова Нигина', $employee->details->spouse_name);
+        $this->assertSame('1992-03-08', $employee->details->spouse_birth_date->toDateString());
+    }
+
+    private function assertChildrenKept(User $employee): void
+    {
+        $this->assertTrue($employee->details->has_children);
+        $this->assertSame(['Азимов Далер'], $employee->children->pluck('full_name')->all());
+    }
+
+    /**
+     * The block opens for whoever may change any line of it, so a form that only
+     * offered the marital status must not wipe the spouse and the children with
+     * blanks it was never meant to send.
+     */
+    public function test_whoever_may_change_only_the_marital_status_leaves_the_rest_alone()
+    {
+        $clerk = $this->withFamilyRights(EmployeeFields::OTHERS, 'marital_status');
+        $employee = $this->withFamily(User::factory()->has(UserDetail::factory(), 'details')->create());
+
+        $this->actingAs($clerk)
+            ->put("/employees/{$employee->id}/family", [
+                'marital_status' => 'single',
+                'spouse_name' => '',
+                'spouse_birth_date' => '',
+                'has_children' => false,
+                'children' => [],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $employee->refresh();
+        $this->assertSame('single', $employee->details->marital_status);
+        $this->assertSpouseKept($employee);
+        $this->assertChildrenKept($employee);
+
+        // Nor is a line they may not change checked: there is nothing for them to fix in it.
+        $this->actingAs($clerk)
+            ->put("/employees/{$employee->id}/family", ['marital_status' => 'married', 'spouse_birth_date' => 'не дата'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('married', $employee->refresh()->details->marital_status);
+    }
+
+    public function test_whoever_may_change_only_the_children_replaces_just_them()
+    {
+        $clerk = $this->withFamilyRights(EmployeeFields::OTHERS, 'children');
+        $employee = $this->withFamily(User::factory()->has(UserDetail::factory(), 'details')->create());
+
+        $this->actingAs($clerk)
+            ->put("/employees/{$employee->id}/family", [
+                'marital_status' => '',
+                'spouse_name' => '',
+                'children' => [['full_name' => 'Азимова Мадина', 'birth_date' => '2018-05-12']],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $employee->refresh();
+        $this->assertSame(['Азимова Мадина'], $employee->children->pluck('full_name')->all());
+        $this->assertSame('married', $employee->details->marital_status);
+        $this->assertSpouseKept($employee);
+
+        // "Детей нет" is part of the children's line, and so theirs to tick.
+        $this->actingAs($clerk)
+            ->put("/employees/{$employee->id}/family", ['has_children' => false, 'children' => []])
+            ->assertSessionHasNoErrors();
+
+        $employee->refresh();
+        $this->assertFalse($employee->details->has_children);
+        $this->assertCount(0, $employee->children);
+        $this->assertSame('married', $employee->details->marital_status);
+    }
+
+    public function test_whoever_may_change_every_line_saves_the_whole_card()
+    {
+        $clerk = $this->withFamilyRights(EmployeeFields::OTHERS, 'marital_status', 'spouse', 'children');
+        $employee = $this->withFamily(User::factory()->has(UserDetail::factory(), 'details')->create());
+
+        $this->actingAs($clerk)
+            ->put("/employees/{$employee->id}/family", [
+                'marital_status' => '',
+                'spouse_name' => '',
+                'spouse_birth_date' => '',
+                'has_children' => null,
+                'children' => [],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $employee->refresh();
+        $this->assertNull($employee->details->marital_status);
+        $this->assertNull($employee->details->spouse_name);
+        $this->assertNull($employee->details->spouse_birth_date);
+        $this->assertNull($employee->details->has_children);
+        $this->assertCount(0, $employee->children);
+    }
+
+    public function test_whoever_may_change_no_line_of_the_family_is_turned_away()
+    {
+        // Reading all of it is not changing any of it.
+        $reader = $this->withFamilyRights(EmployeeFields::OTHERS);
+        $reader->roles->first()->givePermissionTo(array_map(
+            fn (string $field) => EmployeeFields::permission($field),
+            ['marital_status', 'spouse', 'children'],
+        ));
+        $employee = $this->withFamily(User::factory()->has(UserDetail::factory(), 'details')->create());
+
+        $this->actingAs($reader)
+            ->put("/employees/{$employee->id}/family", $this->payload())
+            ->assertForbidden();
+
+        $employee->refresh();
+        $this->assertSpouseKept($employee);
+        $this->assertChildrenKept($employee);
+    }
+
+    /**
+     * One's own card is read against the profile rights, line by line all the
+     * same, and those rights open nobody else's.
+     */
+    public function test_ones_own_family_is_saved_line_by_line_by_the_profile_rights()
+    {
+        $employee = $this->withFamily($this->withFamilyRights(EmployeeFields::OWN, 'marital_status'));
+
+        $this->actingAs($employee)
+            ->put("/employees/{$employee->id}/family", [
+                'marital_status' => 'single',
+                'spouse_name' => '',
+                'spouse_birth_date' => '',
+                'children' => [],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $employee->refresh();
+        $this->assertSame('single', $employee->details->marital_status);
+        $this->assertSpouseKept($employee);
+        $this->assertChildrenKept($employee);
+
+        $parent = $this->withFamily($this->withFamilyRights(EmployeeFields::OWN, 'children'));
+
+        $this->actingAs($parent)
+            ->put("/employees/{$parent->id}/family", [
+                'marital_status' => '',
+                'children' => [['full_name' => 'Азимова Мадина', 'birth_date' => '']],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $parent->refresh();
+        $this->assertSame(['Азимова Мадина'], $parent->children->pluck('full_name')->all());
+        $this->assertSame('married', $parent->details->marital_status);
+        $this->assertSpouseKept($parent);
+
+        $this->actingAs($parent)
             ->put("/employees/{$employee->id}/family", $this->payload())
             ->assertForbidden();
     }

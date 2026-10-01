@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateContactsRequest;
+use App\Http\Requests\UpdateFamilyRequest;
 use App\Http\Requests\UpdatePersonalDataRequest;
 use App\Models\Language;
 use App\Models\User;
@@ -189,43 +190,41 @@ class EmployeeDetailsController extends Controller
     /**
      * The "Семья" card: marital status, the spouse and the children. The
      * children are replaced wholesale, the way the dialog edits them.
+     *
+     * Each of the three lines has a right of its own, and the request validates
+     * only those this viewer may change; whatever it left out stays as it is on
+     * file rather than being overwritten by the blanks of a form that never
+     * showed it.
      */
-    public function family(Request $request, User $employee): RedirectResponse
+    public function family(UpdateFamilyRequest $request, User $employee): RedirectResponse
     {
-        $data = $request->validate([
-            'marital_status' => ['nullable', Rule::in(['single', 'married'])],
-            'spouse_name' => ['nullable', 'string', 'max:150'],
-            'spouse_birth_date' => ['nullable', 'date', 'before_or_equal:today'],
-            // Only false carries meaning here ("HR says there are none"); the
-            // true case is derived from the rows below, so the two cannot drift.
-            'has_children' => ['nullable', 'boolean'],
-            'children' => ['present', 'array', 'max:20'],
-            'children.*.full_name' => ['required', 'string', 'max:150'],
-            'children.*.birth_date' => ['nullable', 'date', 'before_or_equal:today'],
-        ], attributes: [
-            'marital_status' => 'семейное положение',
-            'spouse_name' => 'ФИО супруга',
-            'spouse_birth_date' => 'дата рождения супруга',
-            'children.*.full_name' => 'ФИО ребёнка',
-            'children.*.birth_date' => 'дата рождения ребёнка',
-        ]);
+        $data = $request->validated();
+        $details = Arr::only($data, ['marital_status', 'spouse_name', 'spouse_birth_date']);
+        $children = $data['children'] ?? null;
 
-        // "Не указано" and "детей нет" look the same in an empty list, so the
-        // flag keeps them apart; rows on file always mean there are children.
-        $hasChildren = match (true) {
-            $data['children'] !== [] => true,
-            ($data['has_children'] ?? null) === false => false,
-            default => null,
-        };
+        if ($children !== null) {
+            // "Не указано" and "детей нет" look the same in an empty list, so the
+            // flag keeps them apart; rows on file always mean there are children.
+            $details['has_children'] = match (true) {
+                $children !== [] => true,
+                ($data['has_children'] ?? null) === false => false,
+                default => null,
+            };
+        }
 
-        DB::transaction(function () use ($employee, $data, $hasChildren) {
-            $employee->details()->updateOrCreate([], [...Arr::except($data, 'children'), 'has_children' => $hasChildren]);
+        DB::transaction(function () use ($employee, $details, $children) {
+            if ($details !== []) {
+                $employee->details()->updateOrCreate([], $details);
+            }
 
-            $employee->children()->delete();
-            $employee->children()->createMany(array_map(
-                fn (array $child) => ['full_name' => $child['full_name'], 'birth_date' => $child['birth_date'] ?? null],
-                $data['children'],
-            ));
+            // Only whoever may change the children gets to replace them.
+            if ($children !== null) {
+                $employee->children()->delete();
+                $employee->children()->createMany(array_map(
+                    fn (array $child) => ['full_name' => $child['full_name'], 'birth_date' => $child['birth_date'] ?? null],
+                    $children,
+                ));
+            }
         });
 
         return back();

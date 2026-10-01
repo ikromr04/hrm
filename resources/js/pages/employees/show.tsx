@@ -1001,6 +1001,21 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
         children: (details.children ?? []).map((child) => ({ full_name: child.full_name, birth_date: child.birth_date ?? '' })),
     });
 
+    // The three lines are allowed one by one. Only the ones this viewer may change
+    // are shown and sent: a line left out is kept on file as it is, while an empty
+    // one would read as "clear it" — the server ignores it anyway, but the form
+    // should not ask in the first place.
+    const canEdit = useCanEdit();
+    const editsMarital = canEdit('marital_status');
+    const editsSpouse = canEdit('spouse');
+    const editsChildren = canEdit('children');
+
+    form.transform((data) => ({
+        ...(editsMarital ? { marital_status: data.marital_status } : {}),
+        ...(editsSpouse ? { spouse_name: data.spouse_name, spouse_birth_date: data.spouse_birth_date } : {}),
+        ...(editsChildren ? { has_children: data.has_children, children: data.children } : {}),
+    }));
+
     /** Ticked, the card states there are none; unticked with no rows, it stays unanswered. */
     const noChildren = form.data.has_children === false;
 
@@ -1028,137 +1043,148 @@ function FamilyDialog({ employee, details, onClose }: { employee: Employee; deta
                         <DialogDescription className="sr-only">Измените поля и сохраните.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-                        <div className="grid content-start gap-2 sm:col-span-2">
-                            <Label htmlFor="family-marital">Семейное положение</Label>
-                            <Select
-                                value={form.data.marital_status || 'none'}
-                                onValueChange={(value) => form.setData('marital_status', value === 'none' ? '' : (value as Marital))}
-                            >
-                                <SelectTrigger id="family-marital">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Не указано</SelectItem>
-                                    <SelectItem value="single">{maritalLabels[employee.sex ?? 'male'].single}</SelectItem>
-                                    <SelectItem value="married">{maritalLabels[employee.sex ?? 'male'].married}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError message={form.errors.marital_status} />
-                        </div>
-
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="family-spouse-name">{spouseLabel(employee.sex ?? 'male')}</Label>
-                            <Input
-                                id="family-spouse-name"
-                                placeholder="ФИО"
-                                value={form.data.spouse_name}
-                                onChange={(e) => form.setData('spouse_name', e.target.value)}
-                                aria-invalid={!!form.errors.spouse_name}
-                            />
-                            <InputError message={form.errors.spouse_name} />
-                        </div>
-
-                        <div className="grid content-start gap-2">
-                            <Label htmlFor="family-spouse-birth-date">Дата рождения</Label>
-                            <Input
-                                id="family-spouse-birth-date"
-                                type="date"
-                                max={today}
-                                value={form.data.spouse_birth_date}
-                                onChange={(e) => form.setData('spouse_birth_date', e.target.value)}
-                                aria-invalid={!!form.errors.spouse_birth_date}
-                            />
-                            <InputError message={form.errors.spouse_birth_date} />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 border-t pt-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <h3 className="text-sm font-semibold">Дети</h3>
-                            <div className="flex items-center gap-2">
-                                <Checkbox
-                                    id="family-no-children"
-                                    checked={noChildren}
-                                    // Ticking it drops any rows, so the flag and the list never contradict each other.
-                                    onCheckedChange={(checked) =>
-                                        form.setData((data) => ({
-                                            ...data,
-                                            has_children: checked === true ? false : null,
-                                            children: checked === true ? [] : data.children,
-                                        }))
-                                    }
-                                />
-                                <Label htmlFor="family-no-children" className="font-normal">
-                                    Детей нет
-                                </Label>
-                            </div>
-                        </div>
-
-                        {!noChildren && form.data.children.length === 0 && <p className="text-muted-foreground text-sm">Не указаны</p>}
-
-                        {!noChildren &&
-                            form.data.children.map((child, index) => (
-                                <div key={index} className="flex items-start gap-2">
-                                    <div className="grid min-w-0 flex-1 gap-x-4 gap-y-2 sm:grid-cols-[1fr_10rem]">
-                                        <div className="grid content-start gap-2">
-                                            <Label htmlFor={`family-child-${index}`} className="sr-only">
-                                                ФИО ребёнка
-                                            </Label>
-                                            <Input
-                                                id={`family-child-${index}`}
-                                                placeholder="ФИО"
-                                                value={child.full_name}
-                                                onChange={(e) => setChild(index, { full_name: e.target.value })}
-                                                aria-invalid={!!errors[`children.${index}.full_name`]}
-                                            />
-                                            <InputError message={errors[`children.${index}.full_name`]} />
-                                        </div>
-                                        <div className="grid content-start gap-2">
-                                            <Label htmlFor={`family-child-${index}-birth`} className="sr-only">
-                                                Дата рождения ребёнка
-                                            </Label>
-                                            <Input
-                                                id={`family-child-${index}-birth`}
-                                                type="date"
-                                                max={today}
-                                                value={child.birth_date}
-                                                onChange={(e) => setChild(index, { birth_date: e.target.value })}
-                                                aria-invalid={!!errors[`children.${index}.birth_date`]}
-                                            />
-                                            <InputError message={errors[`children.${index}.birth_date`]} />
-                                        </div>
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="text-muted-foreground shrink-0"
-                                        aria-label="Убрать ребёнка"
-                                        onClick={() =>
-                                            form.setData(
-                                                'children',
-                                                form.data.children.filter((_, i) => i !== index),
-                                            )
-                                        }
+                    {(editsMarital || editsSpouse) && (
+                        <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+                            {editsMarital && (
+                                <div className="grid content-start gap-2 sm:col-span-2">
+                                    <Label htmlFor="family-marital">Семейное положение</Label>
+                                    <Select
+                                        value={form.data.marital_status || 'none'}
+                                        onValueChange={(value) => form.setData('marital_status', value === 'none' ? '' : (value as Marital))}
                                     >
-                                        <Trash2 />
-                                    </Button>
+                                        <SelectTrigger id="family-marital">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Не указано</SelectItem>
+                                            <SelectItem value="single">{maritalLabels[employee.sex ?? 'male'].single}</SelectItem>
+                                            <SelectItem value="married">{maritalLabels[employee.sex ?? 'male'].married}</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={form.errors.marital_status} />
                                 </div>
-                            ))}
+                            )}
 
-                        {!noChildren && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="self-start"
-                                onClick={() => form.setData('children', [...form.data.children, { full_name: '', birth_date: '' }])}
-                            >
-                                <Plus />
-                                Добавить ребёнка
-                            </Button>
-                        )}
-                    </div>
+                            {editsSpouse && (
+                                <div className="grid content-start gap-2">
+                                    <Label htmlFor="family-spouse-name">{spouseLabel(employee.sex ?? 'male')}</Label>
+                                    <Input
+                                        id="family-spouse-name"
+                                        placeholder="ФИО"
+                                        value={form.data.spouse_name}
+                                        onChange={(e) => form.setData('spouse_name', e.target.value)}
+                                        aria-invalid={!!form.errors.spouse_name}
+                                    />
+                                    <InputError message={form.errors.spouse_name} />
+                                </div>
+                            )}
+
+                            {editsSpouse && (
+                                <div className="grid content-start gap-2">
+                                    <Label htmlFor="family-spouse-birth-date">Дата рождения</Label>
+                                    <Input
+                                        id="family-spouse-birth-date"
+                                        type="date"
+                                        max={today}
+                                        value={form.data.spouse_birth_date}
+                                        onChange={(e) => form.setData('spouse_birth_date', e.target.value)}
+                                        aria-invalid={!!form.errors.spouse_birth_date}
+                                    />
+                                    <InputError message={form.errors.spouse_birth_date} />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {editsChildren && (
+                        // The rule above the children only separates them from the lines before.
+                        <div className={cn('flex flex-col gap-3', (editsMarital || editsSpouse) && 'border-t pt-4')}>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <h3 className="text-sm font-semibold">Дети</h3>
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="family-no-children"
+                                        checked={noChildren}
+                                        // Ticking it drops any rows, so the flag and the list never contradict each other.
+                                        onCheckedChange={(checked) =>
+                                            form.setData((data) => ({
+                                                ...data,
+                                                has_children: checked === true ? false : null,
+                                                children: checked === true ? [] : data.children,
+                                            }))
+                                        }
+                                    />
+                                    <Label htmlFor="family-no-children" className="font-normal">
+                                        Детей нет
+                                    </Label>
+                                </div>
+                            </div>
+
+                            {!noChildren && form.data.children.length === 0 && <p className="text-muted-foreground text-sm">Не указаны</p>}
+
+                            {!noChildren &&
+                                form.data.children.map((child, index) => (
+                                    <div key={index} className="flex items-start gap-2">
+                                        <div className="grid min-w-0 flex-1 gap-x-4 gap-y-2 sm:grid-cols-[1fr_10rem]">
+                                            <div className="grid content-start gap-2">
+                                                <Label htmlFor={`family-child-${index}`} className="sr-only">
+                                                    ФИО ребёнка
+                                                </Label>
+                                                <Input
+                                                    id={`family-child-${index}`}
+                                                    placeholder="ФИО"
+                                                    value={child.full_name}
+                                                    onChange={(e) => setChild(index, { full_name: e.target.value })}
+                                                    aria-invalid={!!errors[`children.${index}.full_name`]}
+                                                />
+                                                <InputError message={errors[`children.${index}.full_name`]} />
+                                            </div>
+                                            <div className="grid content-start gap-2">
+                                                <Label htmlFor={`family-child-${index}-birth`} className="sr-only">
+                                                    Дата рождения ребёнка
+                                                </Label>
+                                                <Input
+                                                    id={`family-child-${index}-birth`}
+                                                    type="date"
+                                                    max={today}
+                                                    value={child.birth_date}
+                                                    onChange={(e) => setChild(index, { birth_date: e.target.value })}
+                                                    aria-invalid={!!errors[`children.${index}.birth_date`]}
+                                                />
+                                                <InputError message={errors[`children.${index}.birth_date`]} />
+                                            </div>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-muted-foreground shrink-0"
+                                            aria-label="Убрать ребёнка"
+                                            onClick={() =>
+                                                form.setData(
+                                                    'children',
+                                                    form.data.children.filter((_, i) => i !== index),
+                                                )
+                                            }
+                                        >
+                                            <Trash2 />
+                                        </Button>
+                                    </div>
+                                ))}
+
+                            {!noChildren && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="self-start"
+                                    onClick={() => form.setData('children', [...form.data.children, { full_name: '', birth_date: '' }])}
+                                >
+                                    <Plus />
+                                    Добавить ребёнка
+                                </Button>
+                            )}
+                        </div>
+                    )}
 
                     <DialogFooter className="gap-2">
                         <Button type="button" variant="outline" onClick={onClose}>
