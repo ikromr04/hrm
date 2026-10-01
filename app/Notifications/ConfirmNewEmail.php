@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\URL;
@@ -12,12 +13,17 @@ use Illuminate\Support\Facades\URL;
  * only proof that an address belongs to somebody is that they can read what
  * was sent to it. Until the link is followed the account keeps the address it
  * has, so a typo cannot lock anybody out of the system.
+ *
+ * Sent from the queue, like every letter here: the settings page answers at
+ * once whatever the mail server is doing. The link's hour starts when the
+ * letter is actually written, not when it was asked for.
  */
-class ConfirmNewEmail extends Notification
+class ConfirmNewEmail extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(private readonly string $email) {}
+    /** The address being confirmed; User::routeNotificationForMail() sends the letter there. */
+    public function __construct(public readonly string $email) {}
 
     /**
      * @return array<int, string>
@@ -27,13 +33,9 @@ class ConfirmNewEmail extends Notification
         return ['mail'];
     }
 
-    /**
-     * The letter is addressed to the new e-mail rather than to the account's.
-     */
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->to($this->email)
             ->subject('Подтверждение нового адреса — Evolet HRM')
             ->greeting("Здравствуйте, {$notifiable->name}!")
             ->line("В учётной записи Evolet HRM запрошена смена адреса на **{$this->email}**.")

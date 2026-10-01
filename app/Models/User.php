@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\ConfirmNewEmail;
+use App\Notifications\ResetPassword;
 use App\Support\Access;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Contracts\Permission;
 use Spatie\Permission\Contracts\Permission as PermissionContract;
@@ -29,6 +32,26 @@ class User extends Authenticatable
     // method cannot be reached through parent::.
     use HasRoles {
         hasPermissionTo as hasPermissionViaPositions;
+    }
+
+    /**
+     * Where a letter goes. A new address is confirmed by mail sent to that new
+     * address, not to the one on the account: only whoever reads it can prove
+     * the address is theirs. Everything else goes to the account's address.
+     */
+    public function routeNotificationForMail(Notification $notification): string
+    {
+        return $notification instanceof ConfirmNewEmail ? $notification->email : $this->email;
+    }
+
+    /**
+     * The reset letter, sent from the queue like every other letter here.
+     *
+     * @param  string  $token
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPassword($token));
     }
 
     /**

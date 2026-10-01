@@ -3,6 +3,8 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -10,8 +12,12 @@ use Illuminate\Notifications\Notification;
  * The letter a new colleague gets: where to sign in, with what, and the
  * password picked for them. The password is never stored in readable form, so
  * this is the one time it is ever shown — losing it means resetting it.
+ *
+ * Sent from the queue, so a slow or absent mail server cannot fail the adding
+ * of a colleague. The password rides in the job's payload until then, so the
+ * payload is encrypted rather than left readable in the jobs table.
  */
-class AccountCreated extends Notification
+class AccountCreated extends Notification implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
