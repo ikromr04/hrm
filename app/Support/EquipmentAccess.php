@@ -83,7 +83,7 @@ final class EquipmentAccess
      */
     public const ACTIONS = [
         'create' => [
-            'Постановка на баланс',
+            'Добавление',
             'Завести новую единицу и, если нужно, сразу выдать её.',
         ],
         'issue' => [

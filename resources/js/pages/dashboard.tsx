@@ -3,6 +3,7 @@ import { StatusBadge, type StatusTone } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { useCan } from '@/lib/access';
 import { shortMonths } from '@/lib/employee';
 import { eventLabel, eventTone, type EventKind } from '@/lib/equipment';
 import { cn } from '@/lib/utils';
@@ -125,6 +126,9 @@ function eventDetails(event: JournalRow): string {
 }
 
 export default function Dashboard({ since, today, staff, equipment, departments, events }: DashboardProps) {
+    // Adding a colleague is a right of its own, so the button is only offered
+    // to whoever holds it rather than leading everybody else to a refusal.
+    const canCreate = useCan()('employees.create');
     const heading = capitalize(format(parseISO(today), 'EEEE, d MMMM yyyy', { locale: ru }));
     const maxDepartment = Math.max(...departments.map((department) => department.count), 1);
 
@@ -157,13 +161,17 @@ export default function Dashboard({ since, today, staff, equipment, departments,
                         <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Обзор</h1>
                         <p className="text-muted-foreground text-sm max-md:text-[13px]">{heading}</p>
                     </div>
-                    <Button className="h-10 max-md:hidden lg:h-8" asChild>
-                        <Link href="/employees/create">
-                            <Plus />
-                            Добавить сотрудника
-                        </Link>
-                    </Button>
-                    <MobileFab href="/employees/create" label="Добавить сотрудника" />
+                    {canCreate && (
+                        <>
+                            <Button className="h-10 max-md:hidden lg:h-8" asChild>
+                                <Link href="/employees/create">
+                                    <Plus />
+                                    Добавить сотрудника
+                                </Link>
+                            </Button>
+                            <MobileFab href="/employees/create" label="Добавить сотрудника" />
+                        </>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 md:gap-5 xl:grid-cols-4">

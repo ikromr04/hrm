@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * What a card says about a person, block by block and line by line, and who may
@@ -303,6 +304,14 @@ final class EmployeeFields
      */
     public static function editableBy(User $viewer, ?User $employee = null): array
     {
+        // Whoever is putting a colleague on the books fills the whole card in,
+        // whatever lines they may change on anybody else's: the right to add
+        // somebody is the right to their entire card, for as long as the adding
+        // lasts. After that the card is edited like any other.
+        if (self::isBeingCreatedBy($viewer, $employee)) {
+            return self::keys();
+        }
+
         $scope = self::scopeFor($viewer, $employee);
         $visible = self::visibleTo($viewer, $employee);
 
@@ -310,6 +319,53 @@ final class EmployeeFields
             self::keys(),
             fn (string $field) => in_array($field, $visible, true) && $viewer->can(self::editPermission($field, $scope)),
         ));
+    }
+
+    /**
+     * Where the colleagues somebody is adding right now are remembered: the ids
+     * in their own session, so the window belongs to that person and that sign-in
+     * and needs nothing in the database.
+     */
+    public const CREATING = 'employees.creating';
+
+    /**
+     * The colleague just put on the books by whoever is signed in: the wizard
+     * goes on to fill the rest of the card in, step by step, through the same
+     * forms the card uses, and each of those asks editableBy().
+     *
+     * One at a time: «Сохранить и добавить ещё» never opens the card it leaves
+     * behind, so starting the next colleague is what closes the last one.
+     */
+    public static function startCreating(User $employee): void
+    {
+        session()->put(self::CREATING, [$employee->id]);
+    }
+
+    /**
+     * The adding is over: the card is opened as a card, and from now on it is
+     * edited under the ordinary rights to its lines.
+     */
+    public static function finishCreating(User $employee): void
+    {
+        $left = array_values(array_diff((array) session()->get(self::CREATING, []), [$employee->id]));
+
+        $left === [] ? session()->forget(self::CREATING) : session()->put(self::CREATING, $left);
+    }
+
+    /**
+     * Whether this viewer is in the middle of adding that colleague. Asked only of
+     * whoever is signed in — the session is theirs, and somebody else's rights are
+     * not read from it — and only while they still hold the right to add anybody,
+     * so taking the right away closes the window too.
+     */
+    public static function isBeingCreatedBy(User $viewer, ?User $employee): bool
+    {
+        if ($employee === null || $viewer->is($employee) || Auth::id() !== $viewer->getKey()) {
+            return false;
+        }
+
+        return in_array($employee->id, (array) session()->get(self::CREATING, []), true)
+            && $viewer->can('employees.create');
     }
 
     /**

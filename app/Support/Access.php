@@ -60,6 +60,11 @@ final class Access
         // ничего и не найдёт.
         'employees.view' => ['Просмотр', 'Список сотрудников и их карточки. Что именно видно в карточке — выбирается по строкам.'],
 
+        // A new colleague is put on the books whole, every line of the card at
+        // once, so adding somebody is an action rather than a line: the rights to
+        // single lines decide what may be changed afterwards, not whether anybody
+        // may be added at all.
+        'employees.create' => ['Добавление', 'Завести нового сотрудника и заполнить его карточку целиком.'],
         'employees.transfer' => ['Перевод', 'Перевести сотрудника в другой отдел или на другую должность.'],
         'employees.fire' => ['Увольнение', 'Уволить сотрудника и восстановить уволенного.'],
         'employees.delete' => ['Удаление', 'Удалить сотрудника вместе со всем, что на него записано.'],
@@ -122,12 +127,13 @@ final class Access
     }
 
     /**
-     * The three things one does to a colleague rather than to a line of their
-     * card, which is what the "Действия" column of the table holds.
+     * What one does to a colleague rather than to a line of their card, which is
+     * what the "Действия" column of the table holds. Adding somebody is among
+     * them: it is not a line of anybody's card but the card itself.
      *
      * @var list<string>
      */
-    public const ACTIONS = ['employees.transfer', 'employees.fire', 'employees.delete'];
+    public const ACTIONS = ['employees.create', 'employees.transfer', 'employees.fire', 'employees.delete'];
 
     /**
      * The roles a picker may offer: everything but the one there is only ever one

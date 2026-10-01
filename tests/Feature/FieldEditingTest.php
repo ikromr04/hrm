@@ -171,15 +171,15 @@ class FieldEditingTest extends TestCase
         $this->assertNull(User::find($third->id));
     }
 
-    public function test_whoever_may_change_a_card_may_start_one()
+    public function test_changing_a_line_of_a_card_is_not_adding_a_colleague()
     {
-        // Adding a colleague belongs to no block of the card: it is editing a card
-        // that does not exist yet.
-        $this->actingAs($this->withRights('employees.field.patronymic'))->get('/employees/create')->assertForbidden();
-
+        // Adding somebody is a right of its own: being allowed to retype a line of
+        // an existing card says nothing about putting a new person on the books.
         $this->actingAs($this->withRights('employees.field.patronymic', 'employees.edit.patronymic'))
             ->get('/employees/create')
-            ->assertOk();
+            ->assertForbidden();
+
+        $this->actingAs($this->withRights('employees.create'))->get('/employees/create')->assertOk();
     }
 
     public function test_why_somebody_left_is_for_whoever_ends_an_employment()

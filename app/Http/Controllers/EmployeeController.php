@@ -210,7 +210,9 @@ class EmployeeController extends Controller
             ],
             'status' => $status,
             'statusCounts' => $canStatus ? $this->statusCounts() : null,
-            'canEdit' => $viewer->can('employees.edit.any'),
+            // Adding a colleague is a right of its own, not a consequence of being
+            // allowed to change some line of somebody's card.
+            'canCreate' => $viewer->can('employees.create'),
             'total' => User::count(),
         ]);
     }
@@ -230,9 +232,15 @@ class EmployeeController extends Controller
      * because it runs over several steps and half-filled work should survive a
      * stray key. Everything its steps offer travels with it.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
+        // The last step hands hardware out, which is an operation on the fleet
+        // rather than a line of the card: it stays with the right to issue units,
+        // and without it the step says so instead of offering what it cannot do.
+        $canIssue = $request->user()->can('equipment.issue');
+
         return Inertia::render('employees/create', [
+            'canIssue' => $canIssue,
             'options' => [
                 'roles' => Access::offeredRoles()->get(['name', 'title']),
                 'positions' => Position::query()->orderBy('name')->get(['id', 'name']),
@@ -241,10 +249,12 @@ class EmployeeController extends Controller
                 'nationalities' => $this->distinctDetail('nationality'),
                 'citizenships' => $this->distinctDetail('citizenship'),
                 // The last step hands out hardware, so what is free travels too.
-                'stock' => Equipment::query()
-                    ->where('status', 'stock')
-                    ->orderBy('name')
-                    ->get(['id', 'name', 'inventory_number']),
+                'stock' => $canIssue
+                    ? Equipment::query()
+                        ->where('status', 'stock')
+                        ->orderBy('name')
+                        ->get(['id', 'name', 'inventory_number'])
+                    : [],
             ],
         ]);
     }
@@ -284,6 +294,11 @@ class EmployeeController extends Controller
 
         $employee->notify(new AccountCreated($password));
 
+        // Whoever added them fills the rest of their card in, every line of it,
+        // through the ordinary forms of the card: those ask EmployeeFields, which
+        // reads this. It lasts until the card is opened as a card.
+        EmployeeFields::startCreating($employee);
+
         // The wizard goes on filling the profile in, step by step, and needs
         // to know whom it is filling in; on its own the form is done here.
         return $request->boolean('continue')
@@ -315,6 +330,12 @@ class EmployeeController extends Controller
         if ($request->user()->is($employee)) {
             return to_route('profile');
         }
+
+        // Opening the card is where adding somebody ends — the wizard leads here
+        // when it is done or put off, and there is no way back into it for a
+        // person already on the books. From here on the card is edited under the
+        // ordinary rights to its lines, so it is drawn under them too.
+        EmployeeFields::finishCreating($employee);
 
         return $this->card($request, $employee, neighbours: true);
     }

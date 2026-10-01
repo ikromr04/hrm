@@ -62,7 +62,7 @@ const DIRECTORIES = 'directories';
 const EMPLOYEES_VIEW = 'employees.view';
 
 /** What one does to a colleague rather than to a line of their card. */
-const ACTIONS = ['employees.transfer', 'employees.fire', 'employees.delete'];
+const ACTIONS = ['employees.create', 'employees.transfer', 'employees.fire', 'employees.delete'];
 
 /** A column of the table: a right to tick, or a door to a window of rights. */
 interface Column {
@@ -94,7 +94,7 @@ const EMPLOYEE_COLUMNS: Column[] = [
     {
         key: 'actions',
         title: 'Действия',
-        hint: 'Что делают с самим сотрудником, а не со строкой его карточки: перевод в другой отдел или на другую должность, увольнение и удаление.',
+        hint: 'Что делают с самим сотрудником, а не со строкой его карточки: добавление нового сотрудника с заполнением всей карточки, перевод в другой отдел или на другую должность, увольнение и удаление.',
         width: 'w-40',
     },
 ];
@@ -143,7 +143,7 @@ const EQUIPMENT_COLUMNS: Column[] = [
     {
         key: 'actions',
         title: 'Действия',
-        hint: 'Операции над самой единицей, а не строки её карточки: постановка на баланс, выдача и возврат, списание, обслуживание и удаление.',
+        hint: 'Операции над самой единицей, а не строки её карточки: добавление, выдача и возврат, списание, обслуживание и удаление.',
         width: 'w-40',
     },
 ];
@@ -359,7 +359,7 @@ export default function AccessPage({
         }
 
         if (section === EMPLOYEES && column === 'actions') {
-            // Behind the same counter as the two columns beside it: three loose
+            // Behind the same counter as the two columns beside it: four loose
             // boxes in a cell read as a different kind of answer, and the row
             // should read as one.
             return (

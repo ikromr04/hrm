@@ -33,7 +33,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('employees.index');
     // Before the profile, or "create" would be read as somebody's id.
     Route::get('employees/create', [EmployeeController::class, 'create'])
-        ->middleware('can:employees.edit.any')
+        ->middleware('can:employees.create')
         ->name('employees.create');
     // One's own card, at an address of its own: everybody has one and nobody needs
     // a right to read it, so there is no id to guard.
@@ -70,7 +70,7 @@ Route::middleware(['auth'])->group(function () {
 
 // Putting a new colleague on the books.
 Route::post('employees', [EmployeeController::class, 'store'])
-    ->middleware(['auth', 'can:employees.edit.any'])
+    ->middleware(['auth', 'can:employees.create'])
     ->name('employees.store');
 
 // One card of the profile at a time, each form guarded by the block it saves:

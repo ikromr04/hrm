@@ -17,7 +17,7 @@ class StoreEmployeeRequest extends FormRequest
     use GuardsPrivilegedRoles;
 
     /**
-     * The route already requires the right to change employees.
+     * The route already requires the right to add employees.
      */
     public function authorize(): bool
     {

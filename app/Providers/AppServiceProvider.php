@@ -84,10 +84,6 @@ class AppServiceProvider extends ServiceProvider
             Gate::define("directories.manage.{$list}", fn (User $user) => Directories::canEdit($user, $list));
         }
 
-        // Adding a colleague is editing a card that does not exist yet, so it asks
-        // whether this person may change anything on a card at all.
-        Gate::define('employees.edit.any', fn (User $user, ?User $employee = null) => EmployeeFields::editableBy($user, $employee) !== []);
-
         // The photograph is a line of the card, and the line has a right of its
         // own. The gate is needed because the right alone cannot tell whose card it
         // is: one's own photograph is a different right from a colleague's, and a

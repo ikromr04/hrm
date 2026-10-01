@@ -21,7 +21,7 @@ interface Options {
     languages: { id: number; name: string }[];
     nationalities: string[];
     citizenships: string[];
-    /** Hardware free to hand out, for the last step. */
+    /** Hardware free to hand out, for the last step; empty for whoever may not issue it. */
     stock: { id: number; name: string; inventory_number: string }[];
 }
 
@@ -161,7 +161,7 @@ type SpokenLanguage = { id: string; level: LanguageLevel };
  * here is edited later on the profile, card by card. It is a page rather than
  * a dialog so that half-finished work cannot be lost to a stray key.
  */
-export default function CreateEmployee({ options }: { options: Options }) {
+export default function CreateEmployee({ options, canIssue }: { options: Options; canIssue: boolean }) {
     const today = new Date().toISOString().slice(0, 10);
     const [step, setStep] = useState(0);
     const [employee, setEmployee] = useState<NewEmployee | null>(null);
@@ -377,6 +377,14 @@ export default function CreateEmployee({ options }: { options: Options }) {
         }
 
         // The last step: "next" has nowhere further to go, so it finishes.
+        // Handing hardware out is the right to issue it, not a line of the card:
+        // without it there is nothing to file, and the step only leads on.
+        if (!canIssue) {
+            land(after === 'next' ? 'profile' : after, step);
+
+            return;
+        }
+
         equipment.post(route('employees.equipment.store', employee.id), go(after === 'next' ? 'profile' : after, step));
     };
 
@@ -1089,7 +1097,14 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                 </Records>
                             )}
 
-                            {step === 5 && (
+                            {step === 5 && !canIssue && (
+                                <p className="text-muted-foreground text-sm">
+                                    Выдать оборудование здесь нельзя: для этого нужно право «Выдача» в разделе «Оборудование». Технику новому
+                                    сотруднику выдаст тот, у кого оно есть.
+                                </p>
+                            )}
+
+                            {step === 5 && canIssue && (
                                 <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                     <Field label="Что выдаём" className="@min-[22rem]:col-span-2" error={at(equipment.errors, 'equipment')}>
                                         <MultiSelect

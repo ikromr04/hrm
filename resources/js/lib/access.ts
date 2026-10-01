@@ -21,6 +21,7 @@ export type Permission =
     | 'employees.field.positions'
     | 'employees.field.roles'
     | 'employees.field.languages'
+    | 'employees.create'
     | 'employees.transfer'
     | 'employees.fire'
     | 'employees.delete'

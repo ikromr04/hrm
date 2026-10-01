@@ -136,8 +136,8 @@ interface EmployeesProps {
     status: EmploymentStatus;
     /** Per-list counts; null for viewers who only see working staff. */
     statusCounts: Record<EmploymentStatus, number> | null;
-    /** May add a colleague, transfer, fire and delete (managers). */
-    canEdit: boolean;
+    /** May add a colleague: the right to add, which opens the whole card of whoever is added. */
+    canCreate: boolean;
     total: number;
 }
 
@@ -532,7 +532,7 @@ export default function Employees({
     options,
     status,
     statusCounts,
-    canEdit,
+    canCreate,
 }: EmployeesProps) {
     const { auth } = usePage<SharedData>().props;
     const can = useCan();
@@ -689,7 +689,7 @@ export default function Employees({
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    {canEdit && (
+                    {canCreate && (
                         // A page of its own: the form runs over several steps.
                         <Button className="h-10 max-md:hidden lg:h-8" asChild>
                             <Link href={route('employees.create')}>
@@ -804,7 +804,7 @@ export default function Employees({
                 />
             </div>
 
-            {canEdit && <MobileFab href={route('employees.create')} label="Добавить сотрудника" />}
+            {canCreate && <MobileFab href={route('employees.create')} label="Добавить сотрудника" />}
         </AppLayout>
     );
 }
