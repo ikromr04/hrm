@@ -2248,13 +2248,12 @@ export default function EmployeeProfile({
 
     // One's own card is not a page of the staff list — it is reached from the
     // name in the corner, not by walking through «Сотрудники».
-    const breadcrumbs: BreadcrumbItem[] =
-        neighbours === null
-            ? [{ title: 'Профиль', href: '/profile' }]
-            : [
-                  { title: 'Сотрудники', href: '/employees' },
-                  { title: shortName, href: `/employees/${employee.id}` },
-              ];
+    const breadcrumbs: BreadcrumbItem[] = isSelf
+        ? [{ title: 'Профиль', href: '/profile' }]
+        : [
+              { title: 'Сотрудники', href: '/employees' },
+              { title: shortName, href: `/employees/${employee.id}` },
+          ];
 
     return (
         <ProfileFields visible={visibleFields} editable={editableFields}>

@@ -315,12 +315,13 @@ class EmployeeController extends Controller
      * One's own card, at an address of its own.
      *
      * Everybody has a card and nobody needs a right to read their own, so it is
-     * not a page one arrives at by knowing an id. There is nothing to page
-     * through here either: a profile has no previous and no next.
+     * not a page one arrives at by knowing an id. Whoever may read the staff
+     * list pages on from here to the colleagues beside them; without that right
+     * the arrows would only lead to cards they may not open.
      */
     public function profile(Request $request): Response
     {
-        return $this->card($request, $request->user(), neighbours: false);
+        return $this->card($request, $request->user(), neighbours: $request->user()->can('employees.view'));
     }
 
     public function show(Request $request, User $employee): Response|RedirectResponse

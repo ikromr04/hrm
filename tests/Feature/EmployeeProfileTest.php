@@ -64,10 +64,22 @@ class EmployeeProfileTest extends TestCase
         // Last of the list; someone who left is not in it.
         $this->get("/employees/{$c->id}")->assertInertia(fn (Assert $page) => $page->where('neighbours.next', null));
 
-        // Their own card is not a page of the list at all: it lives at its own
-        // address and has nothing to page through.
+        // Their own card lives at its own address, and pages on from there to
+        // the colleagues beside them in the list.
         $this->get("/employees/{$a->id}")->assertRedirect('/profile');
-        $this->get('/profile')->assertInertia(fn (Assert $page) => $page->where('neighbours', null));
+        $this->get('/profile')->assertInertia(fn (Assert $page) => $page
+            ->where('neighbours.prev', null)
+            ->where('neighbours.next', ['id' => $b->id, 'name' => 'Азимов Фаррух'])
+        );
+    }
+
+    public function test_the_profile_has_no_arrows_for_someone_who_may_not_read_the_staff_list()
+    {
+        $user = $this->colleague();
+        $user->revokePermissionTo('employees.view');
+        User::factory()->create(['surname' => 'Яхёев']);
+
+        $this->actingAs($user)->get('/profile')->assertInertia(fn (Assert $page) => $page->where('neighbours', null));
     }
 
     public function test_employee_sees_their_full_profile_including_passport()
