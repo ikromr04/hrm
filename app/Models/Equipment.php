@@ -120,6 +120,25 @@ class Equipment extends Model
     }
 
     /**
+     * Back on the balance sheet, held by nobody. A return and an employee's
+     * deletion both end a spell this way, so the two cannot drift apart on
+     * which columns a unit on the shelf leaves empty. One save, so the journal
+     * reads it as one act; what the caller knows besides (the day it was
+     * looked over, the state it came back in) goes into the same save.
+     *
+     * @param  array<string, mixed>  $also
+     */
+    public function putOnBalance(array $also = []): void
+    {
+        $this->update([
+            'status' => 'stock',
+            'holder_user_id' => null,
+            'issued_at' => null,
+            ...$also,
+        ]);
+    }
+
+    /**
      * Still part of the fleet: everything but what has been written off.
      */
     public function scopeInService(Builder $query): void

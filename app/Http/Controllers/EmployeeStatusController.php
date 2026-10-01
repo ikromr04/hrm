@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Equipment;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Transfer, fire, restore and delete employees.
  *
  * Transferred and fired people keep their record and move to their own
- * lists; deleting removes the person and all their data for good.
+ * lists; deleting removes the person and all their data for good, and puts
+ * whatever equipment they held back on the balance sheet.
  */
 class EmployeeStatusController extends Controller
 {
@@ -43,8 +46,24 @@ class EmployeeStatusController extends Controller
         // employee's own profile, there is no page to go back to.
         $fromProfile = url()->previous() === route('employees.show', $employee);
 
-        // Details, children, roles, positions and departments go with the row.
-        $employee->delete();
+        DB::transaction(function () use ($employee) {
+            // What they hold goes back on the books first. Left to the foreign
+            // key, a unit would stay "issued" to nobody: off the shelf, yet
+            // with no one to ask for it. Nobody looked these units over, so the
+            // day they were last checked and their state stay as they were.
+            // The note says why the journal shows a return nobody brought in,
+            // and carries the name because the holder in the entry's diff has
+            // nobody behind it once the row is gone.
+            $note = "Сотрудник {$employee->surname} {$employee->name} удалён из системы";
+
+            Equipment::query()->where('holder_user_id', $employee->id)->each(function (Equipment $unit) use ($note) {
+                $unit->journalNote = $note;
+                $unit->putOnBalance();
+            });
+
+            // Details, children, roles, positions and departments go with the row.
+            $employee->delete();
+        });
 
         return $fromProfile ? to_route('employees.index') : back();
     }

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Equipment;
+use App\Models\EquipmentEvent;
 use App\Models\User;
 use App\Models\UserDetail;
 use Database\Seeders\RoleSeeder;
@@ -92,6 +94,46 @@ class EmployeeStatusTest extends TestCase
 
         $this->assertNull(User::find($employee->id));
         $this->assertSame(0, UserDetail::where('user_id', $employee->id)->count());
+    }
+
+    public function test_deleting_puts_what_the_employee_held_back_on_the_balance()
+    {
+        $employee = $this->colleague(['surname' => 'Азимов', 'name' => 'Рустам']);
+        $other = $this->colleague();
+        $held = Equipment::factory(2)->issuedTo($employee->id)->create();
+        $notTheirs = Equipment::factory()->issuedTo($other->id)->create();
+        $this->actingAs($this->admin);
+
+        $this->delete("/employees/{$employee->id}")->assertSessionHasNoErrors();
+
+        foreach ($held as $unit) {
+            $unit->refresh();
+            $this->assertSame('stock', $unit->status);
+            $this->assertNull($unit->holder_user_id);
+            $this->assertNull($unit->issued_at);
+
+            // One return each, signed by whoever deleted the person and saying why.
+            $event = $unit->events()->where('kind', 'stocked')->sole();
+            $this->assertSame($this->admin->id, $event->user_id);
+            $this->assertSame('Сотрудник Азимов Рустам удалён из системы', $event->note);
+            $this->assertSame(['issued', 'stock'], $event->diff['status']);
+        }
+
+        // Somebody else's unit is none of this deletion's business.
+        $this->assertSame('issued', $notTheirs->fresh()->status);
+        $this->assertSame($other->id, $notTheirs->fresh()->holder_user_id);
+        $this->assertSame(0, $notTheirs->events()->where('kind', 'stocked')->count());
+    }
+
+    public function test_deleting_someone_who_holds_nothing_writes_nothing_to_the_journal()
+    {
+        $employee = $this->colleague();
+        $this->actingAs($this->admin);
+
+        $this->delete("/employees/{$employee->id}")->assertSessionHasNoErrors();
+
+        $this->assertNull(User::find($employee->id));
+        $this->assertSame(0, EquipmentEvent::count());
     }
 
     public function test_deleting_from_the_profile_lands_on_the_employee_list()

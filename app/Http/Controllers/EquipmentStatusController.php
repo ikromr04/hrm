@@ -79,10 +79,7 @@ class EquipmentStatusController extends Controller
         // move followed by a correction. Somebody looked the thing over as it
         // came back, so that day is when it was last checked, whether or not
         // they had anything to say about its state.
-        $equipment->update([
-            'status' => 'stock',
-            'holder_user_id' => null,
-            'issued_at' => null,
+        $equipment->putOnBalance([
             'checked_at' => $data['returned_at'],
             ...($data['condition_on_return'] ?? null) === null ? [] : ['condition' => $data['condition_on_return']],
         ]);
