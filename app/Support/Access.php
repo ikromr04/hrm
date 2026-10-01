@@ -151,11 +151,13 @@ final class Access
      * Why this person may not change that person's positions, or null when they
      * may.
      *
-     * There is one rule, and it protects whoever hands rights out. A person who
-     * may change the access table is the one person whose positions must not be
-     * rearranged from outside: take their positions away and you have taken away
-     * what they may do. So their positions are theirs alone, and the system
-     * administrator's — nobody else, however much they were granted.
+     * Two rules, both for people who could otherwise strip each other of what
+     * they may do. A person who may change the access table must not have their
+     * positions rearranged from outside: take their positions away and you have
+     * taken away what they may do. And two people who may both change positions
+     * do not change each other's. In either case the positions are the person's
+     * own and the system administrator's — nobody else's, however much they were
+     * granted.
      *
      * Everybody else's positions are an ordinary line of a card, opened by the
      * ordinary right to that line. One's own card is the same: if the line is open
@@ -174,7 +176,20 @@ final class Access
             return 'Позиции сотрудника, который сам распоряжается доступами, меняет только он или системный администратор.';
         }
 
+        // Two people who may both rearrange positions would otherwise settle
+        // a quarrel by taking each other's away, so neither may touch the
+        // other's: that is left to the person themselves and the one account.
+        if (self::changesPositions($actor) && self::changesPositions($employee)) {
+            return 'Позиции сотрудника, который сам может менять позиции, меняет только он или системный администратор.';
+        }
+
         return null;
+    }
+
+    /** Whether somebody may change the «Позиция» line of other people's cards. */
+    private static function changesPositions(User $user): bool
+    {
+        return in_array('roles', EmployeeFields::editableBy($user), true);
     }
 
     public static function has(string $key): bool

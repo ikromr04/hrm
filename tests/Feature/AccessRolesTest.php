@@ -211,6 +211,32 @@ class AccessRolesTest extends TestCase
         $this->assertFalse($keeper->refresh()->hasRole('translator'));
     }
 
+    public function test_two_who_may_change_positions_do_not_change_each_others()
+    {
+        $first = $this->editorOfPositions()->assignRole('analyst');
+        $second = $this->editorOfPositions()->assignRole('translator');
+
+        $this->actingAs($first->fresh())
+            ->put("/employees/{$second->id}/personal", $this->card($second, ['roles' => []]))
+            ->assertSessionHasErrors('roles');
+        $this->assertTrue($second->refresh()->hasRole('translator'));
+
+        $this->actingAs($second->fresh())
+            ->put("/employees/{$first->id}/personal", $this->card($first, ['roles' => []]))
+            ->assertSessionHasErrors('roles');
+        $this->assertTrue($first->refresh()->hasRole('analyst'));
+
+        // The card says so beside the field.
+        $this->assertNotNull($this->actingAs($first->fresh())->get("/employees/{$second->id}")->viewData('page')['props']['rolesLocked']);
+
+        // The system administrator stands outside the rule.
+        $this->actingAs($this->sysadmin())
+            ->put("/employees/{$second->id}/personal", $this->card($second, ['roles' => ['intern']]))
+            ->assertSessionHasNoErrors();
+        $this->assertTrue($second->refresh()->hasRole('intern'));
+        $this->assertFalse($second->refresh()->hasRole('translator'));
+    }
+
     public function test_the_card_says_why_the_positions_are_locked()
     {
         $keeper = $this->keeperOfAccess();
