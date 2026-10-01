@@ -2,6 +2,8 @@ import {
     clearedFilter,
     countActiveFilters,
     DataTable,
+    MobileListTools,
+    MobileRow,
     resetView,
     useTableView,
     type ColumnDef,
@@ -10,6 +12,7 @@ import {
 } from '@/components/data-table';
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
+import { MobileFab } from '@/components/mobile-fab';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonFace } from '@/components/person-face';
 import { PersonLink } from '@/components/person-link';
@@ -164,7 +167,12 @@ function RowActions({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-muted-foreground size-9 lg:size-8" aria-label={`Действия: ${unit.name}`}>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground size-10 md:size-9 lg:size-8"
+                    aria-label={`Действия: ${unit.name}`}
+                >
                     <Ellipsis className="size-5!" />
                 </Button>
             </DropdownMenuTrigger>
@@ -429,12 +437,16 @@ export default function EquipmentIndex({
         <AppLayout breadcrumbs={breadcrumbs} fitViewport>
             <Head title="Оборудование" />
 
-            <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <h1 className="text-xl font-semibold tracking-tight">Оборудование</h1>
+            <div className="flex flex-1 flex-col gap-4 p-3 max-md:gap-3 md:min-h-0 md:px-5 md:py-4">
+                {/* The phone's top bar already carries the page's name. */}
+                <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Оборудование</h1>
 
-                {/* Search, the status lists, the view and the one thing you can add: one line. */}
-                <div className="-mb-2 flex flex-wrap items-center gap-2">
-                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
+                {/* Search, the status lists, the view and the one thing you can add: one line.
+                    On a phone: the search and the sorting-and-filters button, then the tabs
+                    as a row of chips; the rest is reached from the tab bar or the round button. */}
+                <div className="flex flex-wrap items-center gap-2 md:-mb-2">
+                    {/* text-base on a phone: a smaller font makes iOS zoom in on focus. */}
+                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring max-md:bg-card flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 max-md:min-w-0 max-md:rounded-xl max-md:border-transparent max-md:shadow-none lg:h-8">
                         <Search className="size-4 shrink-0" />
                         <span className="sr-only">Поиск по всем полям</span>
                         <input
@@ -442,14 +454,28 @@ export default function EquipmentIndex({
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Поиск по всем полям"
-                            className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
+                            className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden max-md:text-base"
                         />
                     </label>
 
-                    {/* A phone scrolls the tabs sideways rather than stacking them in rows. */}
+                    <MobileListTools
+                        columns={columns}
+                        filters={filters as unknown as Record<string, unknown>}
+                        onFilter={(changes) => visit({ filters: changes as Partial<Filters> })}
+                        sort={sort}
+                        sortable={sortable}
+                        onSort={(key, direction) =>
+                            visit({ sort: { key, direction: direction ?? (sort.key === key && sort.direction === 'asc' ? 'desc' : 'asc') } })
+                        }
+                        className="max-md:bg-card max-md:rounded-xl max-md:border-transparent max-md:shadow-none"
+                    />
+
+                    {/* A phone scrolls the tabs sideways rather than stacking them in rows,
+                        as chips that run to the screen's edges and show no scrollbar. The
+                        desktop look is kept under md: so neither size overrides the other. */}
                     <nav
                         aria-label="Статус оборудования"
-                        className="flex w-full items-center gap-1 overflow-x-auto text-sm lg:w-auto lg:flex-wrap lg:overflow-visible"
+                        className="flex w-full items-center gap-1 overflow-x-auto text-sm max-md:-mx-3 max-md:w-[calc(100%+1.5rem)] max-md:gap-1.5 max-md:px-3 max-md:[scrollbar-width:none] lg:w-auto lg:flex-wrap lg:overflow-visible max-md:[&::-webkit-scrollbar]:hidden"
                     >
                         {tabs.map((item) => {
                             const active = tab === item.key;
@@ -461,14 +487,21 @@ export default function EquipmentIndex({
                                     onClick={() => visit({ tab: item.key })}
                                     aria-current={active ? 'page' : undefined}
                                     className={cn(
-                                        'flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2.5 whitespace-nowrap transition-colors lg:h-8',
+                                        'flex shrink-0 items-center gap-1.5 whitespace-nowrap transition-colors max-md:h-8 max-md:rounded-full max-md:px-3 md:h-9 md:rounded-md md:px-2.5 lg:h-8',
                                         active
-                                            ? 'bg-brand-soft text-foreground font-semibold dark:bg-white/10'
-                                            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                                            ? 'max-md:bg-brand-soft max-md:text-foreground md:bg-brand-soft md:text-foreground font-semibold max-md:font-medium max-md:font-semibold max-md:dark:bg-white/10 md:dark:bg-white/10'
+                                            : 'max-md:bg-card max-md:text-foreground md:text-muted-foreground md:hover:bg-accent md:hover:text-foreground',
                                     )}
                                 >
                                     {item.label}
-                                    <span className="text-muted-foreground text-xs font-semibold tabular-nums">{item.count}</span>
+                                    <span
+                                        className={cn(
+                                            'text-xs font-semibold tabular-nums',
+                                            active ? 'max-md:text-muted-foreground md:text-muted-foreground' : 'text-muted-foreground',
+                                        )}
+                                    >
+                                        {item.count}
+                                    </span>
                                 </button>
                             );
                         })}
@@ -477,7 +510,8 @@ export default function EquipmentIndex({
                     {activeFilters > 0 && (
                         <Button
                             variant="ghost"
-                            className="h-10 lg:h-8"
+                            // On a phone the filters are cleared in their own sheet.
+                            className="h-10 max-md:hidden lg:h-8"
                             onClick={() =>
                                 visit({
                                     filters: columns.reduce<Partial<Filters>>((acc, column) => ({ ...acc, ...clearedFilter(column.filter!) }), {}),
@@ -491,7 +525,7 @@ export default function EquipmentIndex({
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="h-10 font-normal lg:h-8">
+                            <Button variant="outline" className="h-10 font-normal max-md:hidden lg:h-8">
                                 <Columns3 />
                                 Колонки
                                 <ChevronDown className="text-muted-foreground" />
@@ -526,7 +560,7 @@ export default function EquipmentIndex({
                     {(canJournal || can.create) && (
                         <>
                             {canJournal && (
-                                <Button variant="outline" className="h-10 lg:h-8" asChild>
+                                <Button variant="outline" className="h-10 max-md:hidden lg:h-8" asChild>
                                     <Link href={route('equipment.journal')}>
                                         <History />
                                         Журнал
@@ -535,7 +569,7 @@ export default function EquipmentIndex({
                             )}
 
                             {can.create && (
-                                <Button className="h-10 lg:h-8" asChild>
+                                <Button className="h-10 max-md:hidden lg:h-8" asChild>
                                     <Link href={route('equipment.create')}>
                                         <Plus />
                                         Добавить оборудование
@@ -567,9 +601,38 @@ export default function EquipmentIndex({
                     lockedKey="holder"
                     actions={actsOnRows ? (unit) => <RowActions unit={unit} can={can} onAsk={setAsking} onDelete={setDeleting} /> : undefined}
                     empty="Ничего не найдено."
+                    mobileRow={(unit) => (
+                        <MobileRow
+                            href={route('equipment.show', unit.id)}
+                            leading={<CategoryChip icon={unit.type_icon} size={40} iconSize={20} className="rounded-xl" />}
+                            title={unit.name}
+                            // Who has it says more than the status the badge already
+                            // shows; a unit nobody holds is placed by its category.
+                            subtitle={
+                                <span className="tabular-nums">
+                                    Инв. № {unit.inventory_number} · {unit.holder?.name ?? unit.type ?? statusLabel[unit.status]}
+                                </span>
+                            }
+                            // Under a status tab every row has that status, and the badge
+                            // would only take the width the name needs; it shows under «Все».
+                            meta={
+                                (tab === 'all' || unit.in_service) && (
+                                    <span className="flex items-center gap-1">
+                                        {unit.in_service && <Wrench className="size-3.5" aria-label="На обслуживании" />}
+                                        {tab === 'all' && (
+                                            <StatusBadge tone={statusTone[unit.status]} className="h-5 px-1.5 text-[11px]">
+                                                {statusLabel[unit.status]}
+                                            </StatusBadge>
+                                        )}
+                                    </span>
+                                )
+                            }
+                            trailing={actsOnRows ? <RowActions unit={unit} can={can} onAsk={setAsking} onDelete={setDeleting} /> : undefined}
+                        />
+                    )}
                     footer={
                         <>
-                            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                            <div className="text-muted-foreground flex items-center gap-2 text-sm max-md:hidden">
                                 Строк на странице
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -595,6 +658,7 @@ export default function EquipmentIndex({
                 />
             </div>
 
+            {can.create && <MobileFab href={route('equipment.create')} label="Добавить оборудование" />}
             {asking && <EquipmentMoveDialog unit={asking.unit} kind={asking.kind} holders={options.holders} onClose={() => setAsking(null)} />}
             {deleting && <DeleteDialog unit={deleting} onClose={() => setDeleting(null)} />}
         </AppLayout>

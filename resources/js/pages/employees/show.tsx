@@ -154,7 +154,12 @@ function Tabs({ tabs, active, onChange }: { tabs: readonly { key: TabKey; title:
     return (
         // One strip that scrolls sideways on a phone: wrapped, the underline of the
         // open tab would sit between two rows and read as belonging to neither.
-        <nav aria-label="Разделы профиля" className="mt-1 flex gap-x-6 overflow-x-auto [scrollbar-width:none] lg:mt-3 [&::-webkit-scrollbar]:hidden">
+        // On a phone the strip also stays under the top bar while the card scrolls,
+        // on a frosted band that runs from edge to edge of the screen.
+        <nav
+            aria-label="Разделы профиля"
+            className="max-md:bg-background/90 mt-1 flex gap-x-6 overflow-x-auto [scrollbar-width:none] max-md:sticky max-md:top-12 max-md:z-20 max-md:-mx-3 max-md:mt-0 max-md:gap-x-5 max-md:border-b max-md:px-4 max-md:backdrop-blur-xl lg:mt-3 [&::-webkit-scrollbar]:hidden"
+        >
             {tabs.map((tab) => (
                 <button
                     key={tab.key}
@@ -162,7 +167,7 @@ function Tabs({ tabs, active, onChange }: { tabs: readonly { key: TabKey; title:
                     onClick={() => onChange(tab.key)}
                     aria-current={tab.key === active ? 'page' : undefined}
                     className={cn(
-                        'shrink-0 border-b-2 px-1 pt-2 pb-2.5 text-sm whitespace-nowrap transition-colors lg:pt-0',
+                        'shrink-0 border-b-2 px-1 pt-2 pb-2.5 text-sm whitespace-nowrap transition-colors max-md:pt-3 lg:pt-0',
                         tab.key === active
                             ? 'border-brand text-foreground font-semibold'
                             : 'text-muted-foreground hover:text-foreground border-transparent font-medium',
@@ -209,33 +214,21 @@ function AccessSection({ employee, access }: { employee: Employee; access: Acces
 
     const titles = new Map(access.sections.flatMap((section) => section.rights.map((right) => [right.key, `${section.title}: ${right.title}`])));
 
-    const granted = access.rights.filter((right) => right.override === true);
-    const revoked = access.rights.filter((right) => right.override === false);
-    const effective = access.rights.filter((right) => right.override ?? right.position);
+    // Only the rights this block can name: field, equipment and directory rights are
+    // read and kept list by list elsewhere, and here they would be blank lines.
+    const titled = access.rights.filter((right) => titles.has(right.key));
+    const granted = titled.filter((right) => right.override === true);
+    const revoked = titled.filter((right) => right.override === false);
+    const effective = titled.filter((right) => right.override ?? right.position);
 
     const set = (key: string, allowed: boolean | null) =>
         router.put(route('employees.access', employee.id), { permission: key, allowed }, { preserveScroll: true, preserveState: true });
 
     return (
         <>
-            <Section
-                title="Доступы"
-                action={
-                    !access.everything && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                            aria-label="Настроить доступы"
-                            onClick={() => setOpen(true)}
-                        >
-                            <Pencil className="size-4" />
-                        </Button>
-                    )
-                }
-            >
+            <Section title="Доступы" action={!access.everything && <EditButton label="Настроить доступы" onClick={() => setOpen(true)} />}>
                 {access.everything ? (
-                    <p className="text-muted-foreground text-sm">Все доступы: сотрудник — системный администратор и проходит любую проверку.</p>
+                    <p className={emptyNote}>Все доступы: сотрудник — системный администратор и проходит любую проверку.</p>
                 ) : (
                     <Fields columns={1}>
                         <Field label="Открыто">
@@ -613,16 +606,16 @@ function PersonalDialog({
 }
 
 /** The area left under the tabs, split into a main column and a sidebar. */
-const paneGrid = 'grid gap-4 md:min-h-0 md:flex-1 lg:grid-cols-[1fr_24rem]';
+const paneGrid = 'grid gap-4 max-md:gap-4 md:min-h-0 md:flex-1 lg:grid-cols-[1fr_24rem]';
 
 /** One scrolling column of that area; scroll-soft keeps its bar out of sight until needed. */
-const pane = 'scroll-soft flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overflow-y-auto';
+const pane = 'scroll-soft flex min-w-0 flex-col gap-4 max-md:gap-4 lg:min-h-0 lg:overflow-y-auto';
 
 /**
  * Contacts are dialled and written to, so they carry the brand colour and an
  * icon rather than looking like the plain text of the fields around them.
  */
-const contactLink = 'text-brand-strong flex items-center gap-1.5 hover:underline dark:text-[#C5E27A]';
+const contactLink = 'text-brand-strong flex items-center gap-1.5 hover:underline max-md:justify-end dark:text-[#C5E27A]';
 
 /** A badge that may break onto a second line rather than run off a phone screen. */
 const wrappingBadge = 'h-auto min-h-[22px] max-w-full py-0.5 whitespace-normal';
@@ -1554,19 +1547,70 @@ function Section({
         return null;
     }
 
+    // On a phone the block is an inset grouped list: the title and the action
+    // sit above the card, as a native settings screen has them, and the card
+    // holds nothing but rows. From `md` up the wrapper steps aside (contents)
+    // and the card with its header strip is exactly what it was.
     return (
-        <Card className={cn('flex flex-col gap-4 rounded-xl px-4 py-5 sm:px-6', className)}>
+        <div className="flex min-w-0 flex-col md:contents">
             {title && (
-                // Flush to the card's edges, so the strip reads as its header.
-                <div className="bg-muted/60 -mx-4 -mt-5 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-t-xl border-b px-4 py-2 sm:-mx-6 sm:px-6">
-                    <h2 className="min-w-0 text-base font-semibold">{title}</h2>
+                <div className="mb-1.5 flex min-h-6 flex-wrap items-end justify-between gap-x-3 gap-y-1 px-1 md:hidden">
+                    <h2 className="text-muted-foreground min-w-0 text-[13px] font-semibold tracking-wide uppercase">{title}</h2>
                     {action}
                 </div>
             )}
-            {children}
-        </Card>
+            <Card
+                className={cn(
+                    'flex flex-col gap-4 rounded-xl px-4 py-5 max-md:gap-0 max-md:rounded-2xl max-md:border-0 max-md:py-0 max-md:shadow-none md:px-6',
+                    className,
+                )}
+            >
+                {title && (
+                    // Flush to the card's edges, so the strip reads as its header.
+                    <div className="bg-muted/60 -mx-4 -mt-5 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-t-xl border-b px-4 py-2 max-md:hidden md:-mx-6 md:px-6">
+                        <h2 className="min-w-0 text-base font-semibold">{title}</h2>
+                        {action}
+                    </div>
+                )}
+                {children}
+            </Card>
+        </div>
     );
 }
+
+/**
+ * The action of a block: a pencil in the desktop header strip, the word
+ * «Изменить» in the brand colour above the card on a phone, where an icon on
+ * its own would be a small target with no word to say what it does.
+ */
+function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
+    return (
+        <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground max-md:text-brand-strong max-md:hover:text-brand-strong -my-1 -mr-2.5 size-9 max-md:-my-2.5 max-md:mr-0 max-md:h-10 max-md:w-auto max-md:px-1 max-md:text-[15px] max-md:font-medium max-md:hover:bg-transparent max-md:active:opacity-60 lg:my-0 lg:-mr-2 lg:size-7 max-md:dark:text-[#C5E27A] max-md:dark:hover:text-[#C5E27A]"
+            aria-label={label}
+            onClick={onClick}
+        >
+            <Pencil className="size-4 max-md:hidden" />
+            <span className="md:hidden">Изменить</span>
+        </Button>
+    );
+}
+
+/** A note in place of an empty list; on a phone it is padded like a row of the card it sits in. */
+const emptyNote = 'text-muted-foreground text-sm max-md:py-3.5 max-md:text-[15px]';
+
+/**
+ * "Add a record" under a list. On a phone it is a row of its own in the brand
+ * colour across the whole width, as a native list ends with "Add…"; from `md`
+ * up it stays an ordinary outlined button.
+ */
+const addRecord =
+    'self-start max-md:h-12 max-md:self-stretch max-md:justify-start max-md:rounded-2xl max-md:border-0 max-md:bg-card max-md:px-4 max-md:text-[15px] max-md:font-normal max-md:text-brand-strong max-md:shadow-none max-md:dark:bg-card max-md:dark:text-[#C5E27A]';
+
+/** A record in a list card: rows ruled off from each other, flush with the card from `md` up. */
+const recordRow = 'border-t py-3 first:border-t-0 md:first:pt-0 md:last:pb-0';
 
 /**
  * Fields in newspaper columns: they read top to bottom, up to three across.
@@ -1664,30 +1708,47 @@ function ProfileFields({ visible, editable, children }: { visible: string[]; edi
  * order on the page would not be the order the card is written in.
  */
 function Fields({ children, columns }: { children: ReactNode; columns?: 1 | 2 }) {
-    const fixed = { 1: 'grid-cols-1', 2: 'grid-cols-2' } as const;
+    // A phone always gets one column of ruled rows; the columns start at `md`.
+    const fixed = { 1: 'grid-cols-1', 2: 'grid-cols-1 md:grid-cols-2' } as const;
 
     // Counted from the card's own width rather than the window's: from `lg` the
     // main column shares the row with the sidebar, and with the menu open a
     // 1024px screen leaves it too narrow for three.
     return (
         <div className="@container">
-            <dl className={cn('grid gap-x-6 gap-y-4', columns ? fixed[columns] : 'grid-cols-1 @min-[22rem]:grid-cols-2 @min-[28rem]:grid-cols-3')}>
+            <dl
+                className={cn(
+                    'grid md:gap-x-6 md:gap-y-4',
+                    columns ? fixed[columns] : 'grid-cols-1 md:@min-[22rem]:grid-cols-2 md:@min-[28rem]:grid-cols-3',
+                )}
+            >
                 {children}
             </dl>
         </div>
     );
 }
 
-/** One line of a card. Named after a field, it disappears when that is hidden. */
-function Field({ label, field, children }: { label: string; field?: string; children: ReactNode }) {
+/**
+ * One line of a card. Named after a field, it disappears when that is hidden.
+ * On a phone it is one row, the label on the left and the value on the right;
+ * from `md` up the label sits above the value.
+ */
+function Field({ label, field, className, children }: { label: string; field?: string; className?: string; children: ReactNode }) {
     if (!useShows()(field)) {
         return null;
     }
 
     return (
-        <div className="flex min-w-0 flex-col gap-1">
-            <dt className="text-muted-foreground text-[13px]">{label}</dt>
-            <dd className="text-sm font-medium break-words">{children ?? <span className="text-muted-foreground font-normal">—</span>}</dd>
+        <div
+            className={cn(
+                'border-border/60 flex min-w-0 flex-col gap-1 max-md:flex-row max-md:items-baseline max-md:justify-between max-md:gap-4 max-md:py-2.5 max-md:not-last:border-b',
+                className,
+            )}
+        >
+            <dt className="text-muted-foreground text-[13px] max-md:shrink-0 max-md:text-[15px]">{label}</dt>
+            <dd className="text-sm font-medium break-words max-md:min-w-0 max-md:text-right max-md:text-[15px] max-md:font-normal">
+                {children ?? <span className="text-muted-foreground font-normal">—</span>}
+            </dd>
         </div>
     );
 }
@@ -1712,8 +1773,8 @@ function Languages({ items }: { items: SpokenLanguage[] }) {
     return (
         <ul className="flex flex-col">
             {items.map((language) => (
-                <li key={language.id} className="flex items-center justify-between gap-3 border-t py-2.5 first:border-t-0 first:pt-0 last:pb-0">
-                    <span className="truncate text-sm font-medium">{language.name}</span>
+                <li key={language.id} className={cn(recordRow, 'flex items-center justify-between gap-3 md:py-2.5')}>
+                    <span className="truncate text-sm font-medium max-md:text-[15px] max-md:font-normal">{language.name}</span>
                     <LevelBadge level={language.level} />
                 </li>
             ))}
@@ -1739,9 +1800,9 @@ function Educations({
     return (
         <ul className="flex flex-col">
             {items.map((education) => (
-                <li key={education.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                <li key={education.id} className={cn(recordRow, 'flex items-start gap-3')}>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words">
-                        <span className="text-sm font-medium">{education.institution}</span>
+                        <span className="text-sm font-medium max-md:text-[15px]">{education.institution}</span>
                         <span className="text-sm">
                             {education.faculty} · {education.specialty}
                         </span>
@@ -1800,9 +1861,9 @@ function WorkExperiences({
     return (
         <ul className="flex flex-col">
             {items.map((job) => (
-                <li key={job.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                <li key={job.id} className={cn(recordRow, 'flex items-start gap-3')}>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words">
-                        <span className="text-sm font-medium">{job.position}</span>
+                        <span className="text-sm font-medium max-md:text-[15px]">{job.position}</span>
                         <span className="text-sm">
                             {job.organization} · {job.country}
                         </span>
@@ -1828,11 +1889,11 @@ function EquipmentJournal({ events, names }: { events: HistoryEvent[]; names: Na
     return (
         <Section title="Журнал">
             {events.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Оборудование за этим сотрудником не числилось</p>
+                <p className={emptyNote}>Оборудование за этим сотрудником не числилось</p>
             ) : (
                 <ol className="flex flex-col">
                     {events.map((event) => (
-                        <li key={event.id} className="flex flex-col gap-1.5 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                        <li key={event.id} className={cn(recordRow, 'flex flex-col gap-1.5')}>
                             <div className="flex flex-wrap items-center gap-2">
                                 <StatusBadge tone={eventTone[event.kind]}>{eventLabel[event.kind]}</StatusBadge>
                                 <span className="text-muted-foreground text-[13px] tabular-nums">{formatDate(event.at)}</span>
@@ -1864,7 +1925,7 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
     return (
         <ul className="flex flex-col">
             {items.map((unit) => (
-                <li key={unit.id} className="flex items-start gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
+                <li key={unit.id} className={cn(recordRow, 'flex items-start gap-3')}>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5 break-words">
                         {/* The unit's own card is a matter of the fleet, not of this card. */}
                         {unit.open ? (
@@ -1901,11 +1962,11 @@ function EquipmentList({ items }: { items: ProfilePrivate['equipment'] }) {
 function LockedFace() {
     return (
         <div
-            className="bg-muted text-muted-foreground flex size-28 shrink-0 items-center justify-center rounded-full"
+            className="bg-muted text-muted-foreground flex size-[72px] shrink-0 items-center justify-center rounded-full md:size-28"
             title="Фотография закрыта"
             aria-label="Фотография закрыта"
         >
-            <Lock className="size-8" />
+            <Lock className="size-7 md:size-8" />
         </div>
     );
 }
@@ -1934,14 +1995,18 @@ function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: 
         );
 
     const face = employee.avatar ? (
-        <img src={employee.avatar} alt={`Фотография: ${employee.surname} ${employee.name}`} className="size-28 rounded-full object-cover" />
+        <img
+            src={employee.avatar}
+            alt={`Фотография: ${employee.surname} ${employee.name}`}
+            className="size-[72px] rounded-full object-cover md:size-28"
+        />
     ) : (
-        <PersonAvatar name={`${employee.name} ${employee.surname}`} className="size-28 text-4xl" />
+        <PersonAvatar name={`${employee.name} ${employee.surname}`} className="size-[72px] text-2xl md:size-28 md:text-4xl" />
     );
 
     return (
-        <div className="flex max-w-56 shrink-0 flex-col gap-2 self-start sm:self-auto">
-            <div className="relative self-start">
+        <div className="flex max-w-56 shrink-0 flex-col gap-2 self-center max-md:items-center max-md:text-center md:self-auto">
+            <div className="relative md:self-start">
                 {employee.avatar_original ? (
                     <a href={employee.avatar_original} target="_blank" rel="noopener" title="Открыть оригинал" className="block">
                         {face}
@@ -1976,7 +2041,7 @@ function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: 
                                 <Button
                                     variant="outline"
                                     size="icon"
-                                    className="absolute right-0 bottom-0 size-9 rounded-full shadow-sm lg:size-8"
+                                    className="absolute right-0 bottom-0 size-9 rounded-full shadow-sm max-md:-right-1 max-md:-bottom-1 max-md:size-8 lg:size-8"
                                     aria-label="Изменить фотографию"
                                 >
                                     <Camera className="size-4" />
@@ -2007,6 +2072,18 @@ function Avatar({ employee, canEdit, onDelete }: { employee: Employee; canEdit: 
                 </p>
             )}
         </div>
+    );
+}
+
+/** A round contact button with a word under it, as a phone's contact card has them. */
+function QuickAction({ href, label, title, Icon }: { href: string; label: string; title: string; Icon: typeof Phone }) {
+    return (
+        <a href={href} title={title} aria-label={`${label}: ${title}`} className="group flex w-16 flex-col items-center gap-1">
+            <span className="bg-card text-brand-strong flex size-11 items-center justify-center rounded-full shadow-xs transition-transform group-active:scale-95 dark:text-[#C5E27A]">
+                <Icon className="size-5" />
+            </span>
+            <span className="text-brand-strong text-[11px] font-medium dark:text-[#C5E27A]">{label}</span>
+        </a>
     );
 }
 
@@ -2064,11 +2141,31 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
         );
     };
 
+    // On a phone two full-width buttons would push the card down by a whole row,
+    // so there the same links are small chevrons in the top corners of the hero
+    // (the nearest positioned box), the way a native viewer pages between records.
+    const corner = (to: Neighbour, label: string, Icon: typeof ChevronLeft, side: string) =>
+        to ? (
+            <Button variant="ghost" size="icon" className={cn('absolute top-0 size-9 md:hidden', side)} aria-label={`${label}: ${to.name}`} asChild>
+                <Link href={href(to)} prefetch>
+                    <Icon className="size-5" />
+                </Link>
+            </Button>
+        ) : (
+            <Button variant="ghost" size="icon" className={cn('absolute top-0 size-9 md:hidden', side)} aria-label={label} disabled>
+                <Icon className="size-5" />
+            </Button>
+        );
+
     return (
-        <div className="flex w-full gap-1 sm:w-auto">
-            {arrow(prev, 'Предыдущий', ChevronLeft)}
-            {arrow(next, 'Следующий', ChevronRight)}
-        </div>
+        <>
+            <div className="flex w-full gap-1 max-md:hidden sm:w-auto">
+                {arrow(prev, 'Предыдущий', ChevronLeft)}
+                {arrow(next, 'Следующий', ChevronRight)}
+            </div>
+            {corner(prev, 'Предыдущий', ChevronLeft, 'left-0')}
+            {corner(next, 'Следующий', ChevronRight, 'right-0')}
+        </>
     );
 }
 
@@ -2139,8 +2236,10 @@ export default function EmployeeProfile({
                 <Head title={shortName} />
 
                 {/* The header and tabs stay put; each column below scrolls on its own. */}
-                <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                    <div className="flex flex-col gap-5 px-1 pt-1 sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="flex flex-1 flex-col gap-4 p-3 max-md:gap-3 md:min-h-0 md:px-5 md:py-4">
+                    {/* On a phone the hero is centred, like a contact card: the face,
+                    the name under it, then the ways to reach the person. */}
+                    <div className="flex flex-col gap-5 px-1 pt-1 max-md:relative max-md:items-center max-md:gap-3 max-md:pb-1 max-md:text-center md:flex-row md:flex-wrap md:items-end">
                         {/* The photograph is a line of the card: closed, it says so, and
                         changing it takes that line rather than the right to change
                         anything at all. */}
@@ -2150,8 +2249,8 @@ export default function EmployeeProfile({
                             <LockedFace />
                         )}
 
-                        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:min-w-64">
-                            <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex min-w-0 flex-1 flex-col gap-2 max-md:w-full max-md:items-center max-md:gap-2.5 md:min-w-64">
+                            <div className="flex flex-wrap items-center gap-3 max-md:justify-center max-md:gap-2">
                                 <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{fullName}</h1>
                                 {employee.status !== 'active' && (
                                     <StatusBadge
@@ -2182,7 +2281,7 @@ export default function EmployeeProfile({
                                 said only the second. Told apart by colour, in the order the
                                 card and the table read them. */}
                             {((employee.roles ?? []).length > 0 || (employee.positions ?? []).length > 0) && (
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2 max-md:justify-center max-md:gap-1.5">
                                     {(employee.roles ?? []).map((title) => (
                                         <StatusBadge key={title} tone="info" className={wrappingBadge}>
                                             {title}
@@ -2196,7 +2295,7 @@ export default function EmployeeProfile({
                                 </div>
                             )}
 
-                            <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                            <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 text-sm max-md:hidden">
                                 {employee.email && (
                                     <a href={`mailto:${employee.email}`} className={cn(contactLink, 'max-w-full min-w-0')}>
                                         <Mail className="size-4 shrink-0" />
@@ -2210,10 +2309,28 @@ export default function EmployeeProfile({
                                     </a>
                                 )}
                             </div>
+
+                            {/* On a phone the same two contacts are round buttons under the
+                            name — a tap calls or writes — and only those this viewer reads. */}
+                            {(employee.email || details?.phone) && (
+                                <div className="mt-1 flex justify-center gap-6 md:hidden">
+                                    {details?.phone && (
+                                        <QuickAction
+                                            href={`tel:${details.phone}`}
+                                            label="Позвонить"
+                                            title={formatPhone(details.phone)}
+                                            Icon={Phone}
+                                        />
+                                    )}
+                                    {employee.email && (
+                                        <QuickAction href={`mailto:${employee.email}`} label="Написать" title={employee.email} Icon={Mail} />
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {neighbours !== null && (
-                            <div className="flex items-center gap-2 self-stretch sm:self-end">
+                            <div className="flex items-center gap-2 self-stretch max-md:contents md:self-end">
                                 <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
                             </div>
                         )}
@@ -2228,7 +2345,7 @@ export default function EmployeeProfile({
                                 <>
                                     <Section>
                                         {details.educations.length === 0 ? (
-                                            <p className="text-muted-foreground text-sm">Не указано</p>
+                                            <p className={emptyNote}>Не указано</p>
                                         ) : (
                                             <Educations
                                                 items={details.educations}
@@ -2241,7 +2358,7 @@ export default function EmployeeProfile({
 
                                     {/* Outside the card: the card is the list, this adds to it. */}
                                     {canEditBlock('education') && (
-                                        <Button type="button" variant="outline" className="self-start" onClick={() => setEducation('new')}>
+                                        <Button type="button" variant="outline" className={addRecord} onClick={() => setEducation('new')}>
                                             <Plus />
                                             Добавить образование
                                         </Button>
@@ -2253,7 +2370,7 @@ export default function EmployeeProfile({
                                 <>
                                     <Section>
                                         {details.work_experiences.length === 0 ? (
-                                            <p className="text-muted-foreground text-sm">Не указана</p>
+                                            <p className={emptyNote}>Не указана</p>
                                         ) : (
                                             <WorkExperiences
                                                 items={details.work_experiences}
@@ -2265,7 +2382,7 @@ export default function EmployeeProfile({
                                     </Section>
 
                                     {canEditBlock('experience') && (
-                                        <Button type="button" variant="outline" className="self-start" onClick={() => setJob('new')}>
+                                        <Button type="button" variant="outline" className={addRecord} onClick={() => setJob('new')}>
                                             <Plus />
                                             Добавить место работы
                                         </Button>
@@ -2297,7 +2414,7 @@ export default function EmployeeProfile({
                                             }
                                         >
                                             {details.equipment.length === 0 ? (
-                                                <p className="text-muted-foreground text-sm">Не выдано</p>
+                                                <p className={emptyNote}>Не выдано</p>
                                             ) : (
                                                 <EquipmentList items={details.equipment} />
                                             )}
@@ -2322,15 +2439,7 @@ export default function EmployeeProfile({
                                         title="Основные данные"
                                         action={
                                             canEditBlock('personal') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать основные данные"
-                                                    onClick={() => setEditing('personal')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
+                                                <EditButton label="Редактировать основные данные" onClick={() => setEditing('personal')} />
                                             )
                                         }
                                     >
@@ -2384,15 +2493,7 @@ export default function EmployeeProfile({
                                         title="Паспорт"
                                         action={
                                             canEditBlock('passport') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать паспорт"
-                                                    onClick={() => setEditing('passport')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
+                                                <EditButton label="Редактировать паспорт" onClick={() => setEditing('passport')} />
                                             )
                                         }
                                     >
@@ -2417,17 +2518,7 @@ export default function EmployeeProfile({
                                         fields={['marital_status', 'spouse', 'children']}
                                         title="Семья"
                                         action={
-                                            canEditBlock('family') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать семью"
-                                                    onClick={() => setEditing('family')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
-                                            )
+                                            canEditBlock('family') && <EditButton label="Редактировать семью" onClick={() => setEditing('family')} />
                                         }
                                     >
                                         <Fields>
@@ -2447,13 +2538,36 @@ export default function EmployeeProfile({
                                                     </>
                                                 )}
                                             </Field>
+                                            {/* On a phone the children are one more row of the list, the
+                                            names stacked on the right; the heading and list below are
+                                            the desktop's. The Field asks about the same line. */}
+                                            <Field label="Дети" field="children" className="md:hidden">
+                                                {details.children.length === 0 ? (
+                                                    details.has_children === false ? (
+                                                        'Нет'
+                                                    ) : null
+                                                ) : (
+                                                    <span className="flex flex-col gap-1.5">
+                                                        {details.children.map((child) => (
+                                                            <span key={child.full_name + child.birth_date} className="flex flex-col">
+                                                                <span>{child.full_name}</span>
+                                                                {child.birth_date && (
+                                                                    <span className="text-muted-foreground text-[13px]">
+                                                                        {formatDate(child.birth_date)} · {age(child.birth_date)}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        ))}
+                                                    </span>
+                                                )}
+                                            </Field>
                                         </Fields>
 
                                         {/* Not a Field but a heading and a list, so it has to ask about
                                         its line itself: the payload leaves out what the viewer may
                                         not read, and the block above it may well be readable. */}
                                         {visibleFields.includes('children') && (
-                                            <>
+                                            <div className="max-md:hidden md:contents">
                                                 <h3 className="text-muted-foreground text-[13px]">Дети</h3>
                                                 {details.children.length === 0 ? (
                                                     // A dash while nobody has filled this in; "Нет" only once HR says so.
@@ -2475,24 +2589,41 @@ export default function EmployeeProfile({
                                                         ))}
                                                     </ul>
                                                 )}
-                                            </>
+                                            </div>
                                         )}
                                     </Section>
                                 </div>
 
                                 <aside className={pane}>
+                                    {/* On a phone the two facts get a heading like every other block,
+                                    so the way to change them reads the same: «Изменить» above the card. */}
+                                    {visibleFields.includes('hired_at') && (
+                                        <div className="-mb-2.5 flex min-h-6 items-end justify-between gap-3 px-1 md:hidden">
+                                            <h2 className="text-muted-foreground text-[13px] font-semibold tracking-wide uppercase">
+                                                Работа в компании
+                                            </h2>
+                                            {canEditBlock('employment') && (
+                                                <EditButton label="Редактировать начало работы" onClick={() => setEditing('employment')} />
+                                            )}
+                                        </div>
+                                    )}
                                     {/* Bare, without a card of its own: two facts that need no heading. */}
-                                    <div className="px-1">
+                                    <div
+                                        className={cn(
+                                            'px-1',
+                                            visibleFields.includes('hired_at') ? 'max-md:bg-card max-md:rounded-2xl max-md:px-4' : 'max-md:hidden',
+                                        )}
+                                    >
                                         <Fields columns={2}>
                                             <Field label="Начало работы" field="hired_at">
                                                 {/* The pencil sits by the value it edits, not by the block. */}
-                                                <span className="flex items-center gap-1">
+                                                <span className="flex items-center gap-1 max-md:justify-end">
                                                     {formatDate(details.hired_at) ?? <span className="text-muted-foreground font-normal">—</span>}
                                                     {canEditBlock('employment') && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="text-muted-foreground -my-2.5 size-9 shrink-0 lg:-my-1 lg:size-6"
+                                                            className="text-muted-foreground -my-2.5 size-9 shrink-0 max-md:hidden lg:-my-1 lg:size-6"
                                                             aria-label="Редактировать начало работы"
                                                             onClick={() => setEditing('employment')}
                                                         >
@@ -2512,20 +2643,12 @@ export default function EmployeeProfile({
                                         title="Знание языков"
                                         action={
                                             canEditBlock('languages') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать знание языков"
-                                                    onClick={() => setEditing('languages')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
+                                                <EditButton label="Редактировать знание языков" onClick={() => setEditing('languages')} />
                                             )
                                         }
                                     >
                                         {(employee.languages ?? []).length === 0 ? (
-                                            <p className="text-muted-foreground text-sm">Не указаны</p>
+                                            <p className={emptyNote}>Не указаны</p>
                                         ) : (
                                             <Languages items={employee.languages ?? []} />
                                         )}
@@ -2536,15 +2659,7 @@ export default function EmployeeProfile({
                                         title="Контакты"
                                         action={
                                             canEditBlock('contacts') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать контакты"
-                                                    onClick={() => setEditing('contacts')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
+                                                <EditButton label="Редактировать контакты" onClick={() => setEditing('contacts')} />
                                             )
                                         }
                                     >
@@ -2600,15 +2715,7 @@ export default function EmployeeProfile({
                                         // right that shows up nowhere is a right nobody has.
                                         action={
                                             canEditBlock('personal') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать основные данные"
-                                                    onClick={() => setEditing('personal')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
+                                                <EditButton label="Редактировать основные данные" onClick={() => setEditing('personal')} />
                                             )
                                         }
                                     >
@@ -2639,7 +2746,7 @@ export default function EmployeeProfile({
                                         </Fields>
                                     </Section>
 
-                                    <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-4 py-5 text-sm sm:px-6">
+                                    <Card className="text-muted-foreground flex items-start gap-3 rounded-xl px-4 py-5 text-sm max-md:rounded-2xl max-md:border-0 max-md:py-3.5 max-md:text-[15px] max-md:shadow-none md:px-6">
                                         <Lock className="mt-0.5 size-5 shrink-0" />
                                         {/* Who exactly sees them is no longer a sentence to write down:
                                         it is whatever the access page says, line by line. */}
@@ -2655,20 +2762,12 @@ export default function EmployeeProfile({
                                         title="Знание языков"
                                         action={
                                             canEditBlock('languages') && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="text-muted-foreground -my-1 -mr-2.5 size-9 lg:my-0 lg:-mr-2 lg:size-7"
-                                                    aria-label="Редактировать знание языков"
-                                                    onClick={() => setEditing('languages')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
+                                                <EditButton label="Редактировать знание языков" onClick={() => setEditing('languages')} />
                                             )
                                         }
                                     >
                                         {(employee.languages ?? []).length === 0 ? (
-                                            <p className="text-muted-foreground text-sm">Не указаны</p>
+                                            <p className={emptyNote}>Не указаны</p>
                                         ) : (
                                             <Languages items={employee.languages ?? []} />
                                         )}

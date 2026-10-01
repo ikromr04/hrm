@@ -121,7 +121,7 @@ export function EquipmentScopesDialog({
                 <EquipmentScopes scopes={scopes} held={held} onChange={onChange} />
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
+                    <Button variant="outline" className="max-md:h-11" onClick={onClose}>
                         Готово
                     </Button>
                 </DialogFooter>

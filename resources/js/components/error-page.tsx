@@ -31,8 +31,8 @@ export function ErrorPage({
     const { auth } = usePage<SharedData>().props;
 
     const body = (
-        <div className="flex flex-1 items-center justify-center p-6">
-            <div className="flex w-full max-w-md flex-col items-center gap-6 text-center">
+        <div className="flex flex-1 items-center justify-center p-6 max-md:px-4">
+            <div className="flex w-full max-w-md flex-col items-center gap-6 text-center max-md:gap-5">
                 <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-2xl">
                     <Icon className="size-8" />
                 </span>
@@ -44,12 +44,13 @@ export function ErrorPage({
                     <p className="text-muted-foreground text-sm leading-relaxed text-balance">{description}</p>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                    <Button variant="outline" onClick={() => window.history.back()}>
+                {/* On a phone the two ways out are full-width buttons, the main one on top where the thumb meets it first. */}
+                <div className="flex flex-wrap items-center justify-center gap-2 max-md:w-full max-md:max-w-xs max-md:flex-col-reverse max-md:items-stretch">
+                    <Button variant="outline" onClick={() => window.history.back()} className="max-md:h-11 max-md:text-[15px]">
                         <ArrowLeft />
                         Назад
                     </Button>
-                    <Button asChild>
+                    <Button asChild className="max-md:h-11 max-md:text-[15px]">
                         <Link href={auth.user ? '/' : route('login')}>{auth.user ? 'На главную' : 'Войти'}</Link>
                     </Button>
                 </div>
@@ -70,7 +71,7 @@ export function ErrorPage({
 /** Without an account there is no shell to sit in, so the page brings its own. */
 function Guest({ children }: { children: ReactNode }) {
     return (
-        <div className="bg-background flex min-h-dvh flex-col gap-4 p-6 sm:p-10">
+        <div className="bg-background flex min-h-dvh flex-col gap-4 p-6 max-sm:px-4 sm:p-10">
             <Link href={route('login')} className="flex items-center gap-2.5 self-center">
                 <EvoletLogo className="h-8 w-32 dark:hidden" />
                 <EvoletLogo tone="light" className="hidden h-8 w-32 dark:block" />

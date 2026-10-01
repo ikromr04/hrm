@@ -8,6 +8,7 @@ import {
     type CardFieldsMode,
     type PlainRight,
 } from '@/components/card-fields';
+import { searchBox } from '@/components/directory-manager';
 import { EquipmentScopesButton, EquipmentScopesDialog, type EquipmentScope } from '@/components/equipment-scopes';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,7 +18,7 @@ import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { router } from '@inertiajs/react';
 import { Check, Lock, Search } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 interface Right {
     key: string;
@@ -320,10 +321,135 @@ export default function AccessPage({
             ),
         );
 
+    /**
+     * What answers for one position under one column: a counter with a window
+     * behind it, or a box to tick. Drawn once here, so the table on a desktop and
+     * the cards on a phone are the same controls laid out two ways.
+     */
+    const cell = (role: RoleRow, section: Section, column: Column): ReactNode => {
+        const counter = counterOf(role, section.key, column.key);
+
+        if (counter !== null) {
+            return role.everything ? <span className="text-muted-foreground text-[13px]">все</span> : counter;
+        }
+
+        return role.everything ? (
+            <Check className="text-muted-foreground mx-auto size-4" aria-label={`${role.title}: ${column.title} — есть всегда`} />
+        ) : (
+            <Checkbox
+                checked={held(role).includes(column.key)}
+                onCheckedChange={() => toggle(role, column.key)}
+                aria-label={`${role.title}: ${section.title} — ${column.title}`}
+                className="mx-auto"
+            />
+        );
+    };
+
+    /** The counter under a column, or null where the column is a plain right. */
+    const counterOf = (role: RoleRow, section: string, column: string): ReactNode | null => {
+        if (section === EMPLOYEES && (column === 'view' || column === 'edit')) {
+            return (
+                <CardFieldsButton
+                    mode={column}
+                    groups={fields}
+                    held={held(role)}
+                    onOpen={() => setPicking({ id: role.id, scope: EMPLOYEES, mode: column })}
+                />
+            );
+        }
+
+        if (section === EMPLOYEES && column === 'actions') {
+            // Behind the same counter as the two columns beside it: three loose
+            // boxes in a cell read as a different kind of answer, and the row
+            // should read as one.
+            return (
+                <RightsButton
+                    chosen={actions.filter((right) => held(role).includes(right.key)).length}
+                    total={actions.length}
+                    title="Действия с сотрудником"
+                    onOpen={() => setPicking({ id: role.id, scope: EMPLOYEES, mode: 'actions' })}
+                />
+            );
+        }
+
+        if (section === PROFILE && (column === 'view' || column === 'edit')) {
+            return (
+                <CardFieldsButton
+                    mode={column}
+                    groups={profileFields}
+                    held={held(role)}
+                    onOpen={() => setPicking({ id: role.id, scope: PROFILE, mode: column })}
+                />
+            );
+        }
+
+        if (section === EQUIPMENT && column === 'view') {
+            // Behind a counter like the card sections beside it: what is visible
+            // here is three parts of the fleet and a journal for each, not a box
+            // one either ticks or not.
+            return (
+                <EquipmentScopesButton
+                    scopes={equipmentScopes}
+                    held={held(role)}
+                    onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'scopes' })}
+                />
+            );
+        }
+
+        if (section === EQUIPMENT && column === 'blocks') {
+            return (
+                <RightsButton
+                    chosen={equipmentBlocks.filter((right) => held(role).includes(right.key)).length}
+                    total={equipmentBlocks.length}
+                    title="Блоки карточки единицы"
+                    onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'blocks' })}
+                />
+            );
+        }
+
+        if (section === EQUIPMENT && column === 'actions') {
+            return (
+                <RightsButton
+                    chosen={equipmentActions.filter((right) => held(role).includes(right.key)).length}
+                    total={equipmentActions.length}
+                    title="Операции с единицей"
+                    onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'actions' })}
+                />
+            );
+        }
+
+        if (section === DIRECTORIES && column === 'lists') {
+            // Two counters instead of the pair of boxes this section used to
+            // hold: «Справочники» is five lists, and a position usually keeps one
+            // of them and only reads the rest.
+            return (
+                <RightsButton
+                    chosen={directoryLists.filter((right) => held(role).includes(right.key)).length}
+                    total={directoryLists.length}
+                    title="Какие справочники видно"
+                    onOpen={() => setPicking({ id: role.id, scope: DIRECTORIES, mode: 'lists' })}
+                />
+            );
+        }
+
+        if (section === DIRECTORIES && column === 'edits') {
+            return (
+                <RightsButton
+                    chosen={directoryEdits.filter((right) => held(role).includes(right.key)).length}
+                    total={directoryEdits.length}
+                    title="Какие справочники позиция ведёт"
+                    onOpen={() => setPicking({ id: role.id, scope: DIRECTORIES, mode: 'edits' })}
+                />
+            );
+        }
+
+        return null;
+    };
+
     return (
         <DirectoriesLayout title="Доступы">
-            <div className="-mb-2 flex flex-wrap items-center gap-2">
-                <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
+            <div className="flex flex-wrap items-center gap-2 md:-mb-2">
+                <label className={searchBox}>
                     <Search className="size-4 shrink-0" />
                     <span className="sr-only">Поиск</span>
                     <input
@@ -331,15 +457,78 @@ export default function AccessPage({
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="Поиск по позиции"
-                        className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
+                        className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden max-md:text-base"
                     />
                 </label>
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground text-sm max-md:px-1 max-md:text-[13px]">
                     {rights.length} {plural(rights.length, ['доступ', 'доступа', 'доступов'])} · изменения сохраняются сразу
                 </p>
             </div>
 
-            <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
+            {/*
+             * A phone has no room for a matrix forty columns wide, so each
+             * position becomes a card of its own: the sections down the card, the
+             * same counters and boxes at the right of each line. A position that
+             * passes every check has nothing to choose, and says so in one line
+             * instead of a column of «все».
+             */}
+            <div className="flex flex-col gap-5 md:hidden">
+                {visible.map((role) => (
+                    <section key={role.id} aria-label={role.title}>
+                        <h2 className="text-muted-foreground mb-1.5 flex items-baseline gap-2 px-1 text-[13px] font-semibold tracking-wide uppercase">
+                            <span className="min-w-0 break-words">{role.title}</span>
+                            {role.everything && <Lock className="size-3.5 shrink-0 self-center" aria-label="Все доступы: изменить нельзя" />}
+                            <span className="ml-auto shrink-0 font-normal tracking-normal normal-case tabular-nums">
+                                {role.users_count} {plural(role.users_count, ['сотрудник', 'сотрудника', 'сотрудников'])}
+                            </span>
+                        </h2>
+                        <Card className="gap-0 rounded-2xl border-0 px-4 py-0 shadow-none">
+                            {role.everything ? (
+                                <p className="text-muted-foreground py-3 text-[15px]">Все доступы: позиция проходит любую проверку.</p>
+                            ) : (
+                                sections.map((section) => {
+                                    const columns = columnsOf(section);
+
+                                    if (columns.length === 0) return null;
+
+                                    return (
+                                        <div key={section.key} className="border-border/60 border-b pt-3 last:border-0">
+                                            <p className="text-muted-foreground text-[13px] font-medium">{section.title}</p>
+                                            {columns.map((column) => {
+                                                const control = cell(role, section, column);
+                                                const plain = counterOf(role, section.key, column.key) === null;
+                                                const line = 'flex min-h-12 items-center justify-between gap-4 py-1.5';
+
+                                                // A plain right is ticked from anywhere on its line,
+                                                // not only from the small box at the end of it.
+                                                return plain ? (
+                                                    <label key={column.key} className={line}>
+                                                        <span className="min-w-0 text-[15px] break-words">{column.title}</span>
+                                                        <span className="flex size-10 shrink-0 items-center justify-center">{control}</span>
+                                                    </label>
+                                                ) : (
+                                                    <div key={column.key} className={line}>
+                                                        <span className="min-w-0 text-[15px] break-words">{column.title}</span>
+                                                        <span className="shrink-0">{control}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </Card>
+                    </section>
+                ))}
+
+                {visible.length === 0 && (
+                    <Card className="text-muted-foreground rounded-2xl border-0 px-4 py-12 text-center text-[15px] shadow-none">
+                        Ничего не найдено.
+                    </Card>
+                )}
+            </div>
+
+            <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 max-md:hidden md:min-h-0 md:flex-1">
                 {/*
                  * Below md the page scrolls as a whole, so the table is given a
                  * height of its own: without it the header row would have no box
@@ -412,187 +601,15 @@ export default function AccessPage({
                                     </th>
 
                                     {sections.map((section) =>
-                                        section.key === EMPLOYEES ? (
-                                            <Fragment key={section.key}>
-                                                {(['view', 'edit'] as CardFieldsMode[]).map((mode, index) => (
-                                                    <td key={mode} className={cn('px-2 py-2.5 text-center', index === 0 && 'border-l')}>
-                                                        {role.everything ? (
-                                                            <span className="text-muted-foreground text-[13px]">все</span>
-                                                        ) : (
-                                                            <CardFieldsButton
-                                                                mode={mode}
-                                                                groups={fields}
-                                                                held={held(role)}
-                                                                onOpen={() => setPicking({ id: role.id, scope: EMPLOYEES, mode })}
-                                                            />
-                                                        )}
-                                                    </td>
-                                                ))}
-
-                                                <td className="px-2 py-2.5 text-center">
-                                                    {role.everything ? (
-                                                        <span className="text-muted-foreground text-[13px]">все</span>
-                                                    ) : (
-                                                        // Behind the same counter as the two columns beside it:
-                                                        // three loose boxes in a cell read as a different kind
-                                                        // of answer, and the row should read as one.
-                                                        <RightsButton
-                                                            chosen={actions.filter((right) => held(role).includes(right.key)).length}
-                                                            total={actions.length}
-                                                            title="Действия с сотрудником"
-                                                            onOpen={() => setPicking({ id: role.id, scope: EMPLOYEES, mode: 'actions' })}
-                                                        />
-                                                    )}
-                                                </td>
-                                            </Fragment>
-                                        ) : section.key === PROFILE ? (
-                                            <Fragment key={section.key}>
-                                                {(['view', 'edit'] as CardFieldsMode[]).map((mode, index) => (
-                                                    <td key={mode} className={cn('px-2 py-2.5 text-center', index === 0 && 'border-l')}>
-                                                        {role.everything ? (
-                                                            <span className="text-muted-foreground text-[13px]">все</span>
-                                                        ) : (
-                                                            <CardFieldsButton
-                                                                mode={mode}
-                                                                groups={profileFields}
-                                                                held={held(role)}
-                                                                onOpen={() => setPicking({ id: role.id, scope: PROFILE, mode })}
-                                                            />
-                                                        )}
-                                                    </td>
-                                                ))}
-                                            </Fragment>
-                                        ) : section.key === EQUIPMENT ? (
-                                            <Fragment key={section.key}>
-                                                <td className="border-l px-2 py-2.5 text-center">
-                                                    {role.everything ? (
-                                                        <span className="text-muted-foreground text-[13px]">все</span>
-                                                    ) : (
-                                                        // Behind a counter like the card sections beside it: what
-                                                        // is visible here is three parts of the fleet and a
-                                                        // journal for each, not a box one either ticks or not.
-                                                        <EquipmentScopesButton
-                                                            scopes={equipmentScopes}
-                                                            held={held(role)}
-                                                            onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'scopes' })}
-                                                        />
-                                                    )}
-                                                </td>
-
-                                                <td className="px-2 py-2.5 text-center">
-                                                    {role.everything ? (
-                                                        <span className="text-muted-foreground text-[13px]">все</span>
-                                                    ) : (
-                                                        <RightsButton
-                                                            chosen={equipmentBlocks.filter((right) => held(role).includes(right.key)).length}
-                                                            total={equipmentBlocks.length}
-                                                            title="Блоки карточки единицы"
-                                                            onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'blocks' })}
-                                                        />
-                                                    )}
-                                                </td>
-
-                                                <td className="px-2 py-2.5 text-center">
-                                                    {role.everything ? (
-                                                        <span className="text-muted-foreground text-[13px]">все</span>
-                                                    ) : (
-                                                        <RightsButton
-                                                            chosen={equipmentActions.filter((right) => held(role).includes(right.key)).length}
-                                                            total={equipmentActions.length}
-                                                            title="Операции с единицей"
-                                                            onOpen={() => setPicking({ id: role.id, scope: EQUIPMENT, mode: 'actions' })}
-                                                        />
-                                                    )}
-                                                </td>
-
-                                                {section.rights.map((right) => (
-                                                    <td key={right.key} className="px-2 py-2.5 text-center">
-                                                        {role.everything ? (
-                                                            <Check
-                                                                className="text-muted-foreground mx-auto size-4"
-                                                                aria-label={`${role.title}: ${right.title} — есть всегда`}
-                                                            />
-                                                        ) : (
-                                                            <Checkbox
-                                                                checked={held(role).includes(right.key)}
-                                                                onCheckedChange={() => toggle(role, right.key)}
-                                                                aria-label={`${role.title}: ${section.title} — ${right.title}`}
-                                                                className="mx-auto"
-                                                            />
-                                                        )}
-                                                    </td>
-                                                ))}
-                                            </Fragment>
-                                        ) : section.key === DIRECTORIES ? (
-                                            <Fragment key={section.key}>
-                                                <td className="border-l px-2 py-2.5 text-center">
-                                                    {role.everything ? (
-                                                        <span className="text-muted-foreground text-[13px]">все</span>
-                                                    ) : (
-                                                        // Two counters instead of the pair of boxes this section used
-                                                        // to hold: «Справочники» is five lists, and a position
-                                                        // usually keeps one of them and only reads the rest.
-                                                        <RightsButton
-                                                            chosen={directoryLists.filter((right) => held(role).includes(right.key)).length}
-                                                            total={directoryLists.length}
-                                                            title="Какие справочники видно"
-                                                            onOpen={() => setPicking({ id: role.id, scope: DIRECTORIES, mode: 'lists' })}
-                                                        />
-                                                    )}
-                                                </td>
-
-                                                <td className="px-2 py-2.5 text-center">
-                                                    {role.everything ? (
-                                                        <span className="text-muted-foreground text-[13px]">все</span>
-                                                    ) : (
-                                                        <RightsButton
-                                                            chosen={directoryEdits.filter((right) => held(role).includes(right.key)).length}
-                                                            total={directoryEdits.length}
-                                                            title="Какие справочники позиция ведёт"
-                                                            onOpen={() => setPicking({ id: role.id, scope: DIRECTORIES, mode: 'edits' })}
-                                                        />
-                                                    )}
-                                                </td>
-
-                                                {section.rights.map((right) => (
-                                                    <td key={right.key} className="px-2 py-2.5 text-center">
-                                                        {role.everything ? (
-                                                            <Check
-                                                                className="text-muted-foreground mx-auto size-4"
-                                                                aria-label={`${role.title}: ${right.title} — есть всегда`}
-                                                            />
-                                                        ) : (
-                                                            <Checkbox
-                                                                checked={held(role).includes(right.key)}
-                                                                onCheckedChange={() => toggle(role, right.key)}
-                                                                aria-label={`${role.title}: ${section.title} — ${right.title}`}
-                                                                className="mx-auto"
-                                                            />
-                                                        )}
-                                                    </td>
-                                                ))}
-                                            </Fragment>
-                                        ) : (
-                                            <Fragment key={section.key}>
-                                                {section.rights.map((right, index) => (
-                                                    <td key={right.key} className={cn('px-2 py-2.5 text-center', index === 0 && 'border-l')}>
-                                                        {role.everything ? (
-                                                            <Check
-                                                                className="text-muted-foreground mx-auto size-4"
-                                                                aria-label={`${role.title}: ${right.title} — есть всегда`}
-                                                            />
-                                                        ) : (
-                                                            <Checkbox
-                                                                checked={held(role).includes(right.key)}
-                                                                onCheckedChange={() => toggle(role, right.key)}
-                                                                aria-label={`${role.title}: ${section.title} — ${right.title}`}
-                                                                className="mx-auto"
-                                                            />
-                                                        )}
-                                                    </td>
-                                                ))}
-                                            </Fragment>
-                                        ),
+                                        columnsOf(section).map((column, index) => (
+                                            <td
+                                                // «Просмотр» and «Изменение» appear under several sections.
+                                                key={`${section.key}.${column.key}`}
+                                                className={cn('px-2 py-2.5 text-center', index === 0 && 'border-l')}
+                                            >
+                                                {cell(role, section, column)}
+                                            </td>
+                                        )),
                                     )}
                                 </tr>
                             ))}
@@ -614,7 +631,7 @@ export default function AccessPage({
                 </div>
             </Card>
 
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm max-md:px-1 max-md:text-[13px]">
                 Системный администратор проходит любую проверку, поэтому его строка отмечена целиком. Все остальные позиции, включая «Администратор»,
                 получают ровно то, что отмечено в таблице. Отдельному сотруднику доступ можно выдать или снять в его карточке.
             </p>

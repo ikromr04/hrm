@@ -27,7 +27,7 @@ export interface OrgDepartment {
 }
 
 /** Departments grouped by parent; a parent that is gone puts the branch at the top. */
-function groupByParent(departments: OrgDepartment[]): Map<number | null, OrgDepartment[]> {
+export function groupByParent(departments: OrgDepartment[]): Map<number | null, OrgDepartment[]> {
     const ids = new Set(departments.map((d) => d.id));
     const map = new Map<number | null, OrgDepartment[]>();
 
@@ -185,46 +185,49 @@ function ZoomControls({
     onFullscreen?: () => void;
 }) {
     return (
-        <div className="bg-card absolute right-3 bottom-3 flex items-center gap-0.5 rounded-lg border p-0.5 shadow-sm">
+        // On a phone the bar would be wider than the screen, so it stands on end at the
+        // right edge instead: a slim floating column with + above −. The percentage is
+        // left out there; the steps are all a finger needs.
+        <div className="bg-card absolute right-3 bottom-3 flex items-center gap-0.5 rounded-lg border p-0.5 shadow-sm max-md:right-2 max-md:bottom-2 max-md:flex-col-reverse max-md:rounded-xl max-md:shadow-md">
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-9 lg:size-8"
+                className="size-9 max-md:size-10 lg:size-8"
                 onClick={onToggleAll}
                 aria-label={allOpen ? 'Скрыть сотрудников во всех отделах' : 'Показать сотрудников во всех отделах'}
                 title={allOpen ? 'Скрыть всех сотрудников' : 'Показать всех сотрудников'}
             >
                 {allOpen ? <ChevronsDownUp /> : <ChevronsUpDown />}
             </Button>
-            <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
+            <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px max-md:mx-0 max-md:my-0.5 max-md:h-px max-md:w-6" />
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-9 lg:size-8"
+                className="size-9 max-md:size-10 lg:size-8"
                 onClick={() => onZoom(1 / 1.2)}
                 disabled={scale <= MIN_SCALE}
                 aria-label="Отдалить"
             >
                 <Minus />
             </Button>
-            <Button variant="ghost" className="h-9 w-14 px-0 text-xs tabular-nums lg:h-8" onClick={onReset} title="Сбросить до 100%">
+            <Button variant="ghost" className="h-9 w-14 px-0 text-xs tabular-nums max-md:hidden lg:h-8" onClick={onReset} title="Сбросить до 100%">
                 {Math.round(scale * 100)}%
             </Button>
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-9 lg:size-8"
+                className="size-9 max-md:size-10 lg:size-8"
                 onClick={() => onZoom(1.2)}
                 disabled={scale >= MAX_SCALE}
                 aria-label="Приблизить"
             >
                 <Plus />
             </Button>
-            <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
+            <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px max-md:mx-0 max-md:my-0.5 max-md:h-px max-md:w-6" />
             <Button
                 variant="ghost"
                 size="icon"
-                className="size-9 lg:size-8"
+                className="size-9 max-md:size-10 lg:size-8"
                 onClick={onFit}
                 aria-label="Уместить схему целиком"
                 title="Уместить целиком"
@@ -235,7 +238,7 @@ function ZoomControls({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="size-9 lg:size-8"
+                    className="size-9 max-md:size-10 lg:size-8"
                     onClick={onFullscreen}
                     aria-label={fullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
                     title={fullscreen ? 'Выйти из полноэкранного режима (F или Esc)' : 'На весь экран (F)'}
@@ -243,6 +246,42 @@ function ZoomControls({
                     {fullscreen ? <Shrink /> : <Expand />}
                 </Button>
             )}
+        </div>
+    );
+}
+
+/**
+ * «Список / Схема» on a phone, drawn as an iOS segmented control: one grey
+ * track with the chosen half raised. A tree of boxes is hard to read on a small
+ * screen, so phone pages open on the list and keep the chart one tap away.
+ */
+export function PhoneViewSwitch<T extends string>({
+    value,
+    options,
+    onChange,
+    className,
+}: {
+    value: T;
+    options: { value: T; label: string }[];
+    onChange: (value: T) => void;
+    className?: string;
+}) {
+    return (
+        <div role="group" aria-label="Вид" className={cn('bg-muted grid auto-cols-fr grid-flow-col rounded-[10px] p-0.5 md:hidden', className)}>
+            {options.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(option.value)}
+                    aria-pressed={value === option.value}
+                    className={cn(
+                        'h-9 rounded-lg text-[14px] font-medium transition-colors',
+                        value === option.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground',
+                    )}
+                >
+                    {option.label}
+                </button>
+            ))}
         </div>
     );
 }

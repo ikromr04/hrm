@@ -49,6 +49,7 @@ export default function Equipment({
                     accusative: 'категорию',
                 }}
                 countLabel="Единиц"
+                countWords={['единица', 'единицы', 'единиц']}
             />
         </DirectoriesLayout>
     );

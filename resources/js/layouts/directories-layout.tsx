@@ -37,8 +37,10 @@ export default function DirectoriesLayout({ title, children }: { title: string; 
         <AppLayout breadcrumbs={breadcrumbs} fitViewport>
             <Head title={`${title} — справочники`} />
 
-            <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <h1 className="text-xl font-semibold tracking-tight">Справочники</h1>
+            <div className="flex flex-1 flex-col gap-4 p-3 max-md:gap-3 md:min-h-0 md:px-5 md:py-4">
+                {/* On a phone the top bar already names the page and the chips below
+                    name the section, so the heading is left to screen readers. */}
+                <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Справочники</h1>
 
                 {/*
                  * One tab is not a choice: with a single list open the strip only
@@ -50,13 +52,16 @@ export default function DirectoriesLayout({ title, children }: { title: string; 
                  * wrapping into rows: the underline has to stay one line. The
                  * border sits on the inner row, inside the scrolling box, so the
                  * active tab's underline can overlap it without spilling out.
+                 * On a phone the tabs are pills instead, the way a mobile app
+                 * switches between lists: a 2px underline is a poor target for a
+                 * thumb and hard to spot at a glance, a filled chip is neither.
                  */}
                 {tabs.length > 1 && (
                     <nav
                         aria-label="Справочники"
                         className="-mx-3 shrink-0 overflow-x-auto px-3 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
                     >
-                        <div className="flex w-max min-w-full gap-6 border-b">
+                        <div className="flex w-max min-w-full gap-2 md:gap-6 md:border-b">
                             {tabs.map((tab) => {
                                 const active = url.startsWith(tab.href);
 
@@ -68,10 +73,10 @@ export default function DirectoriesLayout({ title, children }: { title: string; 
                                         aria-current={active ? 'page' : undefined}
                                         ref={active ? activeTab : undefined}
                                         className={cn(
-                                            '-mb-px border-b-2 px-1 pb-2.5 text-sm transition-colors',
+                                            'text-sm transition-colors max-md:flex max-md:h-8 max-md:shrink-0 max-md:items-center max-md:rounded-full max-md:px-3 max-md:font-medium max-md:whitespace-nowrap md:-mb-px md:border-b-2 md:px-1 md:pb-2.5',
                                             active
-                                                ? 'border-brand text-foreground font-semibold'
-                                                : 'text-muted-foreground hover:text-foreground border-transparent font-medium',
+                                                ? 'max-md:bg-brand-soft max-md:text-foreground md:border-brand md:text-foreground max-md:font-semibold md:font-semibold max-md:dark:bg-white/10'
+                                                : 'max-md:bg-card max-md:text-foreground md:text-muted-foreground md:hover:text-foreground md:border-transparent md:font-medium',
                                         )}
                                     >
                                         {tab.title}

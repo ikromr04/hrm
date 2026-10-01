@@ -172,7 +172,7 @@ export function CardFields({
                                                         // A little taller on a touch screen, so a finger finds
                                                         // the line it meant rather than its neighbour.
                                                         className={cn(
-                                                            'flex items-center gap-2 py-1 text-sm lg:py-0',
+                                                            'flex items-center gap-2 py-1 text-sm max-md:min-h-10 max-md:py-2 lg:py-0',
                                                             locked(field) && 'text-muted-foreground',
                                                         )}
                                                     >
@@ -238,7 +238,7 @@ export function CardFieldsDialog({
                 <CardFields mode={mode} groups={groups} held={held} onChange={onChange} />
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
+                    <Button variant="outline" className="max-md:h-11" onClick={onClose}>
                         Готово
                     </Button>
                 </DialogFooter>
@@ -375,7 +375,7 @@ export function RightsDialog({
                 <PlainRights rights={rights} held={held} onToggle={toggle} />
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
+                    <Button variant="outline" className="max-md:h-11" onClick={onClose}>
                         Готово
                     </Button>
                 </DialogFooter>

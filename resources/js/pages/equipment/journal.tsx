@@ -2,13 +2,14 @@ import {
     clearedFilter,
     countActiveFilters,
     DataTable,
+    MobileListTools,
     resetView,
     useTableView,
     type ColumnDef,
     type Sort,
     type ViewState,
 } from '@/components/data-table';
-import { ChangeLines } from '@/components/equipment-changes';
+import { ChangeLines, EventRow } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonFace } from '@/components/person-face';
@@ -114,6 +115,14 @@ function buildColumns(options: Props['options']): ColumnDef[] {
         { key: 'changes', label: 'Что изменилось', width: 420 },
     ];
 }
+
+/** The periods asked for most often, a click away. */
+const presets = [
+    { days: 7, label: 'Неделя' },
+    { days: 30, label: 'Месяц' },
+    { days: 90, label: 'Квартал' },
+    { days: 365, label: 'Год' },
+];
 
 const defaultView = (): ViewState => ({ hidden: [], pinned: { left: ['at'], right: [] } });
 
@@ -227,12 +236,15 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
         <AppLayout breadcrumbs={breadcrumbs} fitViewport>
             <Head title="Журнал операций" />
 
-            <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <h1 className="text-xl font-semibold tracking-tight">Журнал операций</h1>
+            <div className="flex flex-1 flex-col gap-4 p-3 max-md:gap-3 md:min-h-0 md:px-5 md:py-4">
+                {/* The phone's top bar already carries the page's name. */}
+                <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Журнал операций</h1>
 
-                <div className="-mb-2 flex flex-wrap items-center gap-2">
+                {/* On a phone one line: the quick periods as chips and the button to
+                    the sheet, where an exact period is picked along with the rest. */}
+                <div className="flex flex-wrap items-center gap-2 max-md:flex-nowrap md:-mb-2">
                     {/* The period keeps to one line: on a phone its two boxes share the width. */}
-                    <div className="flex w-full items-center gap-2 sm:w-auto">
+                    <div className="flex w-full items-center gap-2 max-md:hidden sm:w-auto">
                         <Input
                             type="date"
                             aria-label="Период с"
@@ -256,13 +268,8 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                         />
                     </div>
 
-                    <div className="grid w-full grid-cols-4 gap-1 sm:flex sm:w-auto">
-                        {[
-                            { days: 7, label: 'Неделя' },
-                            { days: 30, label: 'Месяц' },
-                            { days: 90, label: 'Квартал' },
-                            { days: 365, label: 'Год' },
-                        ].map((preset) => (
+                    <div className="grid w-full grid-cols-4 gap-1 max-md:hidden sm:flex sm:w-auto">
+                        {presets.map((preset) => (
                             <Button
                                 key={preset.days}
                                 variant={inForce(preset.days) ? 'default' : 'outline'}
@@ -275,10 +282,45 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                         ))}
                     </div>
 
+                    {/* The same periods on a phone, as a row of chips that scrolls sideways if it must. */}
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
+                        {presets.map((preset) => (
+                            <button
+                                key={preset.days}
+                                type="button"
+                                aria-pressed={inForce(preset.days)}
+                                onClick={() => period(preset.days)}
+                                className={cn(
+                                    'h-8 shrink-0 rounded-full px-3 text-sm whitespace-nowrap transition-colors',
+                                    inForce(preset.days) ? 'bg-brand-soft text-foreground font-semibold dark:bg-white/10' : 'bg-card',
+                                )}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <MobileListTools
+                        columns={columns}
+                        filters={filters as unknown as Record<string, unknown>}
+                        onFilter={(changes) => {
+                            // The desktop's period boxes follow, so they show what is in force.
+                            const next = changes as Partial<Filters>;
+                            if ('from' in next) setFrom(next.from ?? '');
+                            if ('to' in next) setTo(next.to ?? '');
+                            visit({ filters: next });
+                        }}
+                        sort={DEFAULT_SORT}
+                        sortable={[]}
+                        onSort={() => undefined}
+                        className="max-md:bg-card max-md:rounded-xl max-md:border-transparent max-md:shadow-none"
+                    />
+
                     {activeFilters > 0 && (
                         <Button
                             variant="ghost"
-                            className="h-10 lg:h-8"
+                            // On a phone the filters are cleared in their own sheet.
+                            className="h-10 max-md:hidden lg:h-8"
                             onClick={() => {
                                 // The boxes empty with it, or they would keep
                                 // showing a period that is no longer in force.
@@ -296,7 +338,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="h-10 font-normal sm:ml-auto lg:h-8">
+                            <Button variant="outline" className="h-10 font-normal max-md:hidden sm:ml-auto lg:h-8">
                                 <Columns3 />
                                 Колонки
                                 <ChevronDown className="text-muted-foreground" />
@@ -328,7 +370,7 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button variant="outline" className="h-10 lg:h-8" asChild>
+                    <Button variant="outline" className="h-10 max-md:hidden lg:h-8" asChild>
                         <Link href={route('equipment.index')}>К списку оборудования</Link>
                     </Button>
                 </div>
@@ -348,9 +390,21 @@ export default function EquipmentJournal({ events, names, filters, perPage, perP
                     onHide={(key) => toggleHidden(key, true)}
                     lockedKey="at"
                     empty={<span className={cn('text-sm')}>За этот период операций не было.</span>}
+                    mobileRow={(event) => (
+                        <EventRow
+                            kind={event.kind}
+                            at={event.at}
+                            actor={event.actor}
+                            changes={event.changes}
+                            names={names}
+                            note={event.note}
+                            photos={event.photos}
+                            unit={event.unit}
+                        />
+                    )}
                     footer={
                         <>
-                            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                            <div className="text-muted-foreground flex items-center gap-2 text-sm max-md:hidden">
                                 Строк на странице
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

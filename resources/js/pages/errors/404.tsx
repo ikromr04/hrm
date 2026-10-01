@@ -10,7 +10,8 @@ export default function NotFound() {
             title="Страница не найдена"
             description="Такого адреса нет. Возможно, страницу удалили, а ссылка осталась — или в адресе опечатка."
             note={
-                <p className="text-muted-foreground text-[13px]">
+                // A phone has no keyboard shortcut to offer; its search is the icon in the top bar.
+                <p className="text-muted-foreground text-[13px] max-md:hidden">
                     Или найдите нужное через поиск — <kbd className="border-border rounded border px-1.5 py-0.5 font-sans text-xs">Ctrl</kbd>{' '}
                     <kbd className="border-border rounded border px-1.5 py-0.5 font-sans text-xs">K</kbd>
                 </p>

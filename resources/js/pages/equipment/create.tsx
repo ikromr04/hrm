@@ -35,20 +35,20 @@ const breadcrumbs: BreadcrumbItem[] = [
  * headings — every field here describes the same thing, and rules across the
  * page would only break its rhythm.
  */
-const row = 'grid gap-4 sm:grid-cols-2 lg:grid-cols-4';
+const row = 'grid gap-4 md:grid-cols-2 lg:grid-cols-4';
 
 /**
  * Half a box, which is all a date needs: two of them share one field's place.
  * The narrowest phones stack them, as two dates side by side would not fit.
  */
-const half = 'grid gap-3 min-[360px]:grid-cols-2';
+const half = 'grid gap-3 md:grid-cols-2';
 
 /** A field worth two boxes: a long line of text or a list. */
-const wide = 'sm:col-span-2';
+const wide = 'md:col-span-2';
 
 function Field({ label, htmlFor, error, full, children }: { label: string; htmlFor: string; error?: string; full?: boolean; children: ReactNode }) {
     return (
-        <div className={cn('grid content-start gap-2', full && wide)}>
+        <div className={cn('grid min-w-0 content-start gap-2 [&_input]:min-w-0', full && wide)}>
             <Label htmlFor={htmlFor}>{label}</Label>
             {children}
             <InputError message={error} />
@@ -167,21 +167,23 @@ export default function CreateEquipment({ options }: Props) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Новое оборудование" />
 
-            <div className="flex flex-1 flex-col gap-5 p-3 md:px-5 md:py-4">
+            <div className="flex flex-1 flex-col gap-5 p-3 max-md:gap-3 md:px-5 md:py-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div className="flex flex-col gap-1">
-                        <h1 className="text-xl font-semibold tracking-tight">Новое оборудование</h1>
+                        {/* The phone's top bar already carries the page's name. */}
+                        <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Новое оборудование</h1>
                         <p className="text-muted-foreground text-sm">Единица встаёт на баланс — её можно сразу выдать сотруднику.</p>
                     </div>
 
-                    <Button variant="ghost" asChild>
+                    <Button variant="ghost" className="max-md:hidden" asChild>
                         <Link href={route('equipment.index')}>Отмена</Link>
                     </Button>
                 </div>
 
-                <Card className="w-full rounded-xl p-4 sm:p-6">
+                <Card className="w-full rounded-xl p-4 max-md:rounded-2xl max-md:border-0 max-md:p-4! max-md:shadow-none sm:p-6">
                     {/* noValidate: the server's rules are the real ones. */}
-                    <form onSubmit={submit} noValidate className="flex flex-col gap-6">
+                    {/* On a phone every box is 44px tall, a comfortable target for a thumb. */}
+                    <form onSubmit={submit} noValidate className="flex flex-col gap-6 max-md:[&_[role=combobox]]:h-11 max-md:[&_input]:h-11">
                         <div className={row}>
                             <Field label="Наименование" htmlFor="name" error={form.errors.name} full>
                                 <Input
@@ -322,10 +324,11 @@ export default function CreateEquipment({ options }: Props) {
                             )}
                         </div>
 
-                        {/* A phone stacks the buttons at full width, the one that saves last. */}
-                        <div className="flex flex-col gap-2 border-t pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                        {/* A phone keeps the buttons in a bar that rides just above the tab
+                            bar, so saving is never a scroll away; «Отмена» is the back arrow there. */}
+                        <div className="max-md:bg-background/90 flex flex-col gap-2 border-t pt-6 max-md:sticky max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-md:z-20 max-md:-mx-4 max-md:-mb-4 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:rounded-b-2xl max-md:px-4 max-md:py-3 max-md:backdrop-blur-xl sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                             {filed.length > 0 && (
-                                <p className="text-muted-foreground mr-auto text-sm">
+                                <p className="text-muted-foreground mr-auto text-sm max-md:basis-full">
                                     Добавлено {filed.length}, последнее —{' '}
                                     <Link
                                         href={route('equipment.show', filed[filed.length - 1].id)}
@@ -338,19 +341,28 @@ export default function CreateEquipment({ options }: Props) {
                             )}
 
                             {Object.keys(form.errors).length > 0 && (
-                                <p className="mr-auto text-sm text-red-600 dark:text-red-400">
+                                <p className="mr-auto text-sm text-red-600 max-md:basis-full dark:text-red-400">
                                     Не сохранено: проверьте {Object.keys(form.errors).length === 1 ? 'поле' : 'поля'} выше.
                                 </p>
                             )}
 
-                            <Button type="button" variant="outline" asChild>
+                            <Button type="button" variant="outline" className="max-md:hidden" asChild>
                                 <Link href={route('equipment.index')}>Отмена</Link>
                             </Button>
-                            <Button type="submit" variant="outline" disabled={form.processing} onClick={() => (batch.current = true)}>
-                                <Plus />
-                                Сохранить и добавить ещё
+                            {/* Shorter on a phone, where two buttons share a 320px line. */}
+                            <Button
+                                type="submit"
+                                variant="outline"
+                                aria-label="Сохранить и добавить ещё"
+                                className="max-md:h-11 max-md:min-w-0 max-md:flex-[1.4] max-md:px-3"
+                                disabled={form.processing}
+                                onClick={() => (batch.current = true)}
+                            >
+                                <Plus className="max-md:hidden" />
+                                <span className="md:hidden">Сохранить и ещё</span>
+                                <span className="max-md:hidden">Сохранить и добавить ещё</span>
                             </Button>
-                            <Button type="submit" disabled={form.processing}>
+                            <Button type="submit" className="max-md:h-11 max-md:flex-1" disabled={form.processing}>
                                 {form.processing && <LoaderCircle className="animate-spin" />}
                                 Сохранить
                             </Button>

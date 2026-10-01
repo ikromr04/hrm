@@ -1,6 +1,6 @@
 import { CategoryFieldInputs } from '@/components/category-field-inputs';
-import { countActiveFilters, DataTable, useTableView, type ColumnDef, type ViewState } from '@/components/data-table';
-import { ChangeLines } from '@/components/equipment-changes';
+import { countActiveFilters, DataTable, MobileListTools, useTableView, type ColumnDef, type ViewState } from '@/components/data-table';
+import { ChangeLines, EventRow } from '@/components/equipment-changes';
 import { CategoryChip } from '@/components/equipment-icon';
 import { EquipmentMoveDialog, moveLabel, type AskedMove } from '@/components/equipment-move-dialog';
 import InputError from '@/components/input-error';
@@ -159,14 +159,25 @@ function useTab(shown: TabKey[]): [TabKey, (key: TabKey) => void] {
 
 /* --------------------------------------------------------------- building blocks */
 
+/**
+ * A block of the card. On a phone it reads as an inset grouped list, as in the
+ * settings of a phone: the title stands above a borderless card instead of in a
+ * grey strip inside it, and the block's action sits beside the title as text.
+ * The outer box turns transparent there and the inner one becomes the card; on
+ * a desktop the inner one is `contents`, so the block is laid out as before.
+ */
 function Section({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
     return (
-        <Card className="flex flex-col gap-4 rounded-xl px-4 py-4 sm:px-6 sm:py-5">
-            <div className="bg-muted/60 -mx-4 -mt-4 flex min-h-11 items-center justify-between gap-3 rounded-t-xl border-b px-4 py-2 sm:-mx-6 sm:-mt-5 sm:px-6">
-                <h2 className="text-base font-semibold">{title}</h2>
+        <Card className="flex flex-col gap-4 rounded-xl px-4 py-4 max-md:gap-1.5 max-md:border-0 max-md:bg-transparent max-md:p-0! max-md:shadow-none sm:px-6 sm:py-5">
+            <div className="bg-muted/60 -mx-4 -mt-4 flex min-h-11 items-center justify-between gap-3 rounded-t-xl border-b px-4 py-2 max-md:m-0! max-md:min-h-5 max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:px-1! max-md:py-0 sm:-mx-6 sm:-mt-5 sm:px-6">
+                <h2 className="max-md:text-muted-foreground text-base font-semibold max-md:text-[13px] max-md:tracking-wide max-md:uppercase">
+                    {title}
+                </h2>
                 {action}
             </div>
-            {children}
+            <div className="max-md:bg-card max-md:flex max-md:flex-col max-md:overflow-hidden max-md:rounded-2xl max-md:px-4 md:contents">
+                {children}
+            </div>
         </Card>
     );
 }
@@ -175,18 +186,49 @@ function Section({ title, children, action }: { title: string; children: ReactNo
  * The lines of a block, read across and then down, up to three across.
  *
  * A grid rather than CSS columns: columns fill themselves top to bottom, so the
- * order on the page would not be the order the card is written in.
+ * order on the page would not be the order the card is written in. On a phone
+ * it is one column of rows divided by hairlines, so it has no gaps of its own.
  */
 function Fields({ children, columns }: { children: ReactNode; columns?: 1 }) {
-    return <dl className={cn('grid gap-x-6 gap-y-4', columns === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3')}>{children}</dl>;
+    return (
+        <dl
+            className={cn(
+                'grid gap-x-6 gap-y-4 max-md:gap-0',
+                columns === 1 ? 'grid-cols-1' : 'grid-cols-1 max-md:grid-cols-1! sm:grid-cols-2 lg:grid-cols-3',
+            )}
+        >
+            {children}
+        </dl>
+    );
 }
 
+/** A label over its value; on a phone one row, the label left and the value right. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
     return (
-        <div className="flex min-w-0 flex-col gap-1">
-            <dt className="text-muted-foreground text-[13px]">{label}</dt>
-            <dd className="text-sm font-medium break-words">{children ?? <span className="text-muted-foreground font-normal">—</span>}</dd>
+        <div className="max-md:border-border/60 flex min-w-0 flex-col gap-1 max-md:flex-row max-md:items-baseline max-md:justify-between max-md:gap-4 max-md:border-b max-md:py-2.5 max-md:last:border-0">
+            {/* A long label still leaves the value some room. */}
+            <dt className="text-muted-foreground text-[13px] max-md:max-w-[60%] max-md:shrink-0 max-md:text-[15px]">{label}</dt>
+            <dd className="text-sm font-medium break-words max-md:min-w-0 max-md:text-right max-md:text-[15px] max-md:font-normal">
+                {children ?? <span className="text-muted-foreground font-normal">—</span>}
+            </dd>
         </div>
+    );
+}
+
+/**
+ * A block's action on a phone: a word in the brand colour beside the block's
+ * title. It is drawn small, but the area that takes the tap is a full 40px tall.
+ */
+function PhoneTextButton({ label, onClick, children }: { label?: string; onClick: () => void; children: ReactNode }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            className="text-brand-strong -my-2.5 -mr-1 flex h-10 shrink-0 items-center px-1 text-[15px] font-medium normal-case active:opacity-60 md:hidden dark:text-[#C5E27A]"
+        >
+            {children}
+        </button>
     );
 }
 
@@ -199,15 +241,21 @@ const at = (errors: Record<string, string | undefined>, key: string) =>
 /** The pencil in a block's header strip, as on the employee's profile. */
 function EditButton({ what, onClick }: { what: string; onClick: () => void }) {
     return (
-        <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground -mr-2 size-9 lg:size-7"
-            aria-label={`Редактировать ${what}`}
-            onClick={onClick}
-        >
-            <Pencil className="size-4" />
-        </Button>
+        <>
+            <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground -mr-2 size-9 max-md:hidden lg:size-7"
+                aria-label={`Редактировать ${what}`}
+                onClick={onClick}
+            >
+                <Pencil className="size-4" />
+            </Button>
+            {/* A phone says it in a word, as its own settings screens do. */}
+            <PhoneTextButton label={`Редактировать ${what}`} onClick={onClick}>
+                Изменить
+            </PhoneTextButton>
+        </>
     );
 }
 
@@ -262,12 +310,31 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
         );
     };
 
+    /** On a phone: just the chevron, small and quiet, in the corner of the header. */
+    const icon = (to: Neighbour, label: string, Icon: typeof ChevronLeft) =>
+        to ? (
+            <Button variant="ghost" size="icon" className="text-muted-foreground size-9" aria-label={`${label}: ${to.name}`} asChild>
+                <Link href={href(to)} prefetch>
+                    <Icon className="size-5" />
+                </Link>
+            </Button>
+        ) : (
+            <Button variant="ghost" size="icon" className="text-muted-foreground size-9" aria-label={label} disabled>
+                <Icon className="size-5" />
+            </Button>
+        );
+
     return (
-        // A row of its own on a phone, the two halves sharing it.
-        <div className="flex w-full gap-1 sm:w-auto">
-            {arrow(prev, 'Предыдущее', ChevronLeft)}
-            {arrow(next, 'Следующее', ChevronRight)}
-        </div>
+        <>
+            <div className="-mt-1 -mr-1.5 flex shrink-0 md:hidden">
+                {icon(prev, 'Предыдущее', ChevronLeft)}
+                {icon(next, 'Следующее', ChevronRight)}
+            </div>
+            <div className="flex w-full gap-1 max-md:hidden sm:w-auto">
+                {arrow(prev, 'Предыдущее', ChevronLeft)}
+                {arrow(next, 'Следующее', ChevronRight)}
+            </div>
+        </>
     );
 }
 
@@ -278,7 +345,7 @@ function Neighbours({ prev, next, tab }: { prev: Neighbour; next: Neighbour; tab
  */
 function MoveGroup({ moves, onPick }: { moves: { kind: AskedMove; icon: LucideIcon; danger?: boolean }[]; onPick: (kind: AskedMove) => void }) {
     return (
-        <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border">
+        <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border max-md:hidden">
             {moves.map(({ kind, icon: Icon, danger }, index) => (
                 <button
                     key={kind}
@@ -294,6 +361,34 @@ function MoveGroup({ moves, onPick }: { moves: { kind: AskedMove; icon: LucideIc
                     <Icon className="size-4 shrink-0" />
                     {/* A phone wraps a long label rather than cutting it short. */}
                     <span className="min-w-0 text-center lg:truncate">{moveLabel[kind]}</span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
+/**
+ * The same moves on a phone, as a grouped list of whole-width rows: a strip of
+ * three buttons leaves each label a third of a narrow screen, and a row is what
+ * a phone's thumb expects to tap.
+ */
+function PhoneActions({ actions }: { actions: { key: string; label: string; icon: LucideIcon; danger?: boolean; onClick: () => void }[] }) {
+    if (actions.length === 0) return null;
+
+    return (
+        <div className="bg-card divide-border/60 flex flex-col divide-y overflow-hidden rounded-2xl md:hidden">
+            {actions.map(({ key, label, icon: Icon, danger, onClick }) => (
+                <button
+                    key={key}
+                    type="button"
+                    onClick={onClick}
+                    className={cn(
+                        'active:bg-accent/60 flex min-h-12 items-center gap-3 px-4 text-left text-[15px] transition-colors',
+                        danger ? 'text-[#B42318] dark:text-[#F7A19A]' : 'text-foreground',
+                    )}
+                >
+                    <Icon className={cn('size-5 shrink-0', !danger && 'text-brand-strong dark:text-[#C5E27A]')} />
+                    {label}
                 </button>
             ))}
         </div>
@@ -973,25 +1068,34 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={unit.name} />
 
-            <div className="flex flex-1 flex-col gap-5 p-3 md:px-5 md:py-4">
+            <div className="flex flex-1 flex-col gap-5 p-3 max-md:gap-3 md:px-5 md:py-4">
                 {/* Aligned along the bottom, so the title, the actions and the arrows sit on one line. */}
-                {/* On a phone the name wraps to several lines, so the chip sits by its top instead. */}
-                <div className="flex flex-wrap items-start gap-3 sm:items-end sm:gap-5">
+                {/* On a phone the name wraps to several lines, so the chip sits by its top instead,
+                    and the arrows shrink to two chevrons in the top right corner. */}
+                <div className="flex flex-wrap items-start gap-3 max-md:flex-nowrap md:items-end md:gap-5">
                     {/* Smaller on a phone, where the full-size chip would leave the name a narrow strip. */}
-                    <span className="shrink-0 sm:hidden">
-                        <CategoryChip icon={unit.type_icon} size={48} iconSize={24} />
+                    <span className="shrink-0 md:hidden">
+                        <CategoryChip icon={unit.type_icon} size={56} iconSize={26} className="rounded-2xl" />
                     </span>
-                    <span className="hidden shrink-0 sm:block">
+                    <span className="hidden shrink-0 md:block">
                         <CategoryChip icon={unit.type_icon} size={72} iconSize={32} />
                     </span>
 
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2 max-md:gap-1">
                         <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{unit.name}</h1>
-                            <StatusBadge tone={statusTone[unit.status]}>{statusLabel[unit.status]}</StatusBadge>
+                            <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words max-md:text-lg max-md:leading-snug">
+                                {unit.name}
+                            </h1>
+                            <StatusBadge tone={statusTone[unit.status]} className="max-md:hidden">
+                                {statusLabel[unit.status]}
+                            </StatusBadge>
                         </div>
 
-                        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
+                        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                            {/* On a phone the status opens this line rather than trailing a wrapped name. */}
+                            <StatusBadge tone={statusTone[unit.status]} className="md:hidden">
+                                {statusLabel[unit.status]}
+                            </StatusBadge>
                             {/* The two things every unit has, whatever it is. What
                                 else it is made of depends on the category, and is
                                 read in "Характеристики" below. */}
@@ -1015,7 +1119,12 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                     <Neighbours prev={neighbours.prev} next={neighbours.next} tab={tab} />
                 </div>
 
-                <nav aria-label="Разделы" className="scroll-soft flex gap-6 overflow-x-auto">
+                {/* On a phone the sections stay in reach while the card scrolls: the bar
+                    sticks under the top bar, across the whole width, frosted like it. */}
+                <nav
+                    aria-label="Разделы"
+                    className="scroll-soft max-md:bg-background/90 flex gap-6 overflow-x-auto max-md:sticky max-md:top-[calc(3rem+env(safe-area-inset-top))] max-md:z-20 max-md:-mx-3 max-md:gap-4 max-md:border-b max-md:px-4 max-md:pt-1 max-md:backdrop-blur-xl max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+                >
                     {shownTabs.map((item) => (
                         <button
                             key={item.key}
@@ -1023,7 +1132,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             onClick={() => setTab(item.key)}
                             aria-current={item.key === tab ? 'page' : undefined}
                             className={cn(
-                                'shrink-0 border-b-2 px-1 pb-2.5 text-sm transition-colors',
+                                'shrink-0 border-b-2 px-1 pb-2.5 text-sm transition-colors max-md:pt-2 max-md:text-[15px]',
                                 item.key === tab
                                     ? 'border-brand text-foreground font-semibold'
                                     : 'text-muted-foreground hover:text-foreground border-transparent font-medium',
@@ -1035,8 +1144,9 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                 </nav>
 
                 {tab === 'overview' && (
-                    <div className="grid gap-4 lg:grid-cols-[1fr_26.4rem]">
-                        <div className="flex min-w-0 flex-col gap-4">
+                    // A phone spaces the blocks wider: their titles stand between them.
+                    <div className="grid gap-4 max-md:gap-4 lg:grid-cols-[1fr_26.4rem]">
+                        <div className="flex min-w-0 flex-col gap-4 max-md:gap-4">
                             <Section
                                 title="Характеристики"
                                 action={can.specs && <EditButton what="характеристики" onClick={() => setEditing('specs')} />}
@@ -1068,9 +1178,9 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                     action={can.accessories && <EditButton what="комплектацию" onClick={() => setEditing('accessories')} />}
                                 >
                                     {unit.accessories.length === 0 ? (
-                                        <p className="text-muted-foreground text-sm">Ничего не записано</p>
+                                        <p className="text-muted-foreground text-sm max-md:py-3 max-md:text-[15px]">Ничего не записано</p>
                                     ) : (
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="flex flex-wrap gap-2 max-md:py-3">
                                             {unit.accessories.map((item) => (
                                                 <StatusBadge
                                                     key={item}
@@ -1086,7 +1196,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             )}
                         </div>
 
-                        <div className="flex min-w-0 flex-col gap-4">
+                        <div className="flex min-w-0 flex-col gap-4 max-md:gap-4">
                             <Section
                                 // Not editable: where a unit is follows from the moves
                                 // below, so it is changed by making one of them.
@@ -1094,7 +1204,29 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             >
                                 {unit.holder ? (
                                     <>
-                                        <div className="flex items-center gap-3">
+                                        {/* On a phone the holder is one row of a list: the face, the name
+                                            and when it was handed over, the whole row leading to them. */}
+                                        <PersonLink
+                                            id={unit.holder.id}
+                                            title={`Открыть профиль: ${unit.holder.name}`}
+                                            className="active:bg-accent/60 -mx-4 flex min-h-16 items-center gap-3 px-4 py-2.5 md:hidden"
+                                        >
+                                            <PersonFace
+                                                id={unit.holder.id}
+                                                name={unit.holder.name}
+                                                avatar={unit.holder.avatar}
+                                                className="size-10 shrink-0 text-[13px]"
+                                            />
+                                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                <span className="truncate text-[15px] leading-tight font-medium">{unit.holder.name}</span>
+                                                <span className="text-muted-foreground truncate text-[13px] leading-tight">
+                                                    Выдано {formatDate(unit.issued_at) ?? '—'}
+                                                    {unit.holder.department && ` · ${unit.holder.department}`}
+                                                </span>
+                                            </span>
+                                        </PersonLink>
+
+                                        <div className="flex items-center gap-3 max-md:hidden">
                                             <PersonFace
                                                 id={unit.holder.id}
                                                 name={unit.holder.name}
@@ -1111,9 +1243,11 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                             </div>
                                         </div>
 
-                                        <Fields columns={1}>
-                                            <Field label="Выдано">{formatDate(unit.issued_at)}</Field>
-                                        </Fields>
+                                        <div className="max-md:hidden">
+                                            <Fields columns={1}>
+                                                <Field label="Выдано">{formatDate(unit.issued_at)}</Field>
+                                            </Fields>
+                                        </div>
                                     </>
                                 ) : (
                                     <Fields columns={1}>
@@ -1133,16 +1267,31 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                                     <Field label="След. инвентаризация">{formatMonth(unit.next_inventory_at)}</Field>
                                 </Fields>
 
-                                <Photos photos={lastPhotos} />
+                                <Photos photos={lastPhotos} className="max-md:border-border/60 max-md:border-t max-md:py-3" />
                             </Section>
 
                             {moves.length > 0 && <MoveGroup moves={moves} onPick={setAsking} />}
+
+                            <PhoneActions
+                                actions={[
+                                    ...moves.map(({ kind, icon, danger }) => ({
+                                        key: kind,
+                                        label: moveLabel[kind],
+                                        icon,
+                                        danger,
+                                        onClick: () => setAsking(kind),
+                                    })),
+                                    ...(can.delete && unit.status === 'written_off'
+                                        ? [{ key: 'delete', label: 'Удалить запись', icon: Eraser, danger: true, onClick: () => setDeleting(true) }]
+                                        : []),
+                                ]}
+                            />
 
                             {/* Written off and nowhere left to go: only striking it off remains. */}
                             {can.delete && unit.status === 'written_off' && (
                                 <Button
                                     variant="outline"
-                                    className="border-[#F5C9C4] text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
+                                    className="border-[#F5C9C4] text-[#B42318] hover:text-[#B42318] max-md:hidden dark:text-[#F7A19A]"
                                     onClick={() => setDeleting(true)}
                                 >
                                     <Eraser />
@@ -1159,63 +1308,126 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                         action={
                             can.service &&
                             unit.status !== 'written_off' && (
-                                <Button variant="outline" size="sm" onClick={() => setRepairing(true)}>
-                                    <Plus />
-                                    Добавить запись
-                                </Button>
+                                <>
+                                    <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => setRepairing(true)}>
+                                        <Plus />
+                                        Добавить запись
+                                    </Button>
+                                    <PhoneTextButton onClick={() => setRepairing(true)}>Добавить</PhoneTextButton>
+                                </>
                             )
                         }
                     >
                         {repairs.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">Записей об обслуживании нет</p>
+                            <p className="text-muted-foreground text-sm max-md:py-3 max-md:text-[15px]">Записей об обслуживании нет</p>
                         ) : (
-                            <Table head={['Тип', 'Период', 'Комментарий', 'Фото', '']}>
-                                {repairs.map((repair) => (
-                                    <tr key={repair.id} className="border-t">
-                                        <td className="px-4 py-2.5 font-medium sm:px-6">{repair.kind}</td>
-                                        <td className="px-4 py-2.5 tabular-nums sm:px-6">
-                                            {repair.ended_at
-                                                ? `${formatDate(repair.started_at)} – ${formatDate(repair.ended_at)}`
-                                                : `с ${formatDate(repair.started_at)}`}
-                                        </td>
-                                        <td className="px-4 py-2.5 sm:px-6">{repair.note ?? dash}</td>
-                                        <td className="px-4 py-2.5 sm:px-6">{repair.photos.length > 0 ? <Photos photos={repair.photos} /> : dash}</td>
-                                        <td className="py-2.5 pr-4 text-right sm:pr-6">
-                                            {can.service && (
-                                                <div className="flex items-center justify-end gap-1">
-                                                    {/* Until the work has an end date the unit counts as being looked after. */}
-                                                    {repair.ended_at === null && (
-                                                        <Button variant="outline" size="sm" className="h-9 lg:h-8" onClick={() => setClosing(repair)}>
-                                                            <Check />
-                                                            Завершить
+                            <>
+                                {/* A phone lists the records one under another instead of a table to scroll sideways. */}
+                                <ul className="divide-border/60 -mx-4 divide-y md:hidden">
+                                    {repairs.map((repair) => (
+                                        <li key={repair.id} className="flex flex-col gap-0.5 px-4 py-3">
+                                            <div className="flex items-start gap-2">
+                                                <span className="min-w-0 flex-1 pt-0.5 text-[15px] leading-tight font-medium break-words">
+                                                    {repair.kind}
+                                                </span>
+                                                {can.service && (
+                                                    <div className="-my-2 -mr-2 flex shrink-0">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-muted-foreground size-10"
+                                                            aria-label={`Изменить запись: ${repair.kind}`}
+                                                            onClick={() => setCorrecting(repair)}
+                                                        >
+                                                            <Pencil className="size-4" />
                                                         </Button>
-                                                    )}
-
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-muted-foreground size-9 lg:size-8"
-                                                        aria-label={`Изменить запись: ${repair.kind}`}
-                                                        onClick={() => setCorrecting(repair)}
-                                                    >
-                                                        <Pencil className="size-4" />
-                                                    </Button>
-
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-muted-foreground size-9 lg:size-8"
-                                                        aria-label={`Удалить запись: ${repair.kind}`}
-                                                        onClick={() => setRemoving(repair)}
-                                                    >
-                                                        <Trash2 />
-                                                    </Button>
-                                                </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-muted-foreground size-10"
+                                                            aria-label={`Удалить запись: ${repair.kind}`}
+                                                            onClick={() => setRemoving(repair)}
+                                                        >
+                                                            <Trash2 />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <span className="text-muted-foreground text-[13px] tabular-nums">
+                                                {repair.ended_at
+                                                    ? `${formatDate(repair.started_at)} – ${formatDate(repair.ended_at)}`
+                                                    : `с ${formatDate(repair.started_at)}`}
+                                            </span>
+                                            {repair.note && <span className="text-[13px] break-words">{repair.note}</span>}
+                                            <Photos photos={repair.photos} className="mt-1.5" />
+                                            {/* Until the work has an end date the unit counts as being looked after. */}
+                                            {can.service && repair.ended_at === null && (
+                                                <Button variant="outline" className="mt-2 h-10 self-start" onClick={() => setClosing(repair)}>
+                                                    <Check />
+                                                    Завершить
+                                                </Button>
                                             )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </Table>
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                <div className="max-md:hidden">
+                                    <Table head={['Тип', 'Период', 'Комментарий', 'Фото', '']}>
+                                        {repairs.map((repair) => (
+                                            <tr key={repair.id} className="border-t">
+                                                <td className="px-4 py-2.5 font-medium sm:px-6">{repair.kind}</td>
+                                                <td className="px-4 py-2.5 tabular-nums sm:px-6">
+                                                    {repair.ended_at
+                                                        ? `${formatDate(repair.started_at)} – ${formatDate(repair.ended_at)}`
+                                                        : `с ${formatDate(repair.started_at)}`}
+                                                </td>
+                                                <td className="px-4 py-2.5 sm:px-6">{repair.note ?? dash}</td>
+                                                <td className="px-4 py-2.5 sm:px-6">
+                                                    {repair.photos.length > 0 ? <Photos photos={repair.photos} /> : dash}
+                                                </td>
+                                                <td className="py-2.5 pr-4 text-right sm:pr-6">
+                                                    {can.service && (
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            {/* Until the work has an end date the unit counts as being looked after. */}
+                                                            {repair.ended_at === null && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="h-9 lg:h-8"
+                                                                    onClick={() => setClosing(repair)}
+                                                                >
+                                                                    <Check />
+                                                                    Завершить
+                                                                </Button>
+                                                            )}
+
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-muted-foreground size-9 lg:size-8"
+                                                                aria-label={`Изменить запись: ${repair.kind}`}
+                                                                onClick={() => setCorrecting(repair)}
+                                                            >
+                                                                <Pencil className="size-4" />
+                                                            </Button>
+
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-muted-foreground size-9 lg:size-8"
+                                                                aria-label={`Удалить запись: ${repair.kind}`}
+                                                                onClick={() => setRemoving(repair)}
+                                                            >
+                                                                <Trash2 />
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </Table>
+                                </div>
+                            </>
                         )}
                     </Section>
                 )}
@@ -1223,7 +1435,7 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                 {tab === 'journal' && (
                     <div className="flex flex-col gap-3 md:min-h-0 md:flex-1">
                         {activeFilters > 0 && (
-                            <div className="flex items-center">
+                            <div className="flex items-center max-md:hidden">
                                 <Button variant="ghost" className="h-10 lg:h-8" onClick={() => setJournalFilters(noJournalFilters)}>
                                     <X />
                                     Сбросить фильтры ({activeFilters})
@@ -1231,7 +1443,32 @@ export default function EquipmentShow({ unit, repairs, events, names, holders, t
                             </div>
                         )}
 
+                        {/* A phone has no column headers to filter from, so the filters
+                            gather behind one button, clearing included. */}
+                        <div className="flex justify-end md:hidden">
+                            <MobileListTools
+                                columns={columns}
+                                filters={journalFilters as unknown as Record<string, unknown>}
+                                onFilter={(changes) => setJournalFilters((current) => ({ ...current, ...(changes as Partial<JournalFilters>) }))}
+                                sort={{ key: 'at', direction: 'desc' }}
+                                sortable={[]}
+                                onSort={() => undefined}
+                                className="max-md:bg-card max-md:rounded-xl max-md:border-transparent max-md:shadow-none"
+                            />
+                        </div>
+
                         <DataTable
+                            mobileRow={(event) => (
+                                <EventRow
+                                    kind={event.kind}
+                                    at={event.at}
+                                    actor={event.actor}
+                                    changes={event.changes}
+                                    names={names}
+                                    note={event.note}
+                                    photos={event.photos}
+                                />
+                            )}
                             columns={columns}
                             rows={shown}
                             rowKey={(event) => event.id}

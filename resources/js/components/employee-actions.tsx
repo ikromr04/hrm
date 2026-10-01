@@ -8,7 +8,7 @@ import { useCan } from '@/lib/access';
 import { cn } from '@/lib/utils';
 import { router, useForm } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { ArrowRightLeft, Ellipsis, LoaderCircle, RotateCcw, Trash2, UserX } from 'lucide-react';
+import { ArrowRightLeft, Ellipsis, LoaderCircle, RotateCcw, Trash2, UserX, type LucideIcon } from 'lucide-react';
 import { Fragment, useState, type FormEventHandler } from 'react';
 
 export type EmploymentStatus = 'active' | 'transferred' | 'fired';
@@ -95,27 +95,30 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
                     </DropdownMenuContent>
                 </DropdownMenu>
             ) : (
-                // One segmented control: shared borders, rounded only at the ends.
-                // The labels drop their "…" here, where every pixel of width counts;
-                // on a phone the icon goes above the label so the words stay whole.
-                <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border">
-                    {actions.map(({ key, label, Icon, disabled, run }, index) => (
-                        <button
-                            key={key}
-                            type="button"
-                            disabled={disabled}
-                            onClick={run}
-                            className={cn(
-                                'hover:bg-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:text-xs lg:py-2',
-                                index > 0 && 'border-l',
-                                key === 'delete' && 'text-[#B42318] dark:text-[#F7A19A]',
-                            )}
-                        >
-                            <Icon className="size-4 shrink-0" />
-                            <span className="truncate">{label}</span>
-                        </button>
-                    ))}
-                </div>
+                <>
+                    {/* On a phone the actions are a grouped list of their own, one
+                    full-width row each, as a native contact card ends with them. */}
+                    <div className="bg-card divide-border/60 flex flex-col divide-y overflow-hidden rounded-2xl md:hidden">
+                        {actions.map(({ key, label, Icon, disabled, run }) => (
+                            <button
+                                key={key}
+                                type="button"
+                                disabled={disabled}
+                                onClick={run}
+                                className={cn(
+                                    'active:bg-accent/60 flex min-h-12 w-full items-center gap-3 px-4 text-left text-[15px] transition-colors disabled:pointer-events-none disabled:opacity-50',
+                                    key === 'delete' ? 'text-[#B42318] dark:text-[#F7A19A]' : 'text-foreground',
+                                )}
+                            >
+                                <Icon
+                                    className={cn('size-5 shrink-0', key === 'delete' ? 'text-current' : 'text-brand-strong dark:text-[#C5E27A]')}
+                                />
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                    <SegmentedActions actions={actions} />
+                </>
             )}
 
             {(dialog === 'transfer' || dialog === 'fire') && (
@@ -123,6 +126,40 @@ export function EmployeeActions({ employee, isSelf, variant = 'menu' }: { employ
             )}
             <DeleteDialog open={dialog === 'delete'} employee={employee} name={name} onClose={() => setDialog(null)} />
         </>
+    );
+}
+
+interface Action {
+    key: string;
+    label: string;
+    Icon: LucideIcon;
+    disabled: boolean;
+    run: () => void;
+}
+
+/** The profile sidebar's bar of actions, from `md` up. */
+function SegmentedActions({ actions }: { actions: Action[] }) {
+    return (
+        // One segmented control: shared borders, rounded only at the ends. The
+        // labels drop their "…" here, where every pixel of width counts.
+        <div className="bg-background flex w-full items-stretch overflow-hidden rounded-md border max-md:hidden">
+            {actions.map(({ key, label, Icon, disabled, run }, index) => (
+                <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={run}
+                    className={cn(
+                        'hover:bg-accent focus-visible:ring-ring flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 max-sm:flex-col max-sm:gap-1 max-sm:px-1 max-sm:text-xs lg:py-2',
+                        index > 0 && 'border-l',
+                        key === 'delete' && 'text-[#B42318] dark:text-[#F7A19A]',
+                    )}
+                >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                </button>
+            ))}
+        </div>
     );
 }
 

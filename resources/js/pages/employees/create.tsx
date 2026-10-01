@@ -396,25 +396,69 @@ export default function CreateEmployee({ options }: { options: Options }) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Новый сотрудник" />
 
-            <div className="flex flex-1 flex-col gap-5 p-3 md:px-5 md:py-4">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div className="flex flex-col gap-1">
-                        <h1 className="text-xl font-semibold tracking-tight">Новый сотрудник</h1>
-                        <p className="text-muted-foreground text-sm">
-                            {employee
-                                ? `${employee.name} · шаг ${step + 1} из ${steps.length}`
-                                : 'Пароль сгенерируется сам и придёт сотруднику на почту.'}
+            <div className="flex flex-1 flex-col gap-5 p-3 max-md:gap-3 md:px-5 md:py-4">
+                <div className="flex flex-wrap items-end justify-between gap-3 max-md:flex-nowrap max-md:items-center">
+                    <div className="flex min-w-0 flex-col gap-1">
+                        {/* The phone's top bar already carries the page title. */}
+                        <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Новый сотрудник</h1>
+                        <p className="text-muted-foreground text-sm max-md:text-[13px]">
+                            {employee ? (
+                                <>
+                                    {employee.name}
+                                    {/* A phone says which step it is in the progress header below. */}
+                                    <span className="max-md:hidden">{` · шаг ${step + 1} из ${steps.length}`}</span>
+                                </>
+                            ) : (
+                                'Пароль сгенерируется сам и придёт сотруднику на почту.'
+                            )}
                         </p>
                     </div>
 
-                    <Button variant="ghost" onClick={toProfile}>
+                    {/* «Отмена» is the back arrow's job on a phone; «Закончить позже» leads somewhere else and stays. */}
+                    <Button
+                        variant="ghost"
+                        className={cn('max-md:-mr-2 max-md:shrink-0 max-md:px-2', !employee && 'max-md:hidden')}
+                        onClick={toProfile}
+                    >
                         {employee ? 'Закончить позже' : 'Отмена'}
                     </Button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[18rem_1fr] lg:items-start">
+                <div className="grid grid-cols-1 gap-5 max-md:gap-3 lg:grid-cols-[18rem_1fr] lg:items-start">
+                    {/* On a phone the six step buttons give way to one line and a
+                    progress bar. Its segments still jump between steps once the
+                    colleague is on the books, as the buttons do. */}
+                    <div className="flex flex-col gap-2 px-1 md:hidden">
+                        <p className="text-[15px]">
+                            <span className="font-semibold">
+                                Шаг {step + 1} из {steps.length}
+                            </span>
+                            <span className="text-muted-foreground"> · {steps[step].title}</span>
+                        </p>
+                        <div className="flex gap-1">
+                            {steps.map((item, index) => (
+                                <button
+                                    key={item.title}
+                                    type="button"
+                                    disabled={employee === null && index !== step}
+                                    aria-current={index === step ? 'step' : undefined}
+                                    aria-label={`Шаг ${index + 1}: ${item.title}`}
+                                    onClick={() => employee !== null && setStep(index)}
+                                    className="-my-2 flex-1 py-2 disabled:cursor-default"
+                                >
+                                    <span
+                                        className={cn(
+                                            'block h-1 rounded-full transition-colors',
+                                            index <= step ? 'bg-brand' : 'bg-muted-foreground/20',
+                                        )}
+                                    />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* The road ahead: what is done, where you are, what is left. */}
-                    <Card className="flex flex-col gap-1 rounded-xl p-3">
+                    <Card className="flex flex-col gap-1 rounded-xl p-3 max-md:hidden">
                         <ol
                             ref={strip}
                             className="flex gap-0.5 overflow-x-auto [scrollbar-width:none] lg:flex-col lg:overflow-visible [&::-webkit-scrollbar]:hidden"
@@ -469,7 +513,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                         </ol>
                     </Card>
 
-                    <Card className="rounded-xl p-4 sm:p-6">
+                    <Card className="rounded-xl p-4 max-md:rounded-2xl max-md:border-0 max-md:shadow-none md:p-6">
                         {/* noValidate: the server's rules are the real ones. */}
                         <form
                             noValidate
@@ -477,16 +521,16 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                 event.preventDefault();
                                 next(step === steps.length - 1 ? 'profile' : 'next');
                             }}
-                            className="@container flex flex-col gap-6"
+                            className="@container flex flex-col gap-6 max-md:gap-4 max-md:[&_[role=combobox]]:h-11 max-md:[&_input:not([type=checkbox])]:h-11"
                         >
-                            <div className="flex flex-col gap-1">
-                                <h2 className="text-base font-semibold">{steps[step].title}</h2>
+                            <div className="flex flex-col gap-1 max-md:contents">
+                                <h2 className="text-base font-semibold max-md:sr-only">{steps[step].title}</h2>
                                 {step > 0 && <p className="text-muted-foreground text-[13px]">Шаг необязательный — его можно пропустить.</p>}
                             </div>
 
                             {step === 0 && (
                                 <div className="flex flex-col gap-4">
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="Фамилия" error={main.errors.surname}>
                                             <Input
                                                 value={main.data.surname}
@@ -510,7 +554,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="E-mail" error={main.errors.email}>
                                             <Input
                                                 type="email"
@@ -543,7 +587,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="Место рождения" error={main.errors.birth_place}>
                                             <Input
                                                 value={main.data.birth_place}
@@ -580,7 +624,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="Начало работы" error={main.errors.hired_at}>
                                             <Input
                                                 type="date"
@@ -600,7 +644,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="Позиция" error={at(main.errors, 'roles')}>
                                             <MultiSelect
                                                 options={options.roles.map((role) => ({
@@ -635,7 +679,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 1 && (
                                 <div className="flex flex-col gap-6">
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="Телефон" error={contacts.errors.phone}>
                                             <Input
                                                 value={contacts.data.phone}
@@ -742,7 +786,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
 
                             {step === 2 && (
                                 <div className="flex flex-col gap-6">
-                                    <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <div className="grid grid-cols-2 gap-3">
                                             <Field label="Серия паспорта" error={passport.errors.passport_series}>
                                                 <Input
@@ -779,7 +823,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                         </Field>
                                     </div>
 
-                                    <div className="grid gap-4 border-t pt-6 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                    <div className="grid gap-4 border-t pt-6 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                         <Field label="Семейное положение" error={family.errors.marital_status}>
                                             <SearchableSelect
                                                 value={family.data.marital_status}
@@ -913,7 +957,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     onRemove={(index) => dropRecord(educations, index)}
                                 >
                                     {(record, index) => (
-                                        <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                        <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                             <Field
                                                 label="Учебное заведение"
                                                 className="@min-[22rem]:col-span-2"
@@ -986,7 +1030,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                     onRemove={(index) => dropRecord(jobs, index)}
                                 >
                                     {(record, index) => (
-                                        <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                        <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                             <Field label="Организация" error={at(jobs.errors, `records.${index}.organization`)}>
                                                 <Input
                                                     value={record.organization}
@@ -1046,7 +1090,7 @@ export default function CreateEmployee({ options }: { options: Options }) {
                             )}
 
                             {step === 5 && (
-                                <div className="grid gap-4 @min-[22rem]:grid-cols-2 @min-[30rem]:grid-cols-3">
+                                <div className="grid gap-4 md:@min-[22rem]:grid-cols-2 md:@min-[30rem]:grid-cols-3">
                                     <Field label="Что выдаём" className="@min-[22rem]:col-span-2" error={at(equipment.errors, 'equipment')}>
                                         <MultiSelect
                                             options={options.stock.map((unit) => ({
@@ -1073,26 +1117,53 @@ export default function CreateEmployee({ options }: { options: Options }) {
                                 </div>
                             )}
 
-                            <div className="flex flex-col-reverse gap-2 border-t pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                                <Button type="button" variant="outline" disabled={step === 0 || busy} onClick={() => setStep(step - 1)}>
+                            {/* On a phone the buttons are one bar that sticks above the tab
+                            bar while the step scrolls: the two side actions shrink to icons
+                            (their words stay for screen readers) and the main one takes the
+                            rest of the width. */}
+                            <div className="max-md:bg-background/90 flex flex-col-reverse gap-2 border-t pt-5 max-md:sticky max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-md:z-20 max-md:-mx-4 max-md:-mb-4 max-md:flex-row max-md:items-center max-md:rounded-b-2xl max-md:px-4 max-md:py-3 max-md:backdrop-blur-xl md:flex-row md:flex-wrap md:items-center md:justify-between">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="max-md:size-11 max-md:shrink-0 max-md:px-0"
+                                    disabled={step === 0 || busy}
+                                    onClick={() => setStep(step - 1)}
+                                >
                                     <ChevronLeft />
-                                    Назад
+                                    <span className="max-md:sr-only">Назад</span>
                                 </Button>
 
-                                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap">
+                                <div className="flex flex-col-reverse gap-2 max-md:min-w-0 max-md:flex-1 max-md:flex-row md:flex-row md:flex-wrap">
                                     {/*
                                      * Filing a whole intake: save this step and start the next
                                      * colleague straight away. From the first step it is the quick
                                      * way in — name, e-mail, done, next person.
                                      */}
-                                    <Button type="button" variant="outline" disabled={busy} onClick={() => next('again')}>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="max-md:size-11 max-md:shrink-0 max-md:px-0"
+                                        disabled={busy}
+                                        onClick={() => next('again')}
+                                    >
                                         <UserPlus />
-                                        {step === 0 ? 'Создать и добавить ещё' : 'Сохранить и добавить ещё'}
+                                        <span className="max-md:sr-only">{step === 0 ? 'Создать и добавить ещё' : 'Сохранить и добавить ещё'}</span>
                                     </Button>
 
-                                    <Button type="submit" disabled={busy}>
+                                    <Button type="submit" className="max-md:h-11 max-md:min-w-0 max-md:flex-1" disabled={busy}>
                                         {busy && <LoaderCircle className="animate-spin" />}
-                                        {step === steps.length - 1 ? 'Готово' : step === 0 ? 'Создать и продолжить' : 'Далее'}
+                                        {step === steps.length - 1 ? (
+                                            'Готово'
+                                        ) : step === 0 ? (
+                                            // A 320px phone has no room for the whole phrase beside the
+                                            // two icon buttons; the arrow says the rest.
+                                            <>
+                                                <span className="md:hidden">Создать</span>
+                                                <span className="max-md:hidden">Создать и продолжить</span>
+                                            </>
+                                        ) : (
+                                            'Далее'
+                                        )}
                                         {step < steps.length - 1 && <ChevronRight />}
                                     </Button>
                                 </div>

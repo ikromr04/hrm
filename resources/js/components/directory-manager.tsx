@@ -1,14 +1,17 @@
 import { CardFields, countCardFields, PlainRights, type CardFieldGroup, type CardFieldsMode, type PlainRight } from '@/components/card-fields';
 import { CategoryFieldsEditor } from '@/components/category-fields-editor';
+import { MobileRow } from '@/components/data-table';
 import { IconChip } from '@/components/equipment-icon';
 import { countEquipmentScopes, EquipmentScopes, type EquipmentScope } from '@/components/equipment-scopes';
 import InputError from '@/components/input-error';
+import { MobileFab } from '@/components/mobile-fab';
 import { PersonLink } from '@/components/person-link';
 import { PeoplePicker, type PickablePerson } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,7 +21,7 @@ import { equipmentIcons, fallbackIcon } from '@/lib/equipment-icons';
 import { plural } from '@/lib/plural';
 import { cn } from '@/lib/utils';
 import { Link, router, useForm } from '@inertiajs/react';
-import { LoaderCircle, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { LoaderCircle, Lock, MoreHorizontal, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState, type FormEventHandler, type ReactNode } from 'react';
 
 export interface DirectoryItem {
@@ -83,6 +86,8 @@ interface DirectoryManagerProps {
     employeesField?: Permission;
     /** Header over the count; equipment categories count units, not people. */
     countLabel?: string;
+    /** The same count in words, for the line under a name on a phone: one, few, many. */
+    countWords?: [string, string, string];
     /** Show and edit the parent/child structure (departments). */
     tree?: boolean;
     /** When given, each record has heads and members chosen from these people (departments). */
@@ -147,6 +152,13 @@ interface DirectoryManagerProps {
 
 type Row = DirectoryItem & { depth: number };
 
+/**
+ * The search over a list. On a phone it is a filled field without a frame, the
+ * way search sits over a list in a mobile app, rather than a bordered input.
+ */
+export const searchBox =
+    'border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 max-md:rounded-xl max-md:border-0 max-md:bg-card max-md:shadow-none lg:h-8';
+
 /** Items in tree order (parents first, children indented), or as given when flat. */
 function orderRows(items: DirectoryItem[], tree: boolean): Row[] {
     if (!tree) return items.map((item) => ({ ...item, depth: 0 }));
@@ -185,6 +197,7 @@ export function DirectoryManager({
     employeesUrl,
     employeesField,
     countLabel = 'Сотрудников',
+    countWords = ['сотрудник', 'сотрудника', 'сотрудников'],
     tree = false,
     people,
     icons,
@@ -211,8 +224,8 @@ export function DirectoryManager({
 
     return (
         <>
-            <div className="-mb-2 flex flex-wrap items-center gap-2">
-                <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
+            <div className="flex flex-wrap items-center gap-2 md:-mb-2">
+                <label className={searchBox}>
                     <Search className="size-4 shrink-0" />
                     <span className="sr-only">Поиск</span>
                     <input
@@ -220,18 +233,115 @@ export function DirectoryManager({
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="Поиск по названию"
-                        className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden"
+                        className="text-foreground min-w-0 flex-1 bg-transparent text-sm outline-hidden max-md:text-base"
                     />
                 </label>
                 {canEdit && (
-                    <Button className="h-10 lg:h-8" onClick={() => setEditing('new')}>
+                    // On a phone the round button over the tab bar takes its place.
+                    <Button className="h-10 max-md:hidden lg:h-8" onClick={() => setEditing('new')}>
                         <Plus />
                         {labels.add}
                     </Button>
                 )}
             </div>
 
-            <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 md:min-h-0 md:flex-1">
+            {/*
+             * A phone gets a list rather than the table: three columns squeezed
+             * into 320px leave the names wrapping letter by letter. Tapping a row
+             * opens the people behind it, the same way the count does on a
+             * desktop; changing and deleting sit in the row's menu.
+             */}
+            <Card className="gap-0 overflow-hidden rounded-2xl border-0 p-0 shadow-none md:hidden">
+                {visible.length > 0 ? (
+                    <ul className="divide-border/70 divide-y">
+                        {visible.map((row) => {
+                            const count = row.total_count ?? row.users_count;
+                            const indent = tree && !query ? Math.min(row.depth, 4) * 14 : 0;
+
+                            return (
+                                <MobileRow
+                                    key={row.id}
+                                    href={employeesUrl && opensList && count > 0 ? employeesUrl(row) : null}
+                                    leading={
+                                        indent > 0 || icons ? (
+                                            <span className="flex items-center gap-1.5" style={{ paddingLeft: indent }}>
+                                                {indent > 0 && <span className="text-muted-foreground">└</span>}
+                                                {icons && <IconChip icon={(row.icon && equipmentIcons[row.icon]) || fallbackIcon} />}
+                                            </span>
+                                        ) : undefined
+                                    }
+                                    title={
+                                        <span className="flex min-w-0 items-center gap-1.5">
+                                            <span className={cn('truncate', tree && row.depth === 0 && 'font-semibold')}>{row.label}</span>
+                                            {row.protected && (
+                                                <Lock
+                                                    className="text-muted-foreground size-3.5 shrink-0"
+                                                    aria-label="Системная запись: удалить нельзя"
+                                                />
+                                            )}
+                                        </span>
+                                    }
+                                    subtitle={
+                                        people
+                                            ? row.heads?.length
+                                                ? row.heads.map((head) => head.name).join(', ')
+                                                : 'Руководитель не назначен'
+                                            : `${count} ${plural(count, countWords)}`
+                                    }
+                                    meta={
+                                        people ? (
+                                            <span className="flex flex-col items-end gap-0.5">
+                                                <span className="text-foreground text-[15px] tabular-nums">{count}</span>
+                                                {row.total_count !== undefined && row.total_count !== row.users_count && (
+                                                    <span className="tabular-nums">{row.users_count} напрямую</span>
+                                                )}
+                                            </span>
+                                        ) : undefined
+                                    }
+                                    trailing={
+                                        canEdit ? (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="size-10" aria-label={`Действия: ${row.label}`}>
+                                                        <MoreHorizontal className="size-5" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="min-w-44">
+                                                    <DropdownMenuItem
+                                                        className="min-h-10 text-[15px]"
+                                                        aria-label={`Изменить: ${row.label}`}
+                                                        onSelect={() => setEditing(row)}
+                                                    >
+                                                        <Pencil />
+                                                        Изменить
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="min-h-10 text-[15px] text-[#B42318] focus:text-[#B42318] dark:text-[#F7A19A] dark:focus:text-[#F7A19A] [&_svg]:text-current"
+                                                        aria-label={`Удалить: ${row.label}`}
+                                                        disabled={row.protected}
+                                                        onSelect={() => setDeleting(row)}
+                                                    >
+                                                        <Trash2 />
+                                                        Удалить
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        ) : undefined
+                                    }
+                                />
+                            );
+                        })}
+                    </ul>
+                ) : (
+                    <p className="text-muted-foreground px-4 py-12 text-center text-[15px]">
+                        {items.length === 0 ? 'Пока пусто.' : 'Ничего не найдено.'}
+                    </p>
+                )}
+            </Card>
+
+            {canEdit && <MobileFab onClick={() => setEditing('new')} label={labels.add} />}
+
+            <Card className="flex flex-col gap-0 overflow-hidden rounded-xl p-0 max-md:hidden md:min-h-0 md:flex-1">
                 <div className="overflow-auto md:min-h-0 md:flex-1">
                     <table className="w-full border-collapse text-sm">
                         <thead className="bg-sidebar sticky top-0 z-10 shadow-[0_1px_0_var(--border)]">
@@ -641,6 +751,7 @@ function EditorDialog({
                         <Label htmlFor="directory-label">Название</Label>
                         <Input
                             id="directory-label"
+                            className="max-md:h-11"
                             autoFocus
                             value={form.data.label}
                             onChange={(event) => form.setData('label', event.target.value)}
@@ -837,7 +948,7 @@ function EditorDialog({
                                 value={form.data.parent_id === null ? 'root' : String(form.data.parent_id)}
                                 onValueChange={(value) => form.setData('parent_id', value === 'root' ? null : Number(value))}
                             >
-                                <SelectTrigger id="directory-parent">
+                                <SelectTrigger id="directory-parent" className="max-md:h-11">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-80">
@@ -887,10 +998,10 @@ function EditorDialog({
                     )}
 
                     <DialogFooter className="gap-2">
-                        <Button type="button" variant="outline" onClick={onClose}>
+                        <Button type="button" variant="outline" className="max-md:h-11" onClick={onClose}>
                             Отмена
                         </Button>
-                        <Button type="submit" disabled={form.processing || form.data.label.trim() === ''}>
+                        <Button type="submit" className="max-md:h-11" disabled={form.processing || form.data.label.trim() === ''}>
                             {form.processing && <LoaderCircle className="animate-spin" />}
                             Сохранить
                         </Button>
@@ -955,10 +1066,10 @@ function DeleteDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className="gap-2">
-                    <Button type="button" variant="outline" onClick={onClose}>
+                    <Button type="button" variant="outline" className="max-md:h-11" onClick={onClose}>
                         Отмена
                     </Button>
-                    <Button type="button" variant="destructive" onClick={confirm} disabled={processing}>
+                    <Button type="button" variant="destructive" className="max-md:h-11" onClick={confirm} disabled={processing}>
                         {processing && <LoaderCircle className="animate-spin" />}
                         Удалить
                     </Button>

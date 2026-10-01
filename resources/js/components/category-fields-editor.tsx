@@ -53,6 +53,7 @@ export function CategoryFieldsEditor({
                         <div className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
                             <div className="grid min-w-0 flex-1 basis-full content-start gap-2 sm:basis-auto">
                                 <Input
+                                    className="max-md:h-11"
                                     value={field.name}
                                     placeholder="Название поля"
                                     aria-label={`Название поля ${index + 1}`}
@@ -64,7 +65,7 @@ export function CategoryFieldsEditor({
 
                             <div className="grid min-w-0 flex-1 content-start gap-2 sm:w-40 sm:flex-none">
                                 <Select value={field.type} onValueChange={(type) => replace(index, { type: type as FieldType })}>
-                                    <SelectTrigger aria-label={`Тип поля ${index + 1}`}>
+                                    <SelectTrigger className="max-md:h-11" aria-label={`Тип поля ${index + 1}`}>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -83,7 +84,7 @@ export function CategoryFieldsEditor({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="text-muted-foreground size-9"
+                                    className="text-muted-foreground size-9 max-md:size-10"
                                     aria-label={`Выше: ${field.name || 'новое поле'}`}
                                     disabled={index === 0}
                                     onClick={() => move(index, index - 1)}
@@ -94,7 +95,7 @@ export function CategoryFieldsEditor({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="text-muted-foreground size-9"
+                                    className="text-muted-foreground size-9 max-md:size-10"
                                     aria-label={`Ниже: ${field.name || 'новое поле'}`}
                                     disabled={index === fields.length - 1}
                                     onClick={() => move(index, index + 1)}
@@ -105,7 +106,7 @@ export function CategoryFieldsEditor({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="size-9 text-[#B42318] hover:text-[#B42318] dark:text-[#F7A19A]"
+                                    className="size-9 text-[#B42318] hover:text-[#B42318] max-md:size-10 dark:text-[#F7A19A]"
                                     aria-label={`Убрать поле: ${field.name || 'новое поле'}`}
                                     onClick={() => remove(index)}
                                 >
@@ -117,6 +118,7 @@ export function CategoryFieldsEditor({
                         {field.type === 'select' && (
                             <div className="grid content-start gap-2">
                                 <Input
+                                    className="max-md:h-11"
                                     value={field.options.join(', ')}
                                     placeholder="Варианты через запятую"
                                     aria-label={`Варианты поля ${index + 1}`}
@@ -129,7 +131,7 @@ export function CategoryFieldsEditor({
                             </div>
                         )}
 
-                        <label className="text-muted-foreground flex items-center gap-2 text-[13px]">
+                        <label className="text-muted-foreground flex items-center gap-2 text-[13px] max-md:min-h-10">
                             <Checkbox checked={field.required} onCheckedChange={() => replace(index, { required: !field.required })} />
                             Обязательное
                         </label>
@@ -141,7 +143,7 @@ export function CategoryFieldsEditor({
                 ))}
             </ul>
 
-            <Button type="button" variant="outline" className="h-8 justify-self-start" onClick={add}>
+            <Button type="button" variant="outline" className="h-8 justify-self-start max-md:h-11 max-md:justify-self-stretch" onClick={add}>
                 <Plus />
                 Добавить поле
             </Button>

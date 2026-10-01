@@ -2,6 +2,8 @@ import {
     clearedFilter,
     countActiveFilters,
     DataTable,
+    MobileListTools,
+    MobileRow,
     resetView,
     useTableView,
     type ColumnDef as TableColumn,
@@ -9,6 +11,7 @@ import {
 } from '@/components/data-table';
 import { EmployeeActions, type EmploymentStatus } from '@/components/employee-actions';
 import { LanguageBadges } from '@/components/language-badges';
+import { MobileFab } from '@/components/mobile-fab';
 import { Pagination, type Paginated } from '@/components/pagination';
 import { PersonAvatar } from '@/components/person-avatar';
 import { Phones } from '@/components/phones';
@@ -239,6 +242,48 @@ function LeftBadge({ row }: { row: EmployeeRow }) {
     );
 }
 
+/**
+ * The person's face in a list row. Initials mean nobody uploaded a photograph;
+ * a lock means the photograph is not this viewer's to see, which is not the
+ * same thing. The table and the phone list draw it at their own sizes.
+ */
+function Face({ row, visible, className }: { row: EmployeeRow; visible: string[]; className: string }) {
+    if (!visible.includes('avatar')) {
+        return (
+            <span
+                className={cn('bg-muted text-muted-foreground flex shrink-0 items-center justify-center rounded-full', className)}
+                title="Фотография закрыта"
+                aria-label="Фотография закрыта"
+            >
+                <Lock className="size-4" />
+            </span>
+        );
+    }
+
+    return row.avatar ? (
+        <img src={row.avatar} alt="" className={cn('shrink-0 rounded-full object-cover', className)} />
+    ) : (
+        <PersonAvatar name={`${row.name} ${row.surname}`} className={className} />
+    );
+}
+
+/**
+ * The line under the name in the phone list: why somebody left the list of
+ * working staff, if they did; otherwise what they do, falling back on the
+ * e-mail when the viewer reads neither positions nor roles.
+ */
+function mobileSubtitle(row: EmployeeRow): string | undefined {
+    if (row.status !== 'active') {
+        const female = row.sex === 'female';
+        const label = row.status === 'fired' ? (female ? 'Уволена' : 'Уволен') : female ? 'Переведена' : 'Переведён';
+        const note = row.status_note && (row.status === 'transferred' ? `→ ${row.status_note}` : row.status_note);
+
+        return [[label, formatDate(row.status_changed_at)].filter(Boolean).join(' '), note].filter(Boolean).join(' · ');
+    }
+
+    return [row.positions, row.roles].find((titles) => titles?.length)?.join(', ') || row.email || undefined;
+}
+
 function Empty() {
     return <span className="text-muted-foreground">—</span>;
 }
@@ -279,21 +324,7 @@ function buildColumns(options: EmployeesProps['options'], visible: string[]): Co
                 filter: { type: 'text', param: 'search', placeholder: 'ФИО или почта' },
                 cell: (row) => (
                     <div className="flex items-center gap-3">
-                        {/* Initials mean nobody uploaded a photograph; a lock means the
-                        line is not this viewer's to read, which is not the same thing. */}
-                        {!visible.includes('avatar') ? (
-                            <span
-                                className="bg-muted text-muted-foreground flex size-[38px] shrink-0 items-center justify-center rounded-full"
-                                title="Фотография закрыта"
-                                aria-label="Фотография закрыта"
-                            >
-                                <Lock className="size-4" />
-                            </span>
-                        ) : row.avatar ? (
-                            <img src={row.avatar} alt="" className="size-[38px] shrink-0 rounded-full object-cover" />
-                        ) : (
-                            <PersonAvatar name={`${row.name} ${row.surname}`} className="size-[38px] text-[13px]" />
-                        )}
+                        <Face row={row} visible={visible} className="size-[38px] text-[13px]" />
                         <div className="flex min-w-0 flex-col gap-0.5">
                             <Link
                                 href={route('employees.show', row.id)}
@@ -556,11 +587,14 @@ export default function Employees({
         <AppLayout breadcrumbs={breadcrumbs} fitViewport>
             <Head title="Сотрудники" />
 
-            <div className="flex flex-1 flex-col gap-4 p-3 md:min-h-0 md:px-5 md:py-4">
-                <h1 className="text-xl font-semibold tracking-tight">Сотрудники</h1>
+            <div className="flex flex-1 flex-col gap-4 p-3 max-md:gap-3 md:min-h-0 md:px-5 md:py-4">
+                {/* The phone's top bar already carries the page title. */}
+                <h1 className="text-xl font-semibold tracking-tight max-md:sr-only">Сотрудники</h1>
 
-                <div className="-mb-2 flex flex-wrap items-center gap-2">
-                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 lg:h-8">
+                {/* On a phone this is one line — the search and the button behind
+                which sorting and filters wait — with the lists as chips under it. */}
+                <div className="-mb-2 flex flex-wrap items-center gap-2 max-md:mb-0 max-md:flex-nowrap">
+                    <label className="border-input bg-background text-muted-foreground focus-within:ring-ring max-md:bg-card flex h-10 min-w-48 flex-1 items-center gap-2 rounded-md border px-3 shadow-xs focus-within:ring-2 max-md:min-w-0 max-md:rounded-xl max-md:border-transparent max-md:shadow-none lg:h-8">
                         <Search className="size-4 shrink-0" />
                         <span className="sr-only">Поиск по всем полям</span>
                         <input
@@ -572,8 +606,19 @@ export default function Employees({
                         />
                     </label>
 
+                    <MobileListTools
+                        columns={columns as unknown as TableColumn[]}
+                        filters={filters as unknown as Record<string, unknown>}
+                        onFilter={(changes) => applyFilters(changes as Partial<Filters>)}
+                        canFilter={(column) => canFilter(column as unknown as ColumnDef)}
+                        sort={sort}
+                        sortable={sortable}
+                        onSort={sortBy}
+                        className="bg-card rounded-xl border-transparent shadow-none"
+                    />
+
                     {statusCounts && (
-                        <nav aria-label="Списки сотрудников" className="flex flex-wrap items-center gap-1 text-sm">
+                        <nav aria-label="Списки сотрудников" className="flex flex-wrap items-center gap-1 text-sm max-md:hidden">
                             {statusTabs.map((tab) => (
                                 <button
                                     key={tab.status}
@@ -594,10 +639,11 @@ export default function Employees({
                         </nav>
                     )}
 
+                    {/* The phone's filter sheet has its own "reset all". */}
                     {activeFilters > 0 && (
                         <Button
                             variant="ghost"
-                            className="h-10 lg:h-8"
+                            className="h-10 max-md:hidden lg:h-8"
                             onClick={() =>
                                 applyFilters(
                                     columns.filter(canFilter).reduce<Partial<Filters>>((acc, c) => ({ ...acc, ...clearedFilter(c.filter!) }), {}),
@@ -611,7 +657,7 @@ export default function Employees({
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="h-10 font-normal lg:h-8">
+                            <Button variant="outline" className="h-10 font-normal max-md:hidden lg:h-8">
                                 <Columns3 />
                                 Колонки
                                 <ChevronDown className="text-muted-foreground" />
@@ -645,7 +691,7 @@ export default function Employees({
 
                     {canEdit && (
                         // A page of its own: the form runs over several steps.
-                        <Button className="h-10 lg:h-8" asChild>
+                        <Button className="h-10 max-md:hidden lg:h-8" asChild>
                             <Link href={route('employees.create')}>
                                 <Plus />
                                 Добавить сотрудника
@@ -653,6 +699,40 @@ export default function Employees({
                         </Button>
                     )}
                 </div>
+
+                {statusCounts && (
+                    // The same lists as chips on one line that scrolls sideways,
+                    // bleeding to the screen edges like a native segmented strip.
+                    <nav
+                        aria-label="Списки сотрудников"
+                        className="-mx-3 flex gap-2 overflow-x-auto px-3 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden"
+                    >
+                        {statusTabs.map((tab) => (
+                            <button
+                                key={tab.status}
+                                type="button"
+                                onClick={() => visit({ status: tab.status })}
+                                aria-current={status === tab.status ? 'page' : undefined}
+                                className={cn(
+                                    'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-medium whitespace-nowrap transition-colors',
+                                    status === tab.status
+                                        ? 'bg-brand-soft text-foreground font-semibold dark:bg-white/10'
+                                        : 'bg-card text-foreground',
+                                )}
+                            >
+                                {tab.label}
+                                <span
+                                    className={cn(
+                                        'text-xs tabular-nums',
+                                        status === tab.status ? 'text-muted-foreground font-semibold' : 'text-muted-foreground',
+                                    )}
+                                >
+                                    {statusCounts[tab.status]}
+                                </span>
+                            </button>
+                        ))}
+                    </nav>
+                )}
 
                 <DataTable
                     columns={columns as unknown as TableColumn[]}
@@ -685,10 +765,20 @@ export default function Employees({
                     onHide={(key) => toggleHidden(key, true)}
                     lockedKey="name"
                     actions={canManage ? (row) => <EmployeeActions employee={row} isSelf={row.id === auth.user?.id} /> : undefined}
+                    mobileRow={(row) => (
+                        <MobileRow
+                            href={route('employees.show', row.id)}
+                            leading={<Face row={row} visible={visibleFields} className="size-10 text-[13px]" />}
+                            title={fullName(row)}
+                            subtitle={mobileSubtitle(row)}
+                            trailing={canManage ? <EmployeeActions employee={row} isSelf={row.id === auth.user?.id} /> : undefined}
+                        />
+                    )}
                     empty={<Empty />}
                     footer={
                         <>
-                            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                            {/* A phone keeps the paging and leaves the page size to the default. */}
+                            <div className="text-muted-foreground flex items-center gap-2 text-sm max-md:hidden">
                                 Строк на странице
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -713,6 +803,8 @@ export default function Employees({
                     }
                 />
             </div>
+
+            {canEdit && <MobileFab href={route('employees.create')} label="Добавить сотрудника" />}
         </AppLayout>
     );
 }
