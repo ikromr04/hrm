@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use Illuminate\Auth\Notifications\ResetPassword as BaseResetPassword;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
 /**
@@ -12,5 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
  */
 class ResetPassword extends BaseResetPassword implements ShouldQueue
 {
-    //
+    // The framework's letter is not written to be queued, so it lacks what a
+    // queued one is asked for — which connection, which queue, what delay.
+    use Queueable;
 }

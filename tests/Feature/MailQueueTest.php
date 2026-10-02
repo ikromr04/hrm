@@ -49,6 +49,23 @@ class MailQueueTest extends TestCase
         $this->assertSame([['new@evolet.tj']], $sent);
     }
 
+    public function test_every_letter_is_really_written_and_leaves()
+    {
+        $user = User::factory()->create(['email' => 'old@evolet.tj']);
+        $subjects = [];
+        Event::listen(MessageSent::class, function (MessageSent $event) use (&$subjects) {
+            $subjects[] = $event->message->getSubject();
+        });
+
+        // Nothing is faked: a letter that cannot be queued or written fails
+        // here, as it would on the server.
+        $user->notify(new AccountCreated('secret'));
+        $user->notify(new ConfirmNewEmail('new@evolet.tj'));
+        $this->post('/forgot-password', ['email' => 'old@evolet.tj'])->assertSessionHasNoErrors();
+
+        $this->assertCount(3, $subjects);
+    }
+
     public function test_other_letters_go_to_the_account_address()
     {
         $user = User::factory()->create(['email' => 'old@evolet.tj']);
