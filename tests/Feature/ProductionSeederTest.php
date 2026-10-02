@@ -9,50 +9,64 @@ use App\Models\Language;
 use App\Models\Position;
 use App\Models\User;
 use App\Support\Access;
-use Database\Seeders\DepartmentSeeder;
-use Database\Seeders\EquipmentTypeSeeder;
-use Database\Seeders\LanguageSeeder;
-use Database\Seeders\PositionSeeder;
 use Database\Seeders\ProductionSeeder;
-use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * What the company's own installation starts with: the rights, the positions
- * and the directories — and not one invented person or laptop.
+ * What the company's own installation starts with: the rights and the system
+ * administrator's position — and not one list, person or laptop made up for it.
  */
 class ProductionSeederTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_it_brings_the_rights_the_positions_and_the_directories()
+    public function test_it_brings_the_rights_and_the_one_position()
     {
         $this->seed(ProductionSeeder::class);
 
         $this->assertEqualsCanonicalizing(Access::keys(), Permission::pluck('name')->all());
 
-        $this->assertSame(count(RoleSeeder::ROLES), Role::count());
+        $this->assertSame([Access::SOLE_ROLE], Role::pluck('name')->all());
         $this->assertSame('Системный администратор', Role::findByName(Access::SOLE_ROLE)->title);
-        // The system administrator holds nothing; every other position may look around.
+        // The system administrator holds nothing: the role passes every check by itself.
         $this->assertSame(0, Role::findByName(Access::SOLE_ROLE)->permissions()->count());
-        $this->assertEqualsCanonicalizing(Access::defaults(), Role::findByName('analyst')->permissions->pluck('name')->all());
+    }
 
-        $this->assertSame(count(DepartmentSeeder::TREE, COUNT_RECURSIVE), Department::count());
-        $this->assertSame(count(PositionSeeder::HEADS) + count(PositionSeeder::OTHERS), Position::count());
-        $this->assertSame(count(LanguageSeeder::LANGUAGES), Language::count());
-        $this->assertSame(count(EquipmentTypeSeeder::TYPES), EquipmentType::count());
+    public function test_the_directories_start_empty()
+    {
+        $this->seed(ProductionSeeder::class);
+
+        $this->assertSame(0, Department::count());
+        $this->assertSame(0, Position::count());
+        $this->assertSame(0, Language::count());
+        $this->assertSame(0, EquipmentType::count());
     }
 
     public function test_it_invents_no_people_and_no_hardware()
     {
         $this->seed(ProductionSeeder::class);
 
-        // Not even the administrator: that one is `php artisan hrm:sysadmin`.
+        // The administrator is asked for at a terminal, never made up: with
+        // nobody to ask, as here, there is no account and no invented password.
         $this->assertSame(0, User::count());
         $this->assertSame(0, Equipment::count());
+    }
+
+    public function test_it_says_how_to_create_the_administrator_when_it_cannot_ask()
+    {
+        $this->artisan('db:seed', ['--class' => ProductionSeeder::class])
+            ->expectsOutputToContain('php artisan hrm:sysadmin')
+            ->assertSuccessful();
+
+        // Once there is one, there is nothing left to say.
+        User::factory()->create()->assignRole(Access::SOLE_ROLE);
+
+        $this->artisan('db:seed', ['--class' => ProductionSeeder::class])
+            ->doesntExpectOutputToContain('php artisan hrm:sysadmin')
+            ->assertSuccessful();
     }
 
     public function test_a_second_run_leaves_what_the_company_changed_alone()
@@ -60,26 +74,17 @@ class ProductionSeederTest extends TestCase
         $this->seed(ProductionSeeder::class);
 
         // Somebody has been at work in «Справочники» since the first day.
-        Role::findByName('intern')->delete();
-        Role::findByName('analyst')->syncPermissions([]);
         Role::findByName(Access::SOLE_ROLE)->update(['title' => 'Главный администратор']);
-        Department::firstWhere('name', 'Отдел Дизайна')->update(['name' => 'Отдел дизайна и вёрстки', 'parent_id' => null]);
-        Position::firstWhere('name', 'Уборщица')->delete();
-        Language::firstWhere('name', 'Арабский')->delete();
-        EquipmentType::firstWhere('name', 'Печать')->delete();
-
-        $counts = fn () => [Role::count(), Department::count(), Position::count(), Language::count(), EquipmentType::count()];
-        $before = $counts();
+        $position = Role::create(['name' => 'accountant', 'guard_name' => 'web', 'title' => 'Бухгалтер']);
+        $position->givePermissionTo('employees.view');
+        Department::create(['name' => 'Бухгалтерия']);
 
         $this->seed(ProductionSeeder::class);
 
-        $this->assertSame($before, $counts());
-        $this->assertNull(Role::firstWhere('name', 'intern'));
-        // Rights taken from a position stay taken.
-        $this->assertSame(0, Role::findByName('analyst')->permissions()->count());
         $this->assertSame('Главный администратор', Role::findByName(Access::SOLE_ROLE)->title);
-        $this->assertNull(Department::firstWhere('name', 'Отдел Дизайна'));
-        $this->assertNull(Department::firstWhere('name', 'Отдел дизайна и вёрстки')->parent_id);
+        $this->assertSame(2, Role::count());
+        $this->assertSame(['employees.view'], Role::findByName('accountant')->permissions->pluck('name')->all());
+        $this->assertSame(1, Department::count());
     }
 
     public function test_a_second_run_brings_a_right_added_by_an_update()
@@ -102,8 +107,7 @@ class ProductionSeederTest extends TestCase
 
         $this->seed(ProductionSeeder::class);
 
-        $this->assertTrue(Role::where('name', Access::SOLE_ROLE)->exists());
-        $this->assertSame(count(RoleSeeder::ROLES), Role::count());
+        $this->assertSame([Access::SOLE_ROLE], Role::pluck('name')->all());
     }
 
     public function test_a_plain_db_seed_in_production_is_the_careful_one()
@@ -111,9 +115,9 @@ class ProductionSeederTest extends TestCase
         $this->app['env'] = 'production';
 
         // In production the command asks before it runs; --force is the answer.
-        $this->artisan('db:seed', ['--force' => true])->assertSuccessful();
+        $this->artisan('db:seed', ['--force' => true, '--no-interaction' => true])->assertSuccessful();
 
         $this->assertSame(0, User::count());
-        $this->assertSame(count(RoleSeeder::ROLES), Role::count());
+        $this->assertSame([Access::SOLE_ROLE], Role::pluck('name')->all());
     }
 }
