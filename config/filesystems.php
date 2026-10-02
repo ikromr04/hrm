@@ -39,7 +39,13 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => storage_path('app/public'),
+            // Photographs are kept in storage/ and shown through the symlink
+            // `storage:link` makes in the web root. Shared hosting often forbids
+            // symlinks, and sometimes the web root is a folder apart from the
+            // application altogether; there PUBLIC_DISK_ROOT names a real folder
+            // inside the web root (…/public_html/storage) and the files are
+            // written straight into it. See docs/deploy-cpanel.md.
+            'root' => env('PUBLIC_DISK_ROOT') ?: storage_path('app/public'),
             'url' => env('APP_URL').'/storage',
             'visibility' => 'public',
             'throw' => false,

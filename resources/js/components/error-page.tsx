@@ -13,6 +13,9 @@ import { type ReactNode } from 'react';
  * two things one actually wants — back where they came from, or to the start.
  * Signed in, it sits inside the usual shell, so the sidebar and the search are
  * still there and this is a detour rather than a dead end.
+ *
+ * It is also the page shown when the application itself is what failed, so it
+ * leans on as little as it can: no shared data at all is still a page.
  */
 export function ErrorPage({
     code,
@@ -20,6 +23,8 @@ export function ErrorPage({
     description,
     icon: Icon,
     note,
+    actions,
+    standalone = false,
 }: {
     code: number;
     title: string;
@@ -27,8 +32,16 @@ export function ErrorPage({
     icon: LucideIcon;
     /** A line under the buttons, where one is worth saying. */
     note?: ReactNode;
+    /** Instead of the two ways out, where neither leads anywhere — the whole system is closed. */
+    actions?: ReactNode;
+    /** Outside the shell even when signed in: every link of the sidebar would lead back here. */
+    standalone?: boolean;
 }) {
-    const { auth } = usePage<SharedData>().props;
+    // A failure can come before anything has worked out who is asking — the
+    // database is down, the system is closed for an update — and the shared data
+    // is then simply not there. Nobody signed in is the honest reading of that.
+    const user = (usePage().props as Partial<SharedData>).auth?.user ?? null;
+    const inShell = user !== null && !standalone;
 
     const body = (
         <div className="flex flex-1 items-center justify-center p-6 max-md:px-4">
@@ -46,16 +59,20 @@ export function ErrorPage({
 
                 {/* On a phone the two ways out are full-width buttons, the main one on top where the thumb meets it first. */}
                 <div className="flex flex-wrap items-center justify-center gap-2 max-md:w-full max-md:max-w-xs max-md:flex-col-reverse max-md:items-stretch">
-                    <Button variant="outline" onClick={() => window.history.back()} className="max-md:h-11 max-md:text-[15px]">
-                        <ArrowLeft />
-                        Назад
-                    </Button>
-                    <Button asChild className="max-md:h-11 max-md:text-[15px]">
-                        <Link href={auth.user ? '/' : route('login')}>{auth.user ? 'На главную' : 'Войти'}</Link>
-                    </Button>
+                    {actions ?? (
+                        <>
+                            <Button variant="outline" onClick={() => window.history.back()} className="max-md:h-11 max-md:text-[15px]">
+                                <ArrowLeft />
+                                Назад
+                            </Button>
+                            <Button asChild className="max-md:h-11 max-md:text-[15px]">
+                                <Link href={user ? '/' : route('login')}>{user ? 'На главную' : 'Войти'}</Link>
+                            </Button>
+                        </>
+                    )}
                 </div>
 
-                {auth.user && note}
+                {user && note}
             </div>
         </div>
     );
@@ -63,7 +80,7 @@ export function ErrorPage({
     return (
         <>
             <Head title={title} />
-            {auth.user ? <AppLayout fitViewport>{body}</AppLayout> : <Guest>{body}</Guest>}
+            {inShell ? <AppLayout fitViewport>{body}</AppLayout> : <Guest>{body}</Guest>}
         </>
     );
 }

@@ -8,3 +8,16 @@
 
 CHANGELOG.md export-ignore
 README.md export-ignore
+
+# Left out of `git archive`, which is how the bundle for the server is made
+# (docs/deploy-cpanel.md): none of this is needed to run the application.
+/.claude export-ignore
+/.devcontainer export-ignore
+/.github export-ignore
+/.mcp.json export-ignore
+/.editorconfig export-ignore
+/.prettierignore export-ignore
+/.prettierrc export-ignore
+/eslint.config.js export-ignore
+/phpunit.xml export-ignore
+/tests export-ignore

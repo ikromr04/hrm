@@ -7,6 +7,7 @@ use App\Support\Access;
 use App\Support\Directories;
 use App\Support\EmployeeFields;
 use App\Support\EquipmentAccess;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -32,6 +33,24 @@ class AppServiceProvider extends ServiceProvider
         if (env('CODESPACES') === 'true') {
             URL::forceScheme('https');
         }
+
+        // The same on the company's server, for the same reason. Shared hosting
+        // tends to end HTTPS at a proxy in front of PHP (the host's own, or
+        // Cloudflare), so the request looks like plain HTTP from here — and the
+        // links in a page and the redirect after a form would be written http://,
+        // which a browser on an https page blocks. A proxy that says so in a
+        // header is believed (trustProxies in bootstrap/app.php); this is for the
+        // one that says nothing. APP_URL is what the owner sets either way, so
+        // an https address there settles it.
+        if ($this->app->isProduction() && str_starts_with((string) config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+        }
+
+        // `migrate:fresh`, `migrate:reset`, `migrate:refresh` and `db:wipe` empty
+        // the database. That is how the demo is rebuilt during development, and
+        // typed on the company's server out of habit it would take every card
+        // with it, so there they refuse to run even with --force.
+        DB::prohibitDestructiveCommands($this->app->isProduction());
 
         // One account passes every authorization check, including rights added
         // later: the system administrator. There is exactly one of them, and

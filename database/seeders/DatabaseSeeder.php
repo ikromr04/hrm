@@ -12,6 +12,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // What follows is the demo: invented people, and lists that are put back
+        // the way the code has them on every run. A plain `db:seed` typed on the
+        // company's server out of habit gets the careful seeder instead.
+        if (app()->isProduction()) {
+            $this->call(ProductionSeeder::class);
+
+            return;
+        }
+
         $this->call([
             RoleSeeder::class,
             DepartmentSeeder::class,

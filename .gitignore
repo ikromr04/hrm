@@ -27,3 +27,7 @@ yarn-error.log
 /storage/debugbar
 
 /.playwright-mcp
+
+# The bundle for the server, built by the steps in docs/deploy-cpanel.md
+/release
+/*.zip

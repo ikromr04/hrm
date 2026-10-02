@@ -77,6 +77,58 @@ class ErrorPagesTest extends TestCase
             ->assertSessionHas('notice');
     }
 
+    public function test_a_failure_of_ours_is_a_page_of_the_application_in_production()
+    {
+        // With debugging off, as on the company's server, the framework would
+        // answer a bare "500 | Server Error".
+        config(['app.debug' => false]);
+        Route::middleware('web')->get('/_qa-broken', fn () => throw new \RuntimeException('Something of ours broke.'));
+
+        $this->withoutVite()
+            ->actingAs(User::factory()->create())
+            ->get('/_qa-broken')
+            ->assertStatus(500)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('errors/500'))
+            // What broke is for the log, not for the page.
+            ->assertDontSee('Something of ours broke.');
+    }
+
+    public function test_while_debugging_a_failure_keeps_the_trace()
+    {
+        config(['app.debug' => true]);
+        Route::middleware('web')->get('/_qa-broken', fn () => throw new \RuntimeException('Something of ours broke.'));
+
+        $this->actingAs(User::factory()->create())
+            ->get('/_qa-broken')
+            ->assertStatus(500)
+            ->assertSee('Something of ours broke.');
+    }
+
+    public function test_a_failure_asked_for_in_json_stays_json()
+    {
+        config(['app.debug' => false]);
+        Route::middleware('web')->get('/_qa-broken', fn () => throw new \RuntimeException('Something of ours broke.'));
+
+        $this->actingAs(User::factory()->create())
+            ->getJson('/_qa-broken')
+            ->assertStatus(500)
+            ->assertExactJson(['message' => 'Server Error']);
+    }
+
+    public function test_closed_for_an_update_is_a_page_that_needs_nobody_signed_in()
+    {
+        // `artisan down` answers before the session is started, so the page is
+        // drawn with no shared data at all — hence a route outside the web group.
+        config(['app.debug' => false]);
+        Route::get('/_qa-down', fn () => abort(503, headers: ['Retry-After' => 60]));
+
+        $this->withoutVite()
+            ->get('/_qa-down')
+            ->assertStatus(503)
+            ->assertHeader('Retry-After', 60)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('errors/503')->missing('auth'));
+    }
+
     public function test_a_refusal_asked_for_in_json_stays_json()
     {
         $this->actingAs(User::factory()->create())
