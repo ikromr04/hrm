@@ -16,6 +16,7 @@ use App\Http\Controllers\EquipmentDetailsController;
 use App\Http\Controllers\EquipmentJournalController;
 use App\Http\Controllers\EquipmentRepairController;
 use App\Http\Controllers\EquipmentStatusController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SearchController;
 // The reference lists themselves, under a name of their own: "Directories" here
 // already stands for the controllers that serve them.
@@ -66,6 +67,14 @@ Route::middleware(['auth'])->group(function () {
     // to everybody who signs in, and the pages show names and nothing more.
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::get('departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
+
+    // What the bell opens. Everybody has notifications of their own and nobody
+    // reads anyone else's, so there is no right to ask for: each address works
+    // on the signed-in person's own list.
+    Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    // Before the single one, or "read" would be taken for a notification's id.
+    Route::post('notifications/read', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
 });
 
 // Putting a new colleague on the books.

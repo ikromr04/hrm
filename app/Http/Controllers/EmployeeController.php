@@ -15,11 +15,13 @@ use App\Models\UserDetail;
 use App\Models\UserEducation;
 use App\Models\UserWorkExperience;
 use App\Notifications\AccountCreated;
+use App\Notifications\EmployeeAdded;
 use App\Support\Access;
 use App\Support\Directories;
 use App\Support\EmployeeFields;
 use App\Support\EquipmentAccess;
 use App\Support\EquipmentHistory;
+use App\Support\Recipients;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -293,6 +296,14 @@ class EmployeeController extends Controller
         });
 
         $employee->notify(new AccountCreated($password));
+
+        // The others who add people hear that this one is on the books now.
+        // Whoever added them was there and needs no telling, and neither does
+        // the newcomer, should their position be one that adds people too.
+        Notification::send(
+            Recipients::holding('employees.create')->reject(fn (User $user) => $user->is($request->user()) || $user->is($employee)),
+            new EmployeeAdded($employee),
+        );
 
         // Whoever added them fills the rest of their card in, every line of it,
         // through the ordinary forms of the card: those ask EmployeeFields, which

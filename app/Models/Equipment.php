@@ -40,6 +40,13 @@ class Equipment extends Model
      */
     public array $journalExtra = [];
 
+    /**
+     * Set when the next save moves the unit without anybody to tell about it:
+     * its holder is being deleted, and a line behind the bell of a person who
+     * is gone would be read by nobody. Like the note, it lasts one save.
+     */
+    public bool $unannounced = false;
+
     /** In the order the list's tabs show them. */
     public const STATUSES = ['issued', 'stock', 'written_off'];
 

@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateFamilyRequest;
 use App\Http\Requests\UpdatePersonalDataRequest;
 use App\Models\Language;
 use App\Models\User;
+use App\Notifications\PlacementChanged;
 use App\Support\EmployeeFields;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,6 +61,14 @@ class EmployeeDetailsController extends Controller
     {
         $data = $this->allowed($request, $employee, $request->validated());
 
+        // Where the person stood before the save, so they can be told what
+        // moved. Not while they are still being put on the books: the wizard
+        // saves this card again as one of its steps, and somebody who has not
+        // signed in once has no "before" to hear a change from.
+        $placement = EmployeeFields::isBeingCreatedBy($request->user(), $employee)
+            ? null
+            : PlacementChanged::snapshot($employee);
+
         DB::transaction(function () use ($employee, $data) {
             $employee->update(Arr::only($data, self::ON_USER));
 
@@ -80,6 +89,10 @@ class EmployeeDetailsController extends Controller
                 $how === 'syncRoles' ? $employee->syncRoles($data[$key]) : $employee->{$how}()->sync($data[$key]);
             }
         });
+
+        if ($placement !== null) {
+            PlacementChanged::announce($employee, $placement, $request->user());
+        }
 
         return back();
     }

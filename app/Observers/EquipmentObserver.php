@@ -4,6 +4,8 @@ namespace App\Observers;
 
 use App\Models\Equipment;
 use App\Models\EquipmentEvent;
+use App\Models\User;
+use App\Notifications\EquipmentMoved;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -42,6 +44,8 @@ class EquipmentObserver
 
     public function updated(Equipment $equipment): void
     {
+        $this->announce($equipment);
+
         // Both sides are read through the casts, so a date is a date and a
         // list is a list on either side of the arrow. What `getChanges` holds
         // is on its way to the database — for the accessories that is raw
@@ -85,5 +89,41 @@ class EquipmentObserver
         // Said once, for the save that asked for it.
         $equipment->journalNote = null;
         $equipment->journalExtra = [];
+    }
+
+    /**
+     * Tell the people a unit moved between: whoever it left and whoever it came
+     * to. It is done here for the reason the journal is written here — every
+     * way of moving a unit saves the row, so none of them can forget to.
+     *
+     * Nobody is told about what they did themselves, and nothing is said when
+     * there is no person behind the move: a seeder filling the fleet in is not
+     * news to the people it hands laptops to.
+     */
+    private function announce(Equipment $equipment): void
+    {
+        $quiet = $equipment->unannounced;
+        // Asked for one save, like the note.
+        $equipment->unannounced = false;
+
+        $actor = Auth::user();
+
+        if ($quiet || $actor === null || ! $equipment->wasChanged('holder_user_id')) {
+            return;
+        }
+
+        // The unit still remembers who had it: the original is only brought up
+        // to date once the save is over.
+        $former = User::find($equipment->getOriginal('holder_user_id'));
+        $holder = User::find($equipment->holder_user_id);
+
+        // Somebody who no longer works here cannot sign in to read it.
+        if ($former?->isActive() && ! $former->is($actor)) {
+            $former->notify(new EquipmentMoved($equipment, $equipment->status === 'written_off' ? 'written_off' : 'taken'));
+        }
+
+        if ($holder?->isActive() && ! $holder->is($actor)) {
+            $holder->notify(new EquipmentMoved($equipment, 'issued'));
+        }
     }
 }

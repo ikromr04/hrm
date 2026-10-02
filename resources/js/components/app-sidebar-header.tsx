@@ -1,12 +1,12 @@
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { GlobalSearch } from '@/components/global-search';
+import { NotificationsBell } from '@/components/notifications-bell';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
 import { Link } from '@inertiajs/react';
-import { Bell, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
 const rootCrumb: BreadcrumbItemType = { title: 'Evolet HRM', href: '/dashboard' };
 
@@ -45,14 +45,7 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
             <div className="max-md:hidden">
                 <ThemeToggle />
             </div>
-            <Button
-                variant="outline"
-                size="icon"
-                className="max-md:text-muted-foreground size-10 shrink-0 max-md:border-0 max-md:bg-transparent max-md:shadow-none md:size-9"
-                aria-label="Уведомления"
-            >
-                <Bell className="size-5 md:size-4" />
-            </Button>
+            <NotificationsBell />
         </header>
     );
 }

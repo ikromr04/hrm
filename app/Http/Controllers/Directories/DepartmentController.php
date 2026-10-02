@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Directories;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\User;
+use App\Notifications\PlacementChanged;
 use App\Support\Directories;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -57,7 +58,9 @@ class DepartmentController extends Controller
     {
         [$data, $heads, $members] = $this->validated($request);
 
-        DB::transaction(fn () => $this->syncPeople(Department::create($data), $heads, $members));
+        $this->telling($request, [...$heads ?? [], ...$members ?? []], function () use ($data, $heads, $members) {
+            DB::transaction(fn () => $this->syncPeople(Department::create($data), $heads, $members));
+        });
 
         return back();
     }
@@ -66,9 +69,13 @@ class DepartmentController extends Controller
     {
         [$data, $heads, $members] = $this->validated($request, $department);
 
-        DB::transaction(function () use ($department, $data, $heads, $members) {
-            $department->update($data);
-            $this->syncPeople($department, $heads, $members);
+        $people = [...$department->users()->pluck('users.id'), ...$heads ?? [], ...$members ?? []];
+
+        $this->telling($request, $people, function () use ($department, $data, $heads, $members) {
+            DB::transaction(function () use ($department, $data, $heads, $members) {
+                $department->update($data);
+                $this->syncPeople($department, $heads, $members);
+            });
         });
 
         return back();
@@ -78,14 +85,37 @@ class DepartmentController extends Controller
      * Sub-departments move up to the deleted department's parent, so the
      * tree below it is kept. Employees simply lose this membership.
      */
-    public function destroy(Department $department): RedirectResponse
+    public function destroy(Request $request, Department $department): RedirectResponse
     {
-        DB::transaction(function () use ($department) {
-            Department::where('parent_id', $department->id)->update(['parent_id' => $department->parent_id]);
-            $department->delete();
+        $this->telling($request, $department->users()->pluck('users.id')->all(), function () use ($department) {
+            DB::transaction(function () use ($department) {
+                Department::where('parent_id', $department->id)->update(['parent_id' => $department->parent_id]);
+                $department->delete();
+            });
         });
 
         return back();
+    }
+
+    /**
+     * Make a change to who is in a department, and tell the people it moved.
+     *
+     * Putting somebody into a department here is the same act as picking the
+     * department on their card, so they hear about it the same way. Only those
+     * whose own list of departments came out different are told: a rename, or
+     * a save that left them where they were, is not news to them.
+     *
+     * @param  array<int, int>  $people  Everybody the change could touch.
+     * @param  Closure(): void  $save
+     */
+    private function telling(Request $request, array $people, Closure $save): void
+    {
+        $people = User::query()->active()->whereKey(array_unique($people))->get();
+        $before = $people->mapWithKeys(fn (User $user) => [$user->id => PlacementChanged::snapshot($user, ['departments'])]);
+
+        $save();
+
+        $people->each(fn (User $user) => PlacementChanged::announce($user, $before[$user->id], $request->user()));
     }
 
     /**
